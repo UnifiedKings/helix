@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Helix — Album</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+</head>
+<body>
+  <div class="topbar pandoraTop">
+    <div class="navLeft">
+      <a class="navLink" href="index.html" data-nav="now">Now Playing</a>
+      <a class="navLink" href="my-collection.html" data-nav="collection">My Collection</a>
+      <a class="navLink" href="browse.html" data-nav="browse">Browse</a>
+      <a class="navLink" href="listening-history.html" data-nav="history">Listening History</a>
+      <a class="navLink" href="stations.html" data-nav="stations">Stations</a>
+      <a class="navLink" href="liked-songs.html" data-nav="liked">Liked Songs</a>
+    </div>
+
+    <div class="topSearch">
+      <input id="globalSearch" type="text" placeholder="Search" autocomplete="off" />
+      <button id="clearSearch" class="clearBtn" title="Clear" aria-label="Clear" type="button">×</button>
+    </div>
+
+    <div class="navRight">
+      <a href="admin.html" id="adminLink" style="display:none;">Admin</a>
+      <a href="#" id="logoutLink">Logout</a>
+      <span class="status" id="whoami"></span>
+    </div>
+  </div>
+
+  <div id="albumLoading" class="pageLoading" aria-hidden="false">
+    <div class="spinner" aria-label="Loading"></div>
+  </div>
+
+  <main class="albumPage" id="albumPage" style="display:none;">
+    <section class="albumLeft">
+      <div class="albumCoverWrap">
+        <img id="albumCover" class="albumCover" alt="Album cover" loading="lazy" />
+        <button id="albumPlayBtn" class="coverPlayBtn" type="button" title="Play album">▶</button>
+      </div>
+    </section>
+
+    <section class="albumRight">
+      <div class="albumHeader">
+        <div class="albumTitle" id="albumTitle">Album</div>
+        <div class="albumSub muted" id="albumSub">Album by Artist</div>
+        <div class="albumMetaRow muted" id="albumMeta">0 songs</div>
+      </div>
+
+      <div class="albumTracklist" id="albumTracklist"></div>
+
+      <div class="links" id="albumLinks"></div>
+    </section>
+  </main>
+  <div class="playerBar" role="region" aria-label="Player">
+    <div class="playerRow">
+      <div class="playerLeft">
+        <img id="pbThumb" class="pbThumb" alt="Cover" loading="lazy" />
+        <div class="pbText">
+          <div class="pbTitle" id="pbTitle">—</div>
+          <div class="pbSub" id="pbSub">—</div>
+        </div>
+      </div>
+      <div class="playerCenter">
+        <button class="iconBtn" id="pbReplay" title="Replay" type="button">⟲</button>
+        <button class="iconBtn" id="pbPrev" title="Previous" type="button">⏮</button>
+        <button class="iconBtn play" id="pbPlay" title="Play/Pause" type="button">▶</button>
+        <button class="iconBtn" id="pbNext" title="Next" type="button">⏭</button>
+        <div class="pbVolume" aria-label="Volume">
+          <button class="iconBtn" id="pbVolIcon" title="Volume" type="button">🔊</button>
+          <input class="pbVol" id="pbVol" type="range" min="0" max="100" value="100" step="1" aria-label="Volume slider" />
+        </div>
+        <button class="iconBtn" id="pbLike" title="Like" type="button">♡</button>
+        <button class="iconBtn" id="pbDislike" title="Dislike" type="button">👎</button>
+        <button class="iconBtn" title="Shuffle" type="button" disabled>🔀</button>
+      </div>
+      <div class="playerRight">
+        <div class="muted" id="pbMeta"></div>
+      </div>
+    </div>
+
+    <div class="playerProgress" aria-label="Progress">
+      <div class="pbTime" id="pbCur">0:00</div>
+      <div class="pbTrack" id="pbTrack" role="slider" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+        <canvas id="pbWave" class="pbWave" height="28"></canvas>
+      </div>
+      <div class="pbTime" id="pbDur">0:00</div>
+    </div>
+  </div>
+
+  <script type="module" src="assets/js/router.js"></script>
+</body>
+</html>

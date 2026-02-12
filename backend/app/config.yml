@@ -1,0 +1,37 @@
+
+directory: /data/music
+library: /data/helix/beets/library.db
+
+import:
+  move: yes
+  copy: no
+  write: yes
+  resume: no
+  quiet: yes
+  timid: no
+  log: /data/helix/beets/import.log
+
+  autotag: no
+
+# Prefer album-mode matches when importing batches triggered by album playback.
+# (Helix will call beet with --group-albums on album batches.)
+
+match:
+  strong_rec_thresh: 0.12
+  strong_album_thresh: 0.12
+  max_rec_dist: 0.25
+  max_album_dist: 0.25
+  rec_gap_thresh: 0.25
+  album_gap_thresh: 0.25
+
+paths:
+  # Deterministic: if Helix tags album+albumartist consistently, tracks land together.
+  default: $albumartist/$album/$track $title
+  # Also store "single" imports under their album folder so albums can fill in over time.
+  singleton: $albumartist/$album/$track $title
+
+plugins:
+  - fetchart
+fetchart:
+  cautious: true
+  minwidth: 0

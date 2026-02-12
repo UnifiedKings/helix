@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Helix — Admin</title>
+  <link rel="stylesheet" href="assets/css/app.css" />
+</head>
+<body>
+  <div class="topbar pandoraTop">
+    <div class="navLeft">
+      <a class="navLink" href="index.html" data-nav="now">Now Playing</a>
+      <a class="navLink" href="my-collection.html" data-nav="collection">My Collection</a>
+      <a class="navLink" href="browse.html" data-nav="browse">Browse</a>
+    </div>
+
+    <div class="topSearch">
+      <input id="globalSearch" type="text" placeholder="Search" />
+    </div>
+
+    <div class="navRight">
+      <span class="muted" style="margin-right:10px;">Admin</span>
+      <a href="admin.html" id="adminLink" style="display:none;">Admin</a>
+      <a href="#" id="logoutLink">Logout</a>
+      <span class="status" id="whoami"></span>
+    </div>
+  </div>
+
+  <main style="grid-template-columns: 1fr; max-width: 1100px; margin: 0 auto;">
+    <section class="card">
+      <h2>Global Settings</h2>
+      <div style="padding: 14px;">
+        <div class="grid">
+          <div class="field col-12">
+            <label for="subsonicBaseUrl">Subsonic base URL</label>
+            <input id="subsonicBaseUrl" type="text" placeholder='e.g. http://navidrome:4533' />
+            <div class="muted">Where Helix should talk to your Subsonic-compatible library.</div>
+          </div>
+
+          <div class="field col-6">
+            <label for="subsonicUsername">Subsonic username</label>
+            <input id="subsonicUsername" type="text" autocomplete="username" placeholder="e.g. admin" />
+            <div class="muted">Used to authenticate to your Subsonic-compatible server (Navidrome, etc.).</div>
+          </div>
+
+          <div class="field col-6">
+            <label for="subsonicPassword">Subsonic password</label>
+            <input id="subsonicPassword" type="password" autocomplete="current-password" placeholder="••••••••" />
+            <div class="muted">Stored in Helix settings so the backend can stream audio on your behalf.</div>
+          </div>
+
+          <div class="field col-6">
+            <label for="firstPlayTimeout">First-play timeout (seconds)</label>
+            <input id="firstPlayTimeout" type="number" min="1" max="120" />
+            <div class="muted">UX threshold before a fulfillment attempt is considered too slow.</div>
+          </div>
+
+          <div class="field col-6">
+            <label for="versionPreference">Version preference</label>
+            <select id="versionPreference">
+              <option value="prefer_studio">Prefer studio</option>
+              <option value="prefer_highest_quality">Prefer highest quality</option>
+              <option value="prefer_shortest_latency">Prefer shortest latency</option>
+            </select>
+            <div class="muted">Placeholder policy when multiple versions exist.</div>
+          </div>
+
+          <div class="field col-4">
+            <label for="searchDefaultCountry">Search default country</label>
+            <input id="searchDefaultCountry" type="text" maxlength="2" placeholder="US" />
+            <div class="muted">Used to pick the default “representative” album release (cover art + tracklist).</div>
+          </div>
+
+          <div class="field col-4">
+            <label class="muted" style="display:block; margin-top:22px;">
+              <input id="searchHideNonOfficial" type="checkbox" checked />
+              Hide non-official versions
+            </label>
+            <div class="muted">If enabled, “Other versions” excludes Promo/Bootleg/etc.</div>
+          </div>
+
+          <div class="field col-4">
+            <label class="muted" style="display:block; margin-top:22px;">
+              <input id="searchPreferOriginal" type="checkbox" />
+              Prefer original release over country
+            </label>
+            <div class="muted">If enabled, earliest official release wins even if not in default country.</div>
+          </div>
+
+          <div class="field col-4">
+            <label class="muted" style="display:block; margin-top:22px;">
+              <input id="searchHideTracksWithoutArt" type="checkbox" />
+              Hide tracks without cover art
+            </label>
+            <div class="muted">If enabled, track search results must have an associated release for thumbnail artwork.</div>
+          </div>
+
+          <div class="field col-12" style="margin-top:6px;">
+            <div class="muted" style="font-weight:600; letter-spacing:0.02em;">Artist images & caching</div>
+          </div>
+
+          <div class="field col-4">
+            <label class="muted" style="display:block; margin-top:22px;">
+              <input id="artistImagesEnableWikidata" type="checkbox" checked />
+              Enable artist photos via Wikidata
+            </label>
+            <div class="muted">Attempts MusicBrainz → Wikidata → Wikimedia Commons for artist thumbnails.</div>
+          </div>
+
+          <div class="field col-4">
+            <label class="muted" style="display:block; margin-top:22px;">
+              <input id="imageProxyEnabled" type="checkbox" checked />
+              Proxy and cache thumbnails
+            </label>
+            <div class="muted">Caches cover art and artist thumbnails locally for faster search and stable URLs.</div>
+          </div>
+
+          <div class="field col-4">
+            <label for="imageCacheMaxMb">Image cache max (MB)</label>
+            <input id="imageCacheMaxMb" type="number" min="0" max="20000" />
+            <div class="muted">Hard cap for on-disk thumbnail cache. Oldest entries are evicted first.</div>
+          </div>
+
+          <div class="field col-4">
+            <label for="imageCacheThumbPx">Thumbnail width (px)</label>
+            <input id="imageCacheThumbPx" type="number" min="64" max="1024" />
+            <div class="muted">Requested size for Wikimedia thumbnails. Cover Art uses fixed sizes.</div>
+          </div>
+
+          <div class="field col-4">
+            <label for="imageCacheTtlDays">Image cache TTL (days)</label>
+            <input id="imageCacheTtlDays" type="number" min="1" max="3650" />
+            <div class="muted">Cached thumbnails older than this may be deleted during cleanup.</div>
+          </div>
+
+          <div class="field col-4">
+            <label for="searchCacheTtlSeconds">Search cache TTL (seconds)</label>
+            <input id="searchCacheTtlSeconds" type="number" min="0" max="3600" />
+            <div class="muted">Short TTL reduces upstream load during live search typing.</div>
+          </div>
+
+          <div class="field col-4">
+            <label for="musicbrainzMinIntervalMs">MusicBrainz min interval (ms)</label>
+            <input id="musicbrainzMinIntervalMs" type="number" min="0" max="10000" />
+            <div class="muted">Throttle for MusicBrainz API requests. 1000ms is polite.</div>
+          </div>
+
+          <div class="field col-8">
+            <label for="musicbrainzUserAgent">MusicBrainz User-Agent</label>
+            <input id="musicbrainzUserAgent" type="text" placeholder="Helix/0.1 (you@example.com)" />
+            <div class="muted">MusicBrainz requires a descriptive User-Agent. Include contact info if possible.</div>
+          </div>
+
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <button id="saveSettingsBtn" class="primary">Save settings</button>
+          <span class="status" id="settingsStatus"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Create User</h2>
+      <div style="padding: 14px;">
+        <div class="row">
+          <input id="newUserName" type="text" placeholder="username" style="min-width:200px;" />
+          <input id="newUserPass" type="password" placeholder="password (min 8)" style="min-width:240px;" />
+          <select id="newUserRole">
+            <option value="user" selected>user</option>
+            <option value="admin">admin</option>
+          </select>
+          <button id="createUserBtn">Create</button>
+        </div>
+        <div class="status" id="createStatus" style="margin-top:10px;"></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Users</h2>
+      <div style="padding: 14px;">
+        <div id="userTableWrap" style="overflow:auto;"></div>
+<div id="userList" class="status"></div>
+      </div>
+    </section>
+</main>
+
+    <div class="playerBar" role="region" aria-label="Player">
+    <div class="playerRow">
+      <div class="playerLeft">
+        <img id="pbThumb" class="pbThumb" alt="Cover" loading="lazy" />
+        <div class="pbText">
+          <div class="pbTitle" id="pbTitle">—</div>
+          <div class="pbSub" id="pbSub">—</div>
+        </div>
+      </div>
+      <div class="playerCenter">
+        <button class="iconBtn" id="pbReplay" title="Replay" type="button">⟲</button>
+        <button class="iconBtn" id="pbPrev" title="Previous" type="button">⏮</button>
+        <button class="iconBtn play" id="pbPlay" title="Play/Pause" type="button">▶</button>
+        <button class="iconBtn" id="pbNext" title="Next" type="button">⏭</button>
+        <div class="pbVolume" aria-label="Volume">
+          <button class="iconBtn" id="pbVolIcon" title="Volume" type="button">🔊</button>
+          <input class="pbVol" id="pbVol" type="range" min="0" max="100" value="100" step="1" aria-label="Volume slider" />
+        </div>
+        <button class="iconBtn" id="pbLike" title="Like" type="button">♡</button>
+        <button class="iconBtn" id="pbDislike" title="Dislike" type="button">👎</button>
+        <button class="iconBtn" title="Shuffle" type="button" disabled>🔀</button>
+      </div>
+      <div class="playerRight">
+        <div class="muted" id="pbMeta"></div>
+      </div>
+    </div>
+
+    <div class="playerProgress" aria-label="Progress">
+      <div class="pbTime" id="pbCur">0:00</div>
+      <div class="pbTrack" id="pbTrack" role="slider" aria-label="Seek" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">
+        <canvas id="pbWave" class="pbWave" height="28"></canvas>
+      </div>
+      <div class="pbTime" id="pbDur">0:00</div>
+    </div>
+  </div>
+
+  <script type="module" src="/assets/js/router.js"></script>
+</body>
+</html>

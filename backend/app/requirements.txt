@@ -1,0 +1,10 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+SQLAlchemy==2.0.34
+pydantic==2.8.2
+bcrypt==4.3.0
+passlib[bcrypt]==1.7.4
+httpx>=0.25
+yt-dlp
+ytmusicapi==1.7.4
+mutagen==1.47.0

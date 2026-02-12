@@ -1,0 +1,24 @@
+services:
+  helix:
+    container_name: helix
+    build: .
+    ports:
+      - "10011:8000"
+    restart: unless-stopped
+
+    # Persisted state + your library mounts
+    volumes:
+      # Helix data (db, logs, beets config, stream_cache, etc.)
+      - ./mr_data:/data
+
+      # Static frontend served by Helix (adjust if your backend expects a different path)
+      - ./frontend:/app/static
+
+      # Inbound download staging
+      - ./inbound_yt:/inbound_yt
+
+      # Your Navidrome/Subsonic library root (host path -> container path)
+      - /network-drives-2/music:/data/music
+
+      #Your files will be stored based on the beets config
+      - ./beets_config:/data/helix/beets
