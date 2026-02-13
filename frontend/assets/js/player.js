@@ -498,6 +498,119 @@ function renderQueue(queue, currentIndex) {
   setText("npQueueCount", `${visible.length} songs`);
 }
 
+function _fmtDateLabel(iso) {
+  try {
+    const d = new Date(iso);
+    return d.toLocaleString();
+  } catch {
+    return iso || "";
+  }
+}
+
+async function renderHistory(items) {
+  const list = document.getElementById("npHistoryList");
+  if (!list) return;
+
+  list.innerHTML = "";
+  const max = Array.isArray(items) ? items.slice(0, 30) : [];
+
+  for (const h of max) {
+    const row = document.createElement("div");
+    row.className = "npHistRow";
+
+    const img = document.createElement("img");
+    img.className = "npHistThumb";
+    img.alt = "Cover";
+    if (h.art_url) img.src = h.art_url;
+
+    const text = document.createElement("div");
+    text.className = "npHistText";
+
+    const song = document.createElement("div");
+    song.className = "npHistSong";
+    song.textContent = h.title || "—";
+
+    const meta = document.createElement("div");
+    meta.className = "npHistMeta";
+    const albumPart = (h.album ? ` — ${h.album}` : "");
+    meta.textContent = `${h.artist || ""}${albumPart}`;
+
+    text.appendChild(song);
+    text.appendChild(meta);
+
+    const actions = document.createElement("div");
+    actions.className = "npHistActions";
+
+    const likeBtn = document.createElement("button");
+    likeBtn.className = "npHistBtn";
+    likeBtn.title = "Thumb up";
+    likeBtn.type = "button";
+    likeBtn.textContent = "♡";
+
+    const replayBtn = document.createElement("button");
+    replayBtn.className = "npHistBtn";
+    replayBtn.title = "Replay";
+    replayBtn.type = "button";
+    replayBtn.textContent = "⟲";
+
+    // Best-effort: if we have stable ids, reflect liked state.
+    const sid = (h.subsonic_song_id || "").trim();
+    const vid = (h.yt_video_id || "").trim();
+    if (sid || vid) {
+      backend.likesIsLiked({ subsonic_song_id: sid || null, yt_video_id: vid || null })
+        .then((r) => { likeBtn.textContent = (r && r.liked) ? "♥" : "♡"; })
+        .catch(() => {});
+    }
+
+    likeBtn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      try {
+        const r = await backend.likesToggle({
+          title: h.title || "",
+          artist: h.artist || "",
+          album: h.album || "",
+          duration_ms: h.duration_ms || 0,
+          art_url: h.art_url || "",
+          source: h.source || "",
+          subsonic_song_id: sid || "",
+          yt_video_id: vid || "",
+          yt_browse_id: (h.yt_browse_id || "").trim(),
+        });
+        likeBtn.textContent = (r && r.liked) ? "♥" : "♡";
+      } catch (e) {
+        console.error(e);
+      }
+    });
+
+    replayBtn.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      try {
+        replayBtn.disabled = true;
+        const gs = getGlobalState();
+        const a = gs.audio || document.getElementById("helix-audio");
+        const posMs = a ? Math.round((a.currentTime || 0) * 1000) : 0;
+        await backend.playerReplayFromHistory(h.id, posMs);
+        document.dispatchEvent(new CustomEvent("helix-player-refresh", { detail: { forceLoadStream: true } }));
+      } catch (e) {
+        console.error(e);
+      } finally {
+        replayBtn.disabled = false;
+      }
+    });
+
+    actions.appendChild(likeBtn);
+    actions.appendChild(replayBtn);
+
+    row.appendChild(img);
+    row.appendChild(text);
+    row.appendChild(actions);
+
+    list.appendChild(row);
+  }
+}
+
 let __openQueueMenuEl = null;
 
 function closeOpenQueueMenu() {
@@ -579,15 +692,23 @@ function updatePlayerBar(st) {
   setText("pbMeta", gs2.__isBuffering ? (gs2.__pbMetaBase ? `${gs2.__pbMetaBase} • Loading…` : "Loading…") : gs2.__pbMetaBase);
   setImg("pbThumb", np.art_url || "");
 
-  // Now Playing page
-  setText("npTitle", np.title);
-  setText("npArtist", np.artist);
-  setText("npHeroTitle", np.title);
-  setText("npHeroSub", np.album ? `${np.artist} — ${np.album}` : np.artist);
-  setImg("npThumb", np.art_url || "");
-  setImg("npHeroImg", np.art_url || "");
+// Now Playing page (v1 + v2 ids)
+setText("npTitle", np.title);
+setText("npArtist", np.artist);
+setImg("npThumb", np.art_url || "");
 
+setText("npHeroTitle", np.title);
+setText("npHeroSub", np.album ? `${np.artist} — ${np.album}` : np.artist);
+setImg("npHeroImg", np.art_url || "");
+
+setText("npNowTitle", np.title);
+setText("npNowArtist", np.artist);
+setImg("npNowImg", np.art_url || "");
+
+// Queue panel is optional (Now Playing v2 hides it)
+if (document.getElementById("npQueueList")) {
   renderQueue(st.queue, st.current_index);
+}
 
   // play/pause icon
   const bPlay = qs("pbPlay");
@@ -621,29 +742,37 @@ function updatePlayerBar(st) {
       .catch(() => { dislikeBtn.textContent = "👎"; });
   }
 
-  // Station mode header (Now Playing page)
-  const modeWrap = document.getElementById("npMode");
-  if (modeWrap) {
-    const active = st.active_station && st.active_station_id;
-    if (active) {
-      modeWrap.style.display = "block";
-      const s = st.active_station;
-      const nameEl = document.getElementById("npStationName");
-      const seedEl = document.getElementById("npStationSeed");
-      const metaEl = document.getElementById("npStationMeta");
-      if (nameEl) nameEl.textContent = s.name || "Station";
-      if (seedEl) {
-        const seed = s.seed_type === "track" ? `${s.seed_title || ""} — ${s.seed_artist || ""}` : (s.seed_artist || "");
-        seedEl.textContent = seed;
-      }
-      if (metaEl) {
-        const dPct = Math.round((s.discovery || 0.35) * 100);
-        metaEl.textContent = `Discovery: ${dPct}%`;
-      }
-    } else {
-      modeWrap.style.display = "none";
+// Station mode header (Now Playing page)
+const modeWrap = document.getElementById("npMode");
+const modeWrapV2 = document.getElementById("npNowStation");
+const active = st.active_station && st.active_station_id;
+
+function applyStationUI(wrapEl, idsPrefix) {
+  if (!wrapEl) return;
+  if (active) {
+    wrapEl.style.display = "block";
+    const s = st.active_station;
+    const nameEl = document.getElementById(idsPrefix + "Name");
+    const seedEl = document.getElementById(idsPrefix + "Seed");
+    const metaEl = document.getElementById(idsPrefix + "Meta");
+    if (nameEl) nameEl.textContent = s.name || "Station";
+    if (seedEl) {
+      const seed = s.seed_type === "track" ? `${s.seed_title || ""} — ${s.seed_artist || ""}` : (s.seed_artist || "");
+      seedEl.textContent = seed;
     }
+    if (metaEl) {
+      const dPct = Math.round((s.discovery || 0.35) * 100);
+      metaEl.textContent = `Discovery: ${dPct}%`;
+    }
+  } else {
+    wrapEl.style.display = "none";
   }
+}
+
+// v1 (old) ids
+applyStationUI(modeWrap, "npStation");
+// v2 ids
+applyStationUI(modeWrapV2, "npNowStation");
 }
 
 async function syncOnce(forceLoadStream) {
@@ -660,6 +789,16 @@ async function syncOnce(forceLoadStream) {
   }
 
   updatePlayerBar(st);
+
+  // Now Playing v2: populate recent history panel if present.
+  if (document.getElementById("npHistoryList")) {
+    try {
+      const hist = await backend.getListeningHistory();
+      await renderHistory(hist && hist.items ? hist.items : []);
+    } catch (e) {
+      // non-fatal
+    }
+  }
 
   const audio = getOrCreateAudio();
   if (!audio) return;

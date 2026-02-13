@@ -69,6 +69,14 @@ def init_db() -> None:
         if not has_col("stations", "artist_blacklist"):
             add_col("stations", "artist_blacklist TEXT NOT NULL DEFAULT ''")
 
+        # listen_history: persist stable identifiers for replay/like from history
+        if not has_col("listen_history", "subsonic_song_id"):
+            add_col("listen_history", "subsonic_song_id TEXT NOT NULL DEFAULT \"\"")
+        if not has_col("listen_history", "yt_video_id"):
+            add_col("listen_history", "yt_video_id TEXT NOT NULL DEFAULT \"\"")
+        if not has_col("listen_history", "yt_browse_id"):
+            add_col("listen_history", "yt_browse_id TEXT NOT NULL DEFAULT \"\"")
+
     except Exception:
         # If migration fails (permissions/locking), Helix will still run; new
         # features may be degraded until the DB is reset.

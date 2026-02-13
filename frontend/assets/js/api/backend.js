@@ -168,6 +168,13 @@ export async function playerJump(index) {
   });
 }
 
+export async function playerReplayFromHistory(history_id, position_ms = null) {
+  return api("/api/player/replay", {
+    method: "POST",
+    body: JSON.stringify({ history_id, position_ms }),
+  });
+}
+
 export function playerStreamUrl(queueItemId) {
   if (!queueItemId) return API_BASE + "/api/player/stream/current";
   return API_BASE + `/api/player/stream/${encodeURIComponent(queueItemId)}`;

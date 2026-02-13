@@ -14,7 +14,7 @@ from sqlalchemy import select, delete
 from ..auth import get_current_user
 from ..db import get_db, SessionLocal
 from ..models import User, PlaybackSession, QueueItem, ListenHistoryItem, Station
-from ..schemas import PlayerPlayAlbumRequest, PlayerPlayTrackRequest, PlayerJumpRequest, PlayerQueueItem, PlayerStateResponse, PlayerQueueAppendTrackRequest, PlayerQueueAppendAlbumRequest, PlayerRemoveQueueItemResponse, PlayerHistoryItem, PlayerHistoryResponse, PlayerActionRequest, AutoplaySetRequest
+from ..schemas import PlayerPlayAlbumRequest, PlayerPlayTrackRequest, PlayerJumpRequest, PlayerQueueItem, PlayerStateResponse, PlayerQueueAppendTrackRequest, PlayerQueueAppendAlbumRequest, PlayerRemoveQueueItemResponse, PlayerHistoryItem, PlayerHistoryResponse, PlayerActionRequest, PlayerReplayRequest, AutoplaySetRequest
 from ..settings_store import get_settings
 from ..integrations.subsonic import SubsonicClient
 from ..integrations.ytmusic_api import get_album_full
@@ -137,8 +137,10 @@ def _to_history(h: ListenHistoryItem) -> PlayerHistoryItem:
         title=h.title,
         artist=h.artist,
         album=h.album or "",
-        duration_ms=h.duration_ms or 0,
-        art_url=h.art_url or "",
+        duration_ms=h.duration_ms or 0,        art_url=h.art_url or "",
+        subsonic_song_id=getattr(h, "subsonic_song_id", "") or "",
+        yt_video_id=getattr(h, "yt_video_id", "") or "",
+        yt_browse_id=getattr(h, "yt_browse_id", "") or "",
         source=h.source or "subsonic",
         event=h.event,
         reason=h.reason or "",
@@ -172,6 +174,9 @@ def _push_history(db: Session, user_id: str, item: Optional[QueueItem], event: s
         duration_ms=item.duration_ms or 0,
         art_url=item.art_url or "",
         source=item.source or "subsonic",
+        subsonic_song_id=getattr(item, "subsonic_song_id", "") or "",
+        yt_video_id=getattr(item, "yt_video_id", "") or "",
+        yt_browse_id=getattr(item, "yt_browse_id", "") or "",
         event=event,
         reason=reason,
         played_ms=max(0, int(played_ms or 0)),
@@ -754,6 +759,63 @@ def jump_to(payload: PlayerJumpRequest, db: Session = Depends(get_db), user: Use
     db.commit()
     return state(db=db, user=user)
 
+
+@router.post("/replay", response_model=PlayerStateResponse)
+async def replay_from_history(payload: PlayerReplayRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Replay a song from listen history.
+
+    Behavior:
+      - current track is marked skipped (reason=replay)
+      - the selected history track is inserted to play next (front-of-queue)
+      - playback advances immediately to the inserted item
+    """
+    settings = get_settings(db)
+    sess = _get_or_create_session(db, user.id)
+    items = db.execute(select(QueueItem).where(QueueItem.session_user_id == user.id).order_by(QueueItem.position.asc())).scalars().all()
+    cur = items[sess.current_index] if 0 <= sess.current_index < len(items) else None
+    played_ms = int(payload.position_ms or 0) if payload and payload.position_ms is not None else 0
+    _push_history(db, user.id, cur, event="skipped", reason="replay", played_ms=played_ms, settings=settings)
+
+    hid = (payload.history_id or "").strip()
+    if not hid:
+        raise HTTPException(status_code=400, detail="history_id required")
+    h = db.get(ListenHistoryItem, hid)
+    if not h or h.user_id != user.id:
+        raise HTTPException(status_code=404, detail="History item not found")
+
+    # Determine insert position (play next).
+    insert_idx = 0
+    if items and 0 <= sess.current_index < len(items):
+        insert_idx = sess.current_index + 1
+
+    # Shift positions for existing items after insert_idx.
+    for i, it in enumerate(items):
+        if i >= insert_idx:
+            it.position = int(it.position or 0) + 1
+
+    qi = QueueItem(
+        session_user_id=user.id,
+        position=int(insert_idx),
+        title=h.title,
+        artist=h.artist,
+        album=h.album or "",
+        duration_ms=int(h.duration_ms or 0),
+        art_url=h.art_url or "",
+        source=h.source or "subsonic",
+        subsonic_song_id=getattr(h, "subsonic_song_id", "") or "",
+        yt_video_id=getattr(h, "yt_video_id", "") or "",
+        yt_browse_id=getattr(h, "yt_browse_id", "") or "",
+        is_playable=bool(getattr(h, "subsonic_song_id", "")) or bool(getattr(h, "yt_video_id", "")),
+        error="",
+    )
+    db.add(qi)
+
+    # Advance immediately to the inserted item.
+    sess.current_index = insert_idx
+    sess.is_playing = _can_play(qi)
+
+    db.commit()
+    return state(db=db, user=user)
 
 @router.post("/next", response_model=PlayerStateResponse)
 async def next_track(payload: Optional[PlayerActionRequest] = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):

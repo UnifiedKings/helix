@@ -121,6 +121,9 @@ class PlayerHistoryItem(BaseModel):
     album: str = ""
     duration_ms: int = 0
     art_url: str = ""
+    subsonic_song_id: str = ""
+    yt_video_id: str = ""
+    yt_browse_id: str = ""
     source: str = "subsonic"
     event: str = "skipped"
     reason: str = ""
@@ -139,6 +142,11 @@ class PlayerPositionRequest(BaseModel):
 
 
 class PlayerActionRequest(BaseModel):
+    position_ms: Optional[int] = None
+
+
+class PlayerReplayRequest(BaseModel):
+    history_id: str
     position_ms: Optional[int] = None
 
 

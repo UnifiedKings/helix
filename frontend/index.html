@@ -29,54 +29,31 @@
     </div>
   </div>
 
-  <main class="shell shellNowPlaying">
-    <section class="npLeft">
-      <div class="npHeader">
-        <div class="npThumbWrap">
-          <img id="npThumb" class="thumb npThumb" alt="Cover" loading="lazy" />
-        </div>
-        <div>
-          <div class="npTitle" id="npTitle">New Slang (Live with Sam Beam)</div>
-          <div class="npSub" id="npArtist">The Shins</div>
-        </div>
+    <main class="shell shellNowPlaying shellNowPlayingV2">
+    <section class="npPanel npNow">
+      <div class="npNowArtWrap">
+        <img id="npNowImg" class="npNowImg" alt="Now playing cover" loading="lazy" />
       </div>
+      <div class="npNowMeta">
+        <div class="npNowTitle" id="npNowTitle">—</div>
+        <div class="npNowArtist" id="npNowArtist">—</div>
 
-      <!-- Station mode header (shown only when playing a station) -->
-      <div id="npMode" class="npStationCard" style="display:none;">
-        <div class="npStationLabel muted">Listening to station</div>
-        <div class="npStationName" id="npStationName">—</div>
-        <div class="npStationSeed muted" id="npStationSeed">—</div>
-        <div class="npStationMeta muted" id="npStationMeta"></div>
-      </div>
-
-      <div class="npQueue">
-        <div class="npQueueHeader">
-          <div class="muted">Up Next</div>
-          <div class="muted" id="npQueueCount">3 songs</div>
+        <!-- Station context (shown only when playing a station) -->
+        <div id="npNowStation" class="npNowStation" style="display:none;">
+          <div class="npNowStationLabel muted">Listening to station</div>
+          <div class="npNowStationName" id="npNowStationName">—</div>
+          <div class="npNowStationSeed muted" id="npNowStationSeed">—</div>
+          <div class="npNowStationMeta muted" id="npNowStationMeta"></div>
         </div>
-        <div id="npQueueList" class="npQueueList"></div>
-      </div>
-
-      <div class="npToggle">
-        <div>
-          <div class="npToggleTitle">Autoplay is on</div>
-          <div class="muted">Keep the music playing with similar songs.</div>
-        </div>
-        <label class="switch">
-          <input id="autoplayToggle" type="checkbox" checked>
-          <span class="slider"></span>
-        </label>
       </div>
     </section>
 
-    <section class="npRight">
-      <div class="npHero">
-        <img id="npHeroImg" class="npHeroImg" alt="Now playing cover" loading="lazy" />
+    <section class="npPanel npHistory">
+      <div class="npHistHeader">
+        <div class="npHistTitle">Recently Played</div>
+        <div class="muted npHistHint">Thumb up or replay a song from your station session.</div>
       </div>
-      <div class="npHeroMeta">
-        <div class="npHeroTitle" id="npHeroTitle">New Slang (Live with Sam Beam)</div>
-        <div class="npHeroSub" id="npHeroSub">The Shins — Fighting In A Sack</div>
-      </div>
+      <div id="npHistoryList" class="npHistList"></div>
     </section>
   </main>
   <div class="playerBar" role="region" aria-label="Player">

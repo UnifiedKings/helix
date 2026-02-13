@@ -115,6 +115,10 @@ class ListenHistoryItem(Base):
     art_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
     source: Mapped[str] = mapped_column(String(16), nullable=False, default="subsonic")
 
+    subsonic_song_id: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    yt_video_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    yt_browse_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
     event: Mapped[str] = mapped_column(String(16), nullable=False, default="skipped")  # skipped | completed
     reason: Mapped[str] = mapped_column(String(32), nullable=False, default="")  # next | prev | jump | removed_current | replaced_queue | ended
     played_ms: Mapped[int] = mapped_column(nullable=False, default=0)
