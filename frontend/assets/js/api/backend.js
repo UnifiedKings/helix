@@ -226,3 +226,10 @@ export async function stationsPlay(station_id, reset = true) {
 export async function stationsDelete(station_id) {
   return api(`/api/stations/${encodeURIComponent(station_id)}`, { method: "DELETE" });
 }
+
+export async function stationsUpdate(station_id, payload) {
+  return api(`/api/stations/${encodeURIComponent(station_id)}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload || {}),
+  });
+}

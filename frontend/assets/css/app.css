@@ -1442,3 +1442,84 @@ input[type=range] {
   display:flex; 
   flex-direction:column;
 }
+
+/* --- Simple modal (stations options) --- */
+.hxModalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  z-index: 9999;
+}
+
+.hxModal {
+  width: min(820px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  background: #141823;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.45);
+  padding: 16px;
+}
+
+.hxModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.hxModalTitle {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.hxModalGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .hxModalGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hxModalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.hxField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.hxRow {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.hxDetails {
+  margin-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+  padding-top: 10px;
+}
+
+.hxDetails summary {
+  cursor: pointer;
+  user-select: none;
+  color: rgba(255,255,255,0.85);
+  margin-bottom: 10px;
+}

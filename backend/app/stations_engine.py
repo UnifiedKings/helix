@@ -33,6 +33,56 @@ def _norm_pair(title: str, artist: str) -> str:
     return f"{_norm(title)}|{_norm(artist)}"
 
 
+def _norm_title_core(title: str) -> str:
+    """Normalize a title for 'same song different version' comparisons.
+
+    Aggressively strips common suffixes and bracketed qualifiers.
+    """
+    t = _clean(title).lower()
+    # strip bracketed qualifiers
+    t = re.sub(r"\([^\)]*\)", " ", t)
+    t = re.sub(r"\[[^\]]*\]", " ", t)
+    # strip common separators/suffixes
+    t = re.sub(r"\s+-\s+.*$", " ", t)
+    # strip feat.
+    t = re.sub(r"\bfeat\.?\b.*$", " ", t)
+    # remove common version words
+    t = re.sub(r"\b(remaster(ed)?|live|acoustic|demo|mix|remix|cover|karaoke|version|edit|session)\b", " ", t)
+    t = re.sub(r"[^a-z0-9]+", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def _parse_artist_list(s: str) -> List[str]:
+    raw = (s or "").replace("\r", "\n")
+    parts: List[str] = []
+    for line in raw.split("\n"):
+        for p in line.split(","):
+            p = _clean(p)
+            if p:
+                parts.append(p)
+    # de-dupe while preserving order
+    seen = set()
+    out: List[str] = []
+    for p in parts:
+        k = _norm(p)
+        if k in seen:
+            continue
+        seen.add(k)
+        out.append(p)
+    return out
+
+
+def _recent_artists(db: Session, user_id: str, limit: int = 60) -> List[str]:
+    rows = db.execute(
+        select(ListenHistoryItem.artist)
+        .where(ListenHistoryItem.user_id == user_id)
+        .order_by(ListenHistoryItem.created_at.desc())
+        .limit(limit)
+    ).all()
+    return [_clean(r[0] or "") for r in rows if _clean(r[0] or "")]
+
+
 async def _mb_lookup_artist_id_by_name(name: str) -> str:
     q = _clean(name)
     if not q:
@@ -131,6 +181,28 @@ def _recent_pairs(db: Session, user_id: str, limit: int = 150) -> set[str]:
     return {_norm_pair(r[0] or "", r[1] or "") for r in rows}
 
 
+def _recent_artist_counts(db: Session, user_id: str, window: int = 50) -> Dict[str, int]:
+    """Counts of normalized artist names in recent listens."""
+    rows = db.execute(
+        select(ListenHistoryItem.artist)
+        .where(ListenHistoryItem.user_id == user_id)
+        .order_by(ListenHistoryItem.created_at.desc())
+        .limit(int(window))
+    ).all()
+    counts: Dict[str, int] = {}
+    for (a,) in rows:
+        k = _norm(str(a or ""))
+        if not k:
+            continue
+        counts[k] = counts.get(k, 0) + 1
+    return counts
+
+
+def _looks_like_variant(title: str) -> bool:
+    t = _norm(title)
+    return any(w in t for w in [" live", "(live", "acoustic", "remix", "mix", "cover", "karaoke", "demo", "remaster", "version"])
+
+
 def _next_queue_position(db: Session, user_id: str) -> int:
     mx = db.execute(select(func.max(QueueItem.position)).where(QueueItem.session_user_id == user_id)).scalar_one_or_none()
     return int(mx or 0) + 1 if mx is not None else 0
@@ -163,9 +235,26 @@ async def generate_and_append_station_track(
     tags = await ensure_station_tags(db, station)
     recent = _recent_pairs(db, user_id, limit=200)
 
-    # Choose query: sometimes a tag (discovery), sometimes the seed artist (comfort)
-    d = float(getattr(station, "discovery", 0.35) or 0.35)
+    # Station settings
+    d = float(getattr(station, "discovery", 0.35) or 0.35)  # 0..1
     d = max(0.0, min(1.0, d))
+    seed_infl = float(getattr(station, "seed_influence", 0.75) or 0.75)  # 0..1
+    seed_infl = max(0.0, min(1.0, seed_infl))
+    artist_cooldown = int(getattr(station, "artist_cooldown", 5) or 5)
+    artist_cooldown = max(0, min(50, artist_cooldown))
+    artist_variety = int(getattr(station, "artist_variety", 1) or 1)
+    artist_variety = max(0, min(2, artist_variety))
+    allow_seed_alts = bool(int(getattr(station, "allow_seed_alternates", 0) or 0))
+    tag_strictness = int(getattr(station, "tag_strictness", 70) or 70)
+    tag_strictness = max(0, min(100, tag_strictness))
+
+    blacklist = {_norm(a) for a in _parse_artist_list(str(getattr(station, "artist_blacklist", "") or ""))}
+
+    # Recent constraints
+    cooldown_artists = set(_norm(a) for a in _recent_artists(db, user_id, limit=max(artist_cooldown, 1)))
+    recent_counts = _recent_artist_counts(db, user_id, window=50)
+
+    seed_core = _norm_title_core(station.seed_title or "") if (station.seed_type or "").lower() == "track" else ""
 
     queries: List[str] = []
     if tags:
@@ -177,10 +266,13 @@ async def generate_and_append_station_track(
             .limit(30)
         ).all()
         pool: List[str] = []
+        # tag strictness influences how strongly we prefer the top tags.
+        strict = tag_strictness / 100.0
         for tag, w in stored:
             if not tag:
                 continue
-            rep = max(1, int(round(float(w) * 3)))
+            rep_base = float(w) * 3.0
+            rep = max(1, int(round(rep_base * (1.0 + strict))))
             pool.extend([tag] * rep)
         random.shuffle(pool)
         queries.extend(pool[:10])
@@ -195,7 +287,10 @@ async def generate_and_append_station_track(
         queries.append(comfort_query)
 
     # Determine which query to use
-    use_tag = bool(tags) and (random.random() < d)
+    # use_tag: discoverability increases tag use; seed influence decreases tag use.
+    p_tag = d * (1.0 - (seed_infl * 0.7))
+    p_tag = max(0.0, min(1.0, p_tag))
+    use_tag = bool(tags) and (random.random() < p_tag)
     q = ""
     if use_tag:
         q = random.choice(queries[:-1] or queries)
@@ -229,21 +324,61 @@ async def generate_and_append_station_track(
         if k
     )
 
-    pick: Optional[Dict[str, Any]] = None
+    # Pick the best candidate by applying hard filters, then a simple scoring model.
+    best: Optional[Tuple[float, Dict[str, Any]]] = None
+    variety_penalty = {0: 0.0, 1: 0.8, 2: 1.5}[artist_variety]
+
     for it in songs:
         title = _clean(str(it.get("title") or ""))
         artist = _clean(str(it.get("artist") or ""))
         if not title or not artist:
             continue
+
+        na = _norm(artist)
+        if na in blacklist:
+            continue
+        if artist_cooldown > 0 and na in cooldown_artists:
+            continue
+
+        if seed_core and (not allow_seed_alts):
+            # block alternate versions of the seed track
+            if _norm_title_core(title) == seed_core:
+                continue
+
         if _norm_pair(title, artist) in recent:
             continue
+
         vid = _clean(str(it.get("video_id") or ""))
         if vid and f"yt:{vid}" in disliked_keys:
             continue
-        pick = it
-        break
-    if pick is None:
+
+        # --- Scoring ---
+        score = random.random() * 0.5  # controlled randomness
+
+        # Stay close to the seed (artist match is a weak proxy for similarity)
+        if station.seed_artist and na == _norm(station.seed_artist):
+            score += 1.0 * seed_infl
+
+        # Variety penalty
+        score -= variety_penalty * float(recent_counts.get(na, 0))
+
+        # Mild penalty for obvious variants
+        if _looks_like_variant(title):
+            score -= 0.15
+
+        if best is None or score > best[0]:
+            best = (score, it)
+
+    if best is None:
         pick = songs[0]
+        LOG.warning(
+            "[station] no candidate passed filters; falling back to first result station=%s user=%s q=%r",
+            station_id,
+            user_id,
+            query,
+        )
+    else:
+        pick = best[1]
 
     title = _clean(str(pick.get("title") or ""))
     artist = _clean(str(pick.get("artist") or ""))
@@ -301,5 +436,20 @@ async def generate_and_append_station_track(
         sess.updated_at = datetime.utcnow()
     db.commit()
 
-    LOG.info("[station] appended station=%s user=%s pick=%r - %r yt=%s src=%s", station_id, user_id, title, artist, yt_video_id, qitem.source)
+    LOG.info(
+        "[station] appended station=%s user=%s pick=%r - %r yt=%s src=%s cfg={cooldown:%s discover:%s seed:%s variety:%s allow_alts:%s tag_strict:%s blacklist:%s}",
+        station_id,
+        user_id,
+        title,
+        artist,
+        yt_video_id,
+        qitem.source,
+        artist_cooldown,
+        round(d * 100.0),
+        round(seed_infl * 100.0),
+        artist_variety,
+        allow_seed_alts,
+        tag_strictness,
+        len(blacklist),
+    )
     return qitem

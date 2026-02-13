@@ -142,7 +142,29 @@ class Station(Base):
     mb_artist_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     mb_recording_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
 
-    discovery: Mapped[float] = mapped_column(nullable=False, default=0.35)  # 0..1
+    # --- Station configuration knobs ---
+    # discoverability: 0..1 (exposed as 0..100)
+    discovery: Mapped[float] = mapped_column(nullable=False, default=0.35)
+    # seed influence: 0..1 (exposed as 0..100)
+    seed_influence: Mapped[float] = mapped_column(nullable=False, default=0.75)
+
+    # don't repeat artist within X tracks
+    artist_cooldown: Mapped[int] = mapped_column(nullable=False, default=5)
+    # 0=low, 1=medium, 2=high
+    artist_variety: Mapped[int] = mapped_column(nullable=False, default=1)
+
+    # If false, we block alternate versions of the seed track
+    allow_seed_alternates: Mapped[int] = mapped_column(nullable=False, default=0)
+
+    # Optional advanced controls
+    era_start: Mapped[int] = mapped_column(nullable=False, default=0)  # 0 => any
+    era_end: Mapped[int] = mapped_column(nullable=False, default=0)    # 0 => any
+    popularity_bias: Mapped[int] = mapped_column(nullable=False, default=50)  # 0..100 (popular..obscure)
+    tag_strictness: Mapped[int] = mapped_column(nullable=False, default=70)   # 0..100 (loose..strict)
+
+    # newline/comma separated list of artist names to never play on this station
+    artist_blacklist: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
     temperature: Mapped[float] = mapped_column(nullable=False, default=0.9)
 
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)

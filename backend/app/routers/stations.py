@@ -10,7 +10,7 @@ from sqlalchemy import select
 from ..auth import get_current_user
 from ..db import get_db
 from ..models import User, Station, PlaybackSession, QueueItem
-from ..schemas import StationCreateRequest, StationResponse, StationPlayRequest
+from ..schemas import StationCreateRequest, StationUpdateRequest, StationResponse, StationPlayRequest
 from ..settings_store import get_settings
 from ..stations_engine import generate_and_append_station_track
 
@@ -28,6 +28,15 @@ def _to_station(s: Station) -> StationResponse:
         mb_artist_id=s.mb_artist_id or "",
         mb_recording_id=s.mb_recording_id or "",
         discovery=float(s.discovery or 0.35),
+        seed_influence=float(getattr(s, "seed_influence", 0.75) or 0.75),
+        artist_cooldown=int(getattr(s, "artist_cooldown", 5) or 5),
+        artist_variety=int(getattr(s, "artist_variety", 1) or 1),
+        allow_seed_alternates=bool(int(getattr(s, "allow_seed_alternates", 0) or 0)),
+        era_start=int(getattr(s, "era_start", 0) or 0),
+        era_end=int(getattr(s, "era_end", 0) or 0),
+        popularity_bias=int(getattr(s, "popularity_bias", 50) or 50),
+        tag_strictness=int(getattr(s, "tag_strictness", 70) or 70),
+        artist_blacklist=str(getattr(s, "artist_blacklist", "") or ""),
         temperature=float(getattr(s, "temperature", 0.9) or 0.9),
         created_at=s.created_at.isoformat() + "Z",
         updated_at=s.updated_at.isoformat() + "Z",
@@ -61,6 +70,15 @@ def create_station(payload: StationCreateRequest, db: Session = Depends(get_db),
         mb_artist_id=(payload.mb_artist_id or "").strip() if payload.mb_artist_id else "",
         mb_recording_id=(payload.mb_recording_id or "").strip() if payload.mb_recording_id else "",
         discovery=max(0.0, min(1.0, float(payload.discovery or 0.35))),
+        seed_influence=max(0.0, min(1.0, float(payload.seed_influence or 0.75))),
+        artist_cooldown=max(0, min(50, int(payload.artist_cooldown or 0))),
+        artist_variety=max(0, min(2, int(payload.artist_variety or 1))),
+        allow_seed_alternates=1 if bool(payload.allow_seed_alternates) else 0,
+        era_start=max(0, min(3000, int(payload.era_start or 0))),
+        era_end=max(0, min(3000, int(payload.era_end or 0))),
+        popularity_bias=max(0, min(100, int(payload.popularity_bias or 50))),
+        tag_strictness=max(0, min(100, int(payload.tag_strictness or 70))),
+        artist_blacklist=(payload.artist_blacklist or ""),
         temperature=max(0.2, min(2.0, float(payload.temperature or 0.9))),
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
@@ -69,6 +87,41 @@ def create_station(payload: StationCreateRequest, db: Session = Depends(get_db),
     db.commit()
     db.refresh(s)
     return _to_station(s)
+
+
+@router.patch("/{station_id}", response_model=StationResponse)
+def update_station(station_id: str, payload: StationUpdateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    st = db.get(Station, station_id)
+    if not st or st.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Station not found")
+
+    if payload.name is not None:
+        st.name = (payload.name or "").strip()
+    if payload.discovery is not None:
+        st.discovery = max(0.0, min(1.0, float(payload.discovery)))
+    if payload.seed_influence is not None:
+        st.seed_influence = max(0.0, min(1.0, float(payload.seed_influence)))
+    if payload.artist_cooldown is not None:
+        st.artist_cooldown = max(0, min(50, int(payload.artist_cooldown)))
+    if payload.artist_variety is not None:
+        st.artist_variety = max(0, min(2, int(payload.artist_variety)))
+    if payload.allow_seed_alternates is not None:
+        st.allow_seed_alternates = 1 if bool(payload.allow_seed_alternates) else 0
+    if payload.era_start is not None:
+        st.era_start = max(0, min(3000, int(payload.era_start)))
+    if payload.era_end is not None:
+        st.era_end = max(0, min(3000, int(payload.era_end)))
+    if payload.popularity_bias is not None:
+        st.popularity_bias = max(0, min(100, int(payload.popularity_bias)))
+    if payload.tag_strictness is not None:
+        st.tag_strictness = max(0, min(100, int(payload.tag_strictness)))
+    if payload.artist_blacklist is not None:
+        st.artist_blacklist = payload.artist_blacklist or ""
+
+    st.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(st)
+    return _to_station(st)
 
 
 @router.post("/{station_id}/play")

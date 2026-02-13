@@ -49,6 +49,26 @@ def init_db() -> None:
         if not has_col("playback_sessions", "active_station_id"):
             add_col("playback_sessions", "active_station_id TEXT NOT NULL DEFAULT ''")
 
+        # stations: per-station configuration knobs
+        if not has_col("stations", "seed_influence"):
+            add_col("stations", "seed_influence REAL NOT NULL DEFAULT 0.75")
+        if not has_col("stations", "artist_cooldown"):
+            add_col("stations", "artist_cooldown INTEGER NOT NULL DEFAULT 5")
+        if not has_col("stations", "artist_variety"):
+            add_col("stations", "artist_variety INTEGER NOT NULL DEFAULT 1")
+        if not has_col("stations", "allow_seed_alternates"):
+            add_col("stations", "allow_seed_alternates INTEGER NOT NULL DEFAULT 0")
+        if not has_col("stations", "era_start"):
+            add_col("stations", "era_start INTEGER NOT NULL DEFAULT 0")
+        if not has_col("stations", "era_end"):
+            add_col("stations", "era_end INTEGER NOT NULL DEFAULT 0")
+        if not has_col("stations", "popularity_bias"):
+            add_col("stations", "popularity_bias INTEGER NOT NULL DEFAULT 50")
+        if not has_col("stations", "tag_strictness"):
+            add_col("stations", "tag_strictness INTEGER NOT NULL DEFAULT 70")
+        if not has_col("stations", "artist_blacklist"):
+            add_col("stations", "artist_blacklist TEXT NOT NULL DEFAULT ''")
+
     except Exception:
         # If migration fails (permissions/locking), Helix will still run; new
         # features may be degraded until the DB is reset.
