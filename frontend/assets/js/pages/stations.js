@@ -277,6 +277,10 @@ async function loadStations() {
       ev.stopPropagation();
       try {
         await backend.stationsPlay(s.id, true);
+        // Force immediate player sync when starting playback from Stations page.
+        document.dispatchEvent(new CustomEvent("helix-player-refresh", {
+          detail: { forceLoadStream: true }
+        }));
       } catch {}
     });
 
