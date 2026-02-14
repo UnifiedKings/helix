@@ -349,6 +349,7 @@ function ensureVolumeBindings(audio) {
   });
 }
 
+
 function bindButtons() {
   const bReplay = qs("pbReplay");
   const bPrev = qs("pbPrev");
@@ -782,27 +783,19 @@ if (document.getElementById("npQueueList")) {
   const dislikeBtn = document.getElementById("pbDislike");
   const gs3 = getGlobalState();
   const likeKey = (np.subsonic_song_id ? `subsonic:${np.subsonic_song_id}` : (np.yt_video_id ? `yt:${np.yt_video_id}` : ""));
-  if (likeBtn && likeKey && gs3.__lastLikeKey !== likeKey) {
-    gs3.__lastLikeKey = likeKey;
+  if (likeBtn && likeKey && gs3.__lastLikeKey !== likeKey) 
+  {
+    //gs3.__lastLikeKey = likeKey;
     likeBtn.innerHTML = icons.thumbUp(false);
-
     // Bind stable identifiers/payload to the button to avoid any mismatch across re-renders.
-    const hid = String(h.id || "");
-    likeBtn.dataset.hid = hid;
-    likeBtn.dataset.subsonicSongId = (h.subsonic_song_id || "").trim();
-    likeBtn.dataset.ytVideoId = (h.yt_video_id || "").trim();
-    likeBtn.dataset.ytBrowseId = (h.yt_browse_id || "").trim();
-    likeBtn.dataset.title = h.title || "";
-    likeBtn.dataset.artist = h.artist || "";
-    likeBtn.dataset.album = h.album || "";
-    likeBtn.dataset.durationMs = String(h.duration_ms || 0);
-    likeBtn.dataset.artUrl = h.art_url || "";
-    likeBtn.dataset.source = h.source || "";
-    likeBtn.dataset.liked = "0";
-    likeBtn.dataset.userTouched = "0";
+    console.log("Like button found")
+    console.log("reached")
     backend.likesIsLiked({ yt_video_id: np.yt_video_id || null, subsonic_song_id: np.subsonic_song_id || null })
-      .then((r) => { likeBtn.innerHTML = icons.thumbUp(!!(r && r.liked)); })
-      .catch(() => { likeBtn.innerHTML = icons.thumbUp(false); });
+      .then((r) => {
+        console.log("hello");
+        likeBtn.innerHTML = icons.thumbUp((r.liked)); 
+      })
+      .catch(() => { console.log("error: song not found"); likeBtn.innerHTML = icons.thumbUp(false); });
   }
 
   // dislike button
