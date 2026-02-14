@@ -520,6 +520,9 @@ async function renderHistory(items) {
   list.innerHTML = "";
   const max = Array.isArray(items) ? items.slice(0, 30) : [];
 
+  // Prevent stale async "is liked" checks from clobbering a user click (fixes flicker).
+  const likeSeqByHistoryId = new Map();
+
   for (const h of max) {
     const row = document.createElement("div");
     row.className = "npHistRow";
@@ -553,6 +556,21 @@ async function renderHistory(items) {
     likeBtn.type = "button";
     likeBtn.innerHTML = icons.thumbUp(false);
 
+    // Bind stable identifiers/payload to the button to avoid any mismatch across re-renders.
+    const hid = String(h.id || "");
+    likeBtn.dataset.hid = hid;
+    likeBtn.dataset.subsonicSongId = (h.subsonic_song_id || "").trim();
+    likeBtn.dataset.ytVideoId = (h.yt_video_id || "").trim();
+    likeBtn.dataset.ytBrowseId = (h.yt_browse_id || "").trim();
+    likeBtn.dataset.title = h.title || "";
+    likeBtn.dataset.artist = h.artist || "";
+    likeBtn.dataset.album = h.album || "";
+    likeBtn.dataset.durationMs = String(h.duration_ms || 0);
+    likeBtn.dataset.artUrl = h.art_url || "";
+    likeBtn.dataset.source = h.source || "";
+    likeBtn.dataset.liked = "0";
+    likeBtn.dataset.userTouched = "0";
+
     const replayBtn = document.createElement("button");
     replayBtn.className = "npHistBtn";
     replayBtn.title = "Replay";
@@ -560,32 +578,65 @@ async function renderHistory(items) {
     replayBtn.innerHTML = icons.replay();
 
     // Best-effort: if we have stable ids, reflect liked state.
-    const sid = (h.subsonic_song_id || "").trim();
-    const vid = (h.yt_video_id || "").trim();
-    if (sid || vid) {
-      backend.likesIsLiked({ subsonic_song_id: sid || null, yt_video_id: vid || null })
-        .then((r) => { likeBtn.innerHTML = icons.thumbUp(!!(r && r.liked)); })
+    const sid = likeBtn.dataset.subsonicSongId || "";
+    const vid = likeBtn.dataset.ytVideoId || "";
+    if ((sid || vid) && hid) {
+      const seq = (likeSeqByHistoryId.get(hid) || 0) + 1;
+      likeSeqByHistoryId.set(hid, seq);
+      const callSid = sid;
+      const callVid = vid;
+      backend.likesIsLiked({ subsonic_song_id: callSid || null, yt_video_id: callVid || null })
+        .then((r) => {
+          if ((likeSeqByHistoryId.get(hid) || 0) !== seq) return;
+          if ((likeBtn.dataset.userTouched || "0") === "1") return;
+          // Ensure this callback still corresponds to the same row payload.
+          if ((likeBtn.dataset.subsonicSongId || "") !== callSid) return;
+          if ((likeBtn.dataset.ytVideoId || "") !== callVid) return;
+          const liked = !!(r && r.liked);
+          likeBtn.dataset.liked = liked ? "1" : "0";
+          likeBtn.innerHTML = icons.thumbUp(liked);
+        })
         .catch(() => {});
     }
+
 
     likeBtn.addEventListener("click", async (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       try {
+        // Mark as user-touched so pending is-liked checks don't override state.
+        likeBtn.dataset.userTouched = "1";
+
+        // Optimistic toggle to prevent flicker/latency.
+        const curLiked = (likeBtn.dataset.liked || "0") === "1";
+        const optimistic = !curLiked;
+        likeBtn.dataset.liked = optimistic ? "1" : "0";
+        likeBtn.innerHTML = icons.thumbUp(optimistic);
+        likeBtn.disabled = true;
+
         const r = await backend.likesToggle({
-          title: h.title || "",
-          artist: h.artist || "",
-          album: h.album || "",
-          duration_ms: h.duration_ms || 0,
-          art_url: h.art_url || "",
-          source: h.source || "",
-          subsonic_song_id: sid || "",
-          yt_video_id: vid || "",
-          yt_browse_id: (h.yt_browse_id || "").trim(),
+          title: likeBtn.dataset.title || "",
+          artist: likeBtn.dataset.artist || "",
+          album: likeBtn.dataset.album || "",
+          duration_ms: parseInt(likeBtn.dataset.durationMs || "0", 10) || 0,
+          art_url: likeBtn.dataset.artUrl || "",
+          source: likeBtn.dataset.source || "",
+          subsonic_song_id: likeBtn.dataset.subsonicSongId || "",
+          yt_video_id: likeBtn.dataset.ytVideoId || "",
+          yt_browse_id: likeBtn.dataset.ytBrowseId || "",
         });
-        likeBtn.innerHTML = icons.thumbUp(!!(r && r.liked));
+
+        const liked = !!(r && r.liked);
+        likeBtn.dataset.liked = liked ? "1" : "0";
+        likeBtn.innerHTML = icons.thumbUp(liked);
       } catch (e) {
         console.error(e);
+        // If request failed, revert optimistic state.
+        const cur = (likeBtn.dataset.liked || "0") === "1";
+        likeBtn.dataset.liked = cur ? "0" : "1";
+        likeBtn.innerHTML = icons.thumbUp((likeBtn.dataset.liked || "0") === "1");
+      } finally {
+        likeBtn.disabled = false;
       }
     });
 
@@ -734,6 +785,21 @@ if (document.getElementById("npQueueList")) {
   if (likeBtn && likeKey && gs3.__lastLikeKey !== likeKey) {
     gs3.__lastLikeKey = likeKey;
     likeBtn.innerHTML = icons.thumbUp(false);
+
+    // Bind stable identifiers/payload to the button to avoid any mismatch across re-renders.
+    const hid = String(h.id || "");
+    likeBtn.dataset.hid = hid;
+    likeBtn.dataset.subsonicSongId = (h.subsonic_song_id || "").trim();
+    likeBtn.dataset.ytVideoId = (h.yt_video_id || "").trim();
+    likeBtn.dataset.ytBrowseId = (h.yt_browse_id || "").trim();
+    likeBtn.dataset.title = h.title || "";
+    likeBtn.dataset.artist = h.artist || "";
+    likeBtn.dataset.album = h.album || "";
+    likeBtn.dataset.durationMs = String(h.duration_ms || 0);
+    likeBtn.dataset.artUrl = h.art_url || "";
+    likeBtn.dataset.source = h.source || "";
+    likeBtn.dataset.liked = "0";
+    likeBtn.dataset.userTouched = "0";
     backend.likesIsLiked({ yt_video_id: np.yt_video_id || null, subsonic_song_id: np.subsonic_song_id || null })
       .then((r) => { likeBtn.innerHTML = icons.thumbUp(!!(r && r.liked)); })
       .catch(() => { likeBtn.innerHTML = icons.thumbUp(false); });
