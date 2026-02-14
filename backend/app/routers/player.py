@@ -137,10 +137,12 @@ def _to_history(h: ListenHistoryItem) -> PlayerHistoryItem:
         title=h.title,
         artist=h.artist,
         album=h.album or "",
-        duration_ms=h.duration_ms or 0,        art_url=h.art_url or "",
+        duration_ms=h.duration_ms or 0,
+        art_url=h.art_url or "",
         subsonic_song_id=getattr(h, "subsonic_song_id", "") or "",
         yt_video_id=getattr(h, "yt_video_id", "") or "",
         yt_browse_id=getattr(h, "yt_browse_id", "") or "",
+        station_id=getattr(h, "station_id", "") or "",
         source=h.source or "subsonic",
         event=h.event,
         reason=h.reason or "",
@@ -156,9 +158,14 @@ def _push_history(db: Session, user_id: str, item: Optional[QueueItem], event: s
     if lim <= 0:
         return
 
+    # Station-scoped history: bind entries to the currently active station (if any).
+    sess = _get_or_create_session(db, user_id)
+    station_id = str(getattr(sess, "active_station_id", "") or "")
+
     last = db.execute(
         select(ListenHistoryItem)
         .where(ListenHistoryItem.user_id == user_id)
+        .where(ListenHistoryItem.station_id == station_id)
         .order_by(ListenHistoryItem.created_at.desc())
         .limit(1)
     ).scalars().first()
@@ -167,6 +174,7 @@ def _push_history(db: Session, user_id: str, item: Optional[QueueItem], event: s
 
     h = ListenHistoryItem(
         user_id=user_id,
+        station_id=station_id,
         queue_item_id=item.id,
         title=item.title,
         artist=item.artist,
@@ -184,10 +192,11 @@ def _push_history(db: Session, user_id: str, item: Optional[QueueItem], event: s
     db.add(h)
     db.commit()
 
-    # enforce limit
+    # enforce limit PER STATION
     ids = db.execute(
         select(ListenHistoryItem.id)
         .where(ListenHistoryItem.user_id == user_id)
+        .where(ListenHistoryItem.station_id == station_id)
         .order_by(ListenHistoryItem.created_at.desc())
         .offset(lim)
     ).scalars().all()
@@ -679,14 +688,16 @@ def queue_remove_item(queue_item_id: str, db: Session = Depends(get_db), user: U
 
 
 @router.get("/history", response_model=PlayerHistoryResponse)
-def history(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def history(station_id: str | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     settings = get_settings(db)
     lim = _history_limit(settings)
+
+    q = select(ListenHistoryItem).where(ListenHistoryItem.user_id == user.id)
+    if station_id is not None:
+        q = q.where(ListenHistoryItem.station_id == station_id)
+
     items = db.execute(
-        select(ListenHistoryItem)
-        .where(ListenHistoryItem.user_id == user.id)
-        .order_by(ListenHistoryItem.created_at.desc())
-        .limit(lim)
+        q.order_by(ListenHistoryItem.created_at.desc()).limit(lim)
     ).scalars().all()
     return PlayerHistoryResponse(limit=lim, items=[_to_history(h) for h in items])
 

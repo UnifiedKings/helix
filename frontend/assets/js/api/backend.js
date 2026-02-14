@@ -181,8 +181,11 @@ export function playerStreamUrl(queueItemId) {
 }
 
 
-export async function getListeningHistory() {
-  return await api('/api/player/history');
+export async function getListeningHistory(station_id = null) {
+  if (!station_id) return await api('/api/player/history');
+  const u = new URL(API_BASE + '/api/player/history', window.location.origin);
+  u.searchParams.set('station_id', station_id);
+  return await api(u.pathname + '?' + u.searchParams.toString());
 }
 
 

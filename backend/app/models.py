@@ -106,6 +106,7 @@ class ListenHistoryItem(Base):
     __tablename__ = "listen_history"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    station_id: Mapped[str] = mapped_column(String(36), nullable=False, default="", index=True)
 
     queue_item_id: Mapped[str] = mapped_column(String(36), nullable=False, default="")
     title: Mapped[str] = mapped_column(Text, nullable=False, default="")

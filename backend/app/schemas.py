@@ -124,6 +124,7 @@ class PlayerHistoryItem(BaseModel):
     subsonic_song_id: str = ""
     yt_video_id: str = ""
     yt_browse_id: str = ""
+    station_id: str = ""
     source: str = "subsonic"
     event: str = "skipped"
     reason: str = ""

@@ -76,6 +76,8 @@ def init_db() -> None:
             add_col("listen_history", "yt_video_id TEXT NOT NULL DEFAULT \"\"")
         if not has_col("listen_history", "yt_browse_id"):
             add_col("listen_history", "yt_browse_id TEXT NOT NULL DEFAULT \"\"")
+        if not has_col("listen_history", "station_id"):
+            add_col("listen_history", "station_id TEXT NOT NULL DEFAULT \"\"")
 
     except Exception:
         # If migration fails (permissions/locking), Helix will still run; new

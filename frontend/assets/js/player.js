@@ -793,7 +793,8 @@ async function syncOnce(forceLoadStream) {
   // Now Playing v2: populate recent history panel if present.
   if (document.getElementById("npHistoryList")) {
     try {
-      const hist = await backend.getListeningHistory();
+      const sid = (st && st.active_station_id) ? st.active_station_id : null;
+      const hist = await backend.getListeningHistory(sid);
       await renderHistory(hist && hist.items ? hist.items : []);
     } catch (e) {
       // non-fatal
