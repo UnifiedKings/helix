@@ -446,7 +446,8 @@ function bindButtons() {
         });
 
         // Visually toggle
-        bDislike.textContent = (res && res.disliked) ? "🚫" : "👎";
+        //bDislike.textContent = (res && res.disliked) ? "🚫" : "👎";
+        bDislike.innerHTML = icons.thumbDown(res.disliked)
         // If user disliked the currently playing song, immediately skip it.
         if (res && res.disliked) {
           try { await backend.playerNext(); } catch {}
@@ -743,8 +744,8 @@ if (document.getElementById("npQueueList")) {
     gs3.__lastDislikeKey = likeKey;
     dislikeBtn.textContent = "👎";
     backend.dislikesIsDisliked({ yt_video_id: np.yt_video_id || null, subsonic_song_id: np.subsonic_song_id || null })
-      .then((r) => { dislikeBtn.textContent = r && r.disliked ? "🚫" : "👎"; })
-      .catch(() => { dislikeBtn.textContent = "👎"; });
+      .then((r) => { dislikeBtn.innerHTML = icons.thumbDown(!!(r && r.disliked)) })
+      .catch(() => { dislikeBtn.innerHTML = icons.thumbDown()});
   }
 
 // Station mode header (Now Playing page)
