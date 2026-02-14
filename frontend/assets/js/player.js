@@ -1,4 +1,5 @@
 import * as backend from "./api/backend.js";
+import * as icons from "./ui/icons.js";
 
 // ---- Persist last known player state so UI can restore after hard refresh even if backend is slow ----
 const LAST_STATE_KEY = "helix_last_player_state_v1";
@@ -357,6 +358,10 @@ function bindButtons() {
   const bDislike = qs("pbDislike");
   const ap = document.getElementById("autoplayToggle");
 
+  // Iconify core controls (keeps HTML clean and avoids repeating SVG markup).
+  if (bReplay) bReplay.innerHTML = icons.replay();
+  if (bLike) bLike.innerHTML = icons.thumbUp(false);
+
   if (bReplay && !bReplay.__helixBound) {
     bReplay.__helixBound = true;
     bReplay.addEventListener("click", async () => {
@@ -417,7 +422,7 @@ function bindButtons() {
           subsonic_song_id: np.subsonic_song_id || null,
           yt_video_id: np.yt_video_id || null,
         });
-        bLike.textContent = (res && res.liked) ? "♥" : "♡";
+        bLike.innerHTML = icons.thumbUp(!!(res && res.liked));
       } catch {}
     });
   }
@@ -545,20 +550,20 @@ async function renderHistory(items) {
     likeBtn.className = "npHistBtn";
     likeBtn.title = "Thumb up";
     likeBtn.type = "button";
-    likeBtn.textContent = "♡";
+    likeBtn.innerHTML = icons.thumbUp(false);
 
     const replayBtn = document.createElement("button");
     replayBtn.className = "npHistBtn";
     replayBtn.title = "Replay";
     replayBtn.type = "button";
-    replayBtn.textContent = "⟲";
+    replayBtn.innerHTML = icons.replay();
 
     // Best-effort: if we have stable ids, reflect liked state.
     const sid = (h.subsonic_song_id || "").trim();
     const vid = (h.yt_video_id || "").trim();
     if (sid || vid) {
       backend.likesIsLiked({ subsonic_song_id: sid || null, yt_video_id: vid || null })
-        .then((r) => { likeBtn.textContent = (r && r.liked) ? "♥" : "♡"; })
+        .then((r) => { likeBtn.innerHTML = icons.thumbUp(!!(r && r.liked)); })
         .catch(() => {});
     }
 
@@ -577,7 +582,7 @@ async function renderHistory(items) {
           yt_video_id: vid || "",
           yt_browse_id: (h.yt_browse_id || "").trim(),
         });
-        likeBtn.textContent = (r && r.liked) ? "♥" : "♡";
+        likeBtn.innerHTML = icons.thumbUp(!!(r && r.liked));
       } catch (e) {
         console.error(e);
       }
@@ -727,10 +732,10 @@ if (document.getElementById("npQueueList")) {
   const likeKey = (np.subsonic_song_id ? `subsonic:${np.subsonic_song_id}` : (np.yt_video_id ? `yt:${np.yt_video_id}` : ""));
   if (likeBtn && likeKey && gs3.__lastLikeKey !== likeKey) {
     gs3.__lastLikeKey = likeKey;
-    likeBtn.textContent = "♡";
+    likeBtn.innerHTML = icons.thumbUp(false);
     backend.likesIsLiked({ yt_video_id: np.yt_video_id || null, subsonic_song_id: np.subsonic_song_id || null })
-      .then((r) => { likeBtn.textContent = r && r.liked ? "♥" : "♡"; })
-      .catch(() => { likeBtn.textContent = "♡"; });
+      .then((r) => { likeBtn.innerHTML = icons.thumbUp(!!(r && r.liked)); })
+      .catch(() => { likeBtn.innerHTML = icons.thumbUp(false); });
   }
 
   // dislike button

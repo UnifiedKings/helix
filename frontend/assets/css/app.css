@@ -752,9 +752,12 @@ tr:hover td {
 .pbTitle { font-size: 12px; font-weight: 650; }
 .pbSub { font-size: 11px; color:#aab2c0; margin-top: 2px; }
 .playerCenter { display:flex; gap: 12px; align-items:center; justify-content:center; }
-.iconBtn { background: transparent; border: none; color:#e7e7e7; font-size: 16px; padding: 8px; border-radius: 999px; cursor:pointer; }
+.iconBtn { background: transparent; border: none; color:#e7e7e7; font-size: 16px; padding: 8px; border-radius: 999px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
 .iconBtn:hover { background: rgba(255,255,255,0.06); }
 .iconBtn.play { font-size: 18px; border: 1px solid #2a3140; width: 40px; height: 40px; display:flex; align-items:center; justify-content:center; }
+
+/* Inline SVG icons (currentColor) */
+.hxIcon { width: 18px; height: 18px; display: block; fill: currentColor; }
 .playerRight { min-width: 140px; display:flex; justify-content:flex-end; }
 
 /* Search page */
@@ -1537,6 +1540,8 @@ input[type=range] {
   border: 1px solid #1f2530;
   border-radius: 14px;
   padding: 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 .npNow {
@@ -1564,6 +1569,7 @@ input[type=range] {
 
 .npNowMeta {
   min-width: 0;
+  width: 90%;
 }
 
 .npNowTitle {
@@ -1683,6 +1689,10 @@ input[type=range] {
   background: rgba(20, 24, 32, 0.7);
   color: #e7eaf0;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
 }
 
 .npHistBtn:hover {

@@ -1,4 +1,5 @@
 import * as backend from "../api/backend.js";
+import * as icons from "../ui/icons.js";
 import { startPlayerPolling } from "../player.js";
 import { requireAuth } from "../auth-guard.js";
 
@@ -32,7 +33,7 @@ async function render() {
   if (cnt) cnt.textContent = `${items.length} song${items.length === 1 ? "" : "s"}`;
 
   if (!items.length) {
-    wrap.innerHTML = `<div class="muted">No liked songs yet. Hit the ♡ button while a track is playing.</div>`;
+    wrap.innerHTML = `<div class="muted">No liked songs yet. Hit the thumbs up button while a track is playing.</div>`;
     return;
   }
 
@@ -49,7 +50,7 @@ async function render() {
       </div>
       <div class="resultActions">
         <button class="primaryBtn" type="button" data-act="play">Play</button>
-        <button class="iconBtn" type="button" title="Unlike" data-act="unlike">♥</button>
+        <button class="iconBtn" type="button" title="Unlike" data-act="unlike">${icons.thumbUp(true)}</button>
       </div>
     `;
 
