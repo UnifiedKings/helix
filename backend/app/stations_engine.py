@@ -28,6 +28,25 @@ def _norm(s: str) -> str:
     s = re.sub(r"\s+", " ", s).strip()
     return s
 
+def _norm_artist(s: str) -> str:
+    """Normalize artist names for anti-repetition checks.
+
+    Goal: treat common library variants as equivalent (e.g. "The Shins" vs "Shins",
+    "Shins, The", punctuation differences).
+    """
+    a = _norm(s)
+    if not a:
+        return ""
+    # handle trailing ", the"
+    a = re.sub(r",\s*the$", "", a).strip()
+    # drop leading "the "
+    a = re.sub(r"^the\s+", "", a).strip()
+    # reduce punctuation to spaces for stability
+    a = re.sub(r"[^a-z0-9\s]+", " ", a)
+    a = re.sub(r"\s+", " ", a).strip()
+    print(a)
+    return a
+
 
 def _norm_pair(title: str, artist: str) -> str:
     return f"{_norm(title)}|{_norm(artist)}"
@@ -191,7 +210,7 @@ def _recent_artist_counts(db: Session, user_id: str, window: int = 50) -> Dict[s
     ).all()
     counts: Dict[str, int] = {}
     for (a,) in rows:
-        k = _norm(str(a or ""))
+        k = _norm_artist(str(a or ""))
         if not k:
             continue
         counts[k] = counts.get(k, 0) + 1
@@ -248,10 +267,30 @@ async def generate_and_append_station_track(
     tag_strictness = int(getattr(station, "tag_strictness", 70) or 70)
     tag_strictness = max(0, min(100, tag_strictness))
 
-    blacklist = {_norm(a) for a in _parse_artist_list(str(getattr(station, "artist_blacklist", "") or ""))}
+    blacklist = {_norm_artist(a) for a in _parse_artist_list(str(getattr(station, "artist_blacklist", "") or ""))}
 
     # Recent constraints
-    cooldown_artists = set(_norm(a) for a in _recent_artists(db, user_id, limit=max(artist_cooldown, 1)))
+    cooldown_artists = set(_norm_artist(a) for a in _recent_artists(db, user_id, limit=max(artist_cooldown, 1)))
+    # Also consider artists currently queued at/after the current index (including the currently
+    # playing item). This prevents immediate repeats before listen history is written, and
+    # prevents repeated appends from stacking the same artist in the upcoming window.
+    try:
+        sess = db.get(PlaybackSession, user_id)
+        if sess:
+            window = max(artist_cooldown, 1)
+            qrows = db.execute(
+                select(QueueItem.artist)
+                .where(QueueItem.session_user_id == user_id)
+                .order_by(QueueItem.position.asc())
+                .offset(max(int(getattr(sess, "current_index", 0) or 0), 0))
+                .limit(window)
+            ).all()
+            for (a,) in qrows:
+                na2 = _norm_artist(str(a or ""))
+                if na2:
+                    cooldown_artists.add(na2)
+    except Exception:
+        pass
     recent_counts = _recent_artist_counts(db, user_id, window=50)
 
     seed_core = _norm_title_core(station.seed_title or "") if (station.seed_type or "").lower() == "track" else ""
@@ -334,7 +373,7 @@ async def generate_and_append_station_track(
         if not title or not artist:
             continue
 
-        na = _norm(artist)
+        na = _norm_artist(artist)
         if na in blacklist:
             continue
         if artist_cooldown > 0 and na in cooldown_artists:
@@ -356,7 +395,7 @@ async def generate_and_append_station_track(
         score = random.random() * 0.5  # controlled randomness
 
         # Stay close to the seed (artist match is a weak proxy for similarity)
-        if station.seed_artist and na == _norm(station.seed_artist):
+        if station.seed_artist and na == _norm_artist(station.seed_artist):
             score += 1.0 * seed_infl
 
         # Variety penalty
