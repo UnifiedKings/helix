@@ -12,7 +12,8 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from .models import Station, StationTag, QueueItem, PlaybackSession, ListenHistoryItem, DislikedTrack
-from .integrations.ytmusic_api import search_ytmusic
+from .integrations.listenbrainz import lb_radio_for_artist, lb_radio_for_tags
+from .integrations.musicbrainz_meta import lookup_artist_mbid_by_name, lookup_recording, simplify_recording
 from .integrations.subsonic import SubsonicClient
 
 LOG = logging.getLogger("helix.stations")
@@ -44,7 +45,6 @@ def _norm_artist(s: str) -> str:
     # reduce punctuation to spaces for stability
     a = re.sub(r"[^a-z0-9\s]+", " ", a)
     a = re.sub(r"\s+", " ", a).strip()
-    print(a)
     return a
 
 
@@ -157,7 +157,7 @@ async def ensure_station_tags(db: Session, station: Station) -> List[str]:
     mb_artist_id = _clean(getattr(station, "mb_artist_id", "") or "")
     if not mb_artist_id and station.seed_artist:
         try:
-            mb_artist_id = await _mb_lookup_artist_id_by_name(station.seed_artist)
+            mb_artist_id = await lookup_artist_mbid_by_name(station.seed_artist)
         except Exception as e:
             LOG.warning("mb artist lookup failed for %r: %s", station.seed_artist, e)
             mb_artist_id = ""
@@ -198,6 +198,18 @@ def _recent_pairs(db: Session, user_id: str, limit: int = 150) -> set[str]:
         .limit(limit)
     ).all()
     return {_norm_pair(r[0] or "", r[1] or "") for r in rows}
+
+
+
+
+def _recent_recording_ids(db: Session, user_id: str, limit: int = 400) -> set[str]:
+    rows = db.execute(
+        select(ListenHistoryItem.mb_recording_id)
+        .where(ListenHistoryItem.user_id == user_id)
+        .order_by(ListenHistoryItem.created_at.desc())
+        .limit(limit)
+    ).all()
+    return {str(r[0] or '').strip() for r in rows if str(r[0] or '').strip()}
 
 
 def _recent_artist_counts(db: Session, user_id: str, window: int = 50) -> Dict[str, int]:
@@ -271,87 +283,117 @@ async def generate_and_append_station_track(
 
     # Recent constraints
     cooldown_artists = set(_norm_artist(a) for a in _recent_artists(db, user_id, limit=max(artist_cooldown, 1)))
-    # Also consider artists currently queued at/after the current index (including the currently
-    # playing item). This prevents immediate repeats before listen history is written, and
-    # prevents repeated appends from stacking the same artist in the upcoming window.
+    # Also consider the tail of the current queue so repeated appends can't
+    # queue the same artist back-to-back before history accrues.
     try:
-        sess = db.get(PlaybackSession, user_id)
-        if sess:
-            window = max(artist_cooldown, 1)
-            qrows = db.execute(
-                select(QueueItem.artist)
-                .where(QueueItem.session_user_id == user_id)
-                .order_by(QueueItem.position.asc())
-                .offset(max(int(getattr(sess, "current_index", 0) or 0), 0))
-                .limit(window)
-            ).all()
-            for (a,) in qrows:
-                na2 = _norm_artist(str(a or ""))
-                if na2:
-                    cooldown_artists.add(na2)
+        tail = db.execute(
+            select(QueueItem.artist)
+            .where(QueueItem.session_user_id == user_id)
+            .order_by(QueueItem.position.desc())
+            .limit(max(artist_cooldown, 1))
+        ).all()
+        for (a,) in tail:
+            na2 = _norm_artist(str(a or ""))
+            if na2:
+                cooldown_artists.add(na2)
     except Exception:
         pass
     recent_counts = _recent_artist_counts(db, user_id, window=50)
 
     seed_core = _norm_title_core(station.seed_title or "") if (station.seed_type or "").lower() == "track" else ""
 
-    queries: List[str] = []
-    if tags:
-        # mix tags weighted by stored weights
-        stored = db.execute(
-            select(StationTag.tag, StationTag.weight)
-            .where(StationTag.station_id == station.id)
-            .order_by(StationTag.weight.desc())
-            .limit(30)
-        ).all()
-        pool: List[str] = []
-        # tag strictness influences how strongly we prefer the top tags.
-        strict = tag_strictness / 100.0
-        for tag, w in stored:
-            if not tag:
-                continue
-            rep_base = float(w) * 3.0
-            rep = max(1, int(round(rep_base * (1.0 + strict))))
-            pool.extend([tag] * rep)
-        random.shuffle(pool)
-        queries.extend(pool[:10])
+    # --- Candidate generation (ListenBrainz radio) ---
 
-    # always include a comfort fallback query
-    comfort_query = ""
-    if (station.seed_type or "").lower() == "track" and station.seed_title and station.seed_artist:
-        comfort_query = f"{station.seed_title} {station.seed_artist}".strip()
-    elif station.seed_artist:
-        comfort_query = station.seed_artist
-    if comfort_query:
-        queries.append(comfort_query)
+    # Map popularity_bias (0..100 popular..obscure) to a ListenBrainz popularity range (0..100).
+    pop_bias = int(getattr(station, "popularity_bias", 50) or 50)
+    pop_bias = max(0, min(100, pop_bias))
+    # popular -> higher pop range; obscure -> lower pop range
+    pop_hi = int(round(100 - (pop_bias * 0.6)))
+    pop_lo = max(0, pop_hi - 30)
+    pop_lo = max(0, min(100, pop_lo))
+    pop_hi = max(0, min(100, pop_hi))
+    if pop_lo > pop_hi:
+        pop_lo, pop_hi = pop_hi, pop_lo
 
-    # Determine which query to use
-    # use_tag: discoverability increases tag use; seed influence decreases tag use.
-    p_tag = d * (1.0 - (seed_infl * 0.7))
-    p_tag = max(0.0, min(1.0, p_tag))
-    use_tag = bool(tags) and (random.random() < p_tag)
-    q = ""
-    if use_tag:
-        q = random.choice(queries[:-1] or queries)
+    # Map discoverability to LB mode. Higher discoverability => harder mode (more adventurous).
+    if d < 0.34:
+        lb_mode = "easy"
+    elif d < 0.67:
+        lb_mode = "medium"
     else:
-        q = comfort_query or (queries[-1] if queries else "")
+        lb_mode = "hard"
 
-    # Broaden a bit: for tags, add "music" keyword; for artist, allow "similar" phrasing.
-    if use_tag:
-        query = f"{q} music"
+    # Ensure MBIDs on station (semantic anchors).
+    seed_type = (station.seed_type or "artist").lower().strip()
+    if seed_type == "artist":
+        mb_artist_id = _clean(getattr(station, "mb_artist_id", "") or "")
+        if not mb_artist_id and station.seed_artist:
+            try:
+                mb_artist_id = await lookup_artist_mbid_by_name(station.seed_artist)
+            except Exception as e:
+                LOG.warning("mb artist lookup failed for %r: %s", station.seed_artist, e)
+                mb_artist_id = ""
+            if mb_artist_id:
+                station.mb_artist_id = mb_artist_id
+                station.updated_at = datetime.utcnow()
+                db.commit()
+
+        if not mb_artist_id:
+            return None
+
+        try:
+            lb_payload = await lb_radio_for_artist(
+                mb_artist_id,
+                mode=lb_mode,
+                max_similar_artists=200,
+                max_recordings_per_artist=50,
+                pop_begin=pop_lo,
+                pop_end=pop_hi,
+                cache_ttl_s=7 * 24 * 3600,
+            )
+        except Exception as e:
+            LOG.warning("listenbrainz lb-radio/artist failed: %s", e)
+            lb_payload = {}
     else:
-        query = f"{q}"
+        # Track stations: use the station's cached MB tags as seeds for LB tag radio.
+        top_tags = tags[:8] if tags else []
+        try:
+            lb_payload = await lb_radio_for_tags(
+                top_tags,
+                operator="OR",
+                count=300,
+                pop_begin=pop_lo,
+                pop_end=pop_hi,
+                cache_ttl_s=2 * 24 * 3600,
+            )
+        except Exception as e:
+            LOG.warning("listenbrainz lb-radio/tags failed: %s", e)
+            lb_payload = {}
 
-    payload = search_ytmusic(query, song_limit=25, album_limit=0)
-    songs = payload.get("songs") or []
-    if not songs and comfort_query:
-        payload = search_ytmusic(comfort_query, song_limit=25, album_limit=0)
-        songs = payload.get("songs") or []
-    if not songs:
+    def _extract_items(obj: Any, acc: List[Dict[str, Any]]) -> None:
+        if isinstance(obj, dict):
+            if "recording_mbid" in obj and (obj.get("recording_mbid") or "").strip():
+                acc.append(obj)
+                return
+            for v in obj.values():
+                _extract_items(v, acc)
+        elif isinstance(obj, list):
+            for v in obj:
+                _extract_items(v, acc)
+
+    lb_items: List[Dict[str, Any]] = []
+    _extract_items(lb_payload, lb_items)
+
+    if not lb_items:
+        LOG.warning("[station] no listenbrainz candidates station=%s user=%s seed=%r", station_id, user_id, station.seed_artist)
         return None
 
-    random.shuffle(songs)
+    random.shuffle(lb_items)
 
+    # Recent IDs for de-dupe
+    recent_rec_ids = _recent_recording_ids(db, user_id, limit=600)
+
+    # Pull a small set of recent dislikes (keys) for fast filtering.
     # Pull a small set of recent dislikes (keys) for fast filtering.
     disliked_keys = set(
         k for (k,) in db.execute(
@@ -367,9 +409,34 @@ async def generate_and_append_station_track(
     best: Optional[Tuple[float, Dict[str, Any]]] = None
     variety_penalty = {0: 0.0, 1: 0.8, 2: 1.5}[artist_variety]
 
-    for it in songs:
-        title = _clean(str(it.get("title") or ""))
-        artist = _clean(str(it.get("artist") or ""))
+    # Pick the best candidate by applying hard filters, then a simple scoring model.
+    best: Optional[Tuple[float, Dict[str, Any]]] = None
+    variety_penalty = {0: 0.0, 1: 0.8, 2: 1.5}[artist_variety]
+
+    era_start = int(getattr(station, "era_start", 0) or 0)
+    era_end = int(getattr(station, "era_end", 0) or 0)
+
+    # Only resolve a bounded number of MB recordings per request to keep station refresh snappy.
+    max_to_consider = 220
+
+    for it in lb_items[:max_to_consider]:
+        rec_mbid = _clean(str(it.get("recording_mbid") or ""))
+        if not rec_mbid:
+            continue
+
+        if rec_mbid in recent_rec_ids:
+            continue
+
+        if f"mb:{rec_mbid}" in disliked_keys:
+            continue
+
+        # Resolve recording metadata from MusicBrainz (cached).
+        try:
+            rec = await lookup_recording(rec_mbid)
+        except Exception:
+            continue
+
+        title, artist, album, duration_ms, year, release_mbid = simplify_recording(rec)
         if not title or not artist:
             continue
 
@@ -380,52 +447,91 @@ async def generate_and_append_station_track(
             continue
 
         if seed_core and (not allow_seed_alts):
-            # block alternate versions of the seed track
             if _norm_title_core(title) == seed_core:
+                continue
+
+        # Era filter (best-effort; relies on MB release date)
+        if (era_start or era_end) and year:
+            if era_start and year < era_start:
+                continue
+            if era_end and year > era_end:
                 continue
 
         if _norm_pair(title, artist) in recent:
             continue
 
-        vid = _clean(str(it.get("video_id") or ""))
-        if vid and f"yt:{vid}" in disliked_keys:
-            continue
-
         # --- Scoring ---
         score = random.random() * 0.5  # controlled randomness
 
-        # Stay close to the seed (artist match is a weak proxy for similarity)
+        # Prefer seed artist based on seed_influence.
         if station.seed_artist and na == _norm_artist(station.seed_artist):
             score += 1.0 * seed_infl
 
         # Variety penalty
         score -= variety_penalty * float(recent_counts.get(na, 0))
 
-        # Mild penalty for obvious variants
+        # Penalize obvious variants
         if _looks_like_variant(title):
             score -= 0.15
 
+        # Slight boost for higher listen count within the returned pool (keeps things sane).
+        try:
+            lcount = float(it.get("total_listen_count") or 0)
+            if lcount > 0:
+                score += min(0.35, (lcount ** 0.5) / 2000.0)
+        except Exception:
+            pass
+
         if best is None or score > best[0]:
-            best = (score, it)
+            # stash resolved fields to avoid repeating MB lookups
+            pick = dict(it)
+            pick["_title"] = title
+            pick["_artist"] = artist
+            pick["_album"] = album
+            pick["_duration_ms"] = duration_ms
+            pick["_year"] = year
+            pick["_release_mbid"] = release_mbid
+            best = (score, pick)
 
     if best is None:
-        pick = songs[0]
+        pick = lb_items[0]
+        # best-effort metadata
+        rec_mbid = _clean(str(pick.get("recording_mbid") or ""))
+        try:
+            rec = await lookup_recording(rec_mbid) if rec_mbid else {}
+        except Exception:
+            rec = {}
+        title, artist, album, duration_ms, year, release_mbid = simplify_recording(rec)
+        pick = dict(pick)
+        pick["_title"] = title
+        pick["_artist"] = artist
+        pick["_album"] = album
+        pick["_duration_ms"] = duration_ms
+        pick["_year"] = year
+        pick["_release_mbid"] = release_mbid
         LOG.warning(
-            "[station] no candidate passed filters; falling back to first result station=%s user=%s q=%r",
+            "[station] no candidate passed filters; falling back to first LB result station=%s user=%s",
             station_id,
             user_id,
-            query,
         )
     else:
         pick = best[1]
 
-    title = _clean(str(pick.get("title") or ""))
-    artist = _clean(str(pick.get("artist") or ""))
-    album = _clean(str(pick.get("album") or ""))
-    dur_s = pick.get("duration_seconds")
-    duration_ms = int(dur_s * 1000) if isinstance(dur_s, int) and dur_s > 0 else 0
-    art_url = _clean(str(pick.get("thumbnail_url") or ""))
-    yt_video_id = _clean(str(pick.get("video_id") or ""))
+    title = _clean(str(pick.get("_title") or ""))
+    artist = _clean(str(pick.get("_artist") or ""))
+    album = _clean(str(pick.get("_album") or ""))
+    duration_ms = int(pick.get("_duration_ms") or 0)
+
+    mb_recording_id = _clean(str(pick.get("recording_mbid") or ""))
+    mb_artist_id = _clean(str(pick.get("similar_artist_mbid") or ""))
+
+    # Cover art from Cover Art Archive (best-effort)
+    art_url = ""
+    rel = _clean(str(pick.get("_release_mbid") or ""))
+    if rel:
+        art_url = f"https://coverartarchive.org/release/{rel}/front-500"
+
+    yt_video_id = ""  # found lazily during fulfillment (stream time)
 
     # Match to Subsonic (fast path) but do NOT prefer it.
     song = None
@@ -450,10 +556,12 @@ async def generate_and_append_station_track(
         album=album,
         duration_ms=duration_ms,
         art_url=art_url,
-        source="ytmusic",
+        source="missing",
     )
     qitem.yt_video_id = yt_video_id
     qitem.yt_browse_id = ""
+    qitem.mb_recording_id = mb_recording_id
+    qitem.mb_artist_id = mb_artist_id
 
     if song and song.get("id"):
         qitem.source = "subsonic"
