@@ -18,6 +18,7 @@ from ..schemas import PlayerPlayAlbumRequest, PlayerPlayTrackRequest, PlayerJump
 from ..settings_store import get_settings
 from ..integrations.subsonic import SubsonicClient
 from ..integrations.ytmusic_api import get_album_full
+from ..integrations.ytmusic_search import find_track
 from ..download_manager import DOWNLOAD_MANAGER, DownloadJob
 from ..stations_engine import generate_and_append_station_track
 
@@ -112,14 +113,26 @@ def _to_item(q: QueueItem) -> PlayerQueueItem:
         source=q.source,
         subsonic_song_id=getattr(q, "subsonic_song_id", "") or "",
         yt_video_id=getattr(q, "yt_video_id", "") or "",
+        yt_browse_id=getattr(q, "yt_browse_id", "") or "",
+        mb_recording_id=getattr(q, "mb_recording_id", "") or "",
+        mb_artist_id=getattr(q, "mb_artist_id", "") or "",
         is_playable=q.is_playable,
         error=q.error or "",
     )
 
 
 def _can_play(it: QueueItem) -> bool:
-    """A queue item is playable if it's in Subsonic OR it can be fulfilled from YT."""
-    return bool(it.is_playable) or bool(getattr(it, "yt_video_id", ""))
+    """A queue item is playable if it's in Subsonic OR it can be fulfilled on-demand.
+
+    For station-discovered items we may not have a YT id yet; we can still resolve one
+    lazily at stream time using the title/artist intent.
+    """
+    if bool(it.is_playable):
+        return True
+    if getattr(it, "source", "") == "subsonic":
+        return False
+    return bool((it.title or "").strip()) and bool((it.artist or "").strip())
+
 
 
 
@@ -142,6 +155,8 @@ def _to_history(h: ListenHistoryItem) -> PlayerHistoryItem:
         subsonic_song_id=getattr(h, "subsonic_song_id", "") or "",
         yt_video_id=getattr(h, "yt_video_id", "") or "",
         yt_browse_id=getattr(h, "yt_browse_id", "") or "",
+        mb_recording_id=getattr(h, "mb_recording_id", "") or "",
+        mb_artist_id=getattr(h, "mb_artist_id", "") or "",
         station_id=getattr(h, "station_id", "") or "",
         source=h.source or "subsonic",
         event=h.event,
@@ -185,6 +200,8 @@ def _push_history(db: Session, user_id: str, item: Optional[QueueItem], event: s
         subsonic_song_id=getattr(item, "subsonic_song_id", "") or "",
         yt_video_id=getattr(item, "yt_video_id", "") or "",
         yt_browse_id=getattr(item, "yt_browse_id", "") or "",
+        mb_recording_id=getattr(item, "mb_recording_id", "") or "",
+        mb_artist_id=getattr(item, "mb_artist_id", "") or "",
         event=event,
         reason=reason,
         played_ms=max(0, int(played_ms or 0)),
@@ -816,6 +833,8 @@ async def replay_from_history(payload: PlayerReplayRequest, db: Session = Depend
         subsonic_song_id=getattr(h, "subsonic_song_id", "") or "",
         yt_video_id=getattr(h, "yt_video_id", "") or "",
         yt_browse_id=getattr(h, "yt_browse_id", "") or "",
+        mb_recording_id=getattr(h, "mb_recording_id", "") or "",
+        mb_artist_id=getattr(h, "mb_artist_id", "") or "",
         is_playable=bool(getattr(h, "subsonic_song_id", "")) or bool(getattr(h, "yt_video_id", "")),
         error="",
     )
@@ -919,6 +938,21 @@ async def stream_item(queue_item_id: str, db: Session = Depends(get_db), user: U
         raise HTTPException(status_code=404, detail="Queue item not found.")
     # If the item isn't playable from Subsonic yet, try to resolve it from Subsonic first (fast path),
     # otherwise fulfill ASAP from YT Music (download) only when this item is being streamed (front of queue).
+    # If we have no YT id (common for station-discovered tracks), attempt to find one lazily.
+    if (not _clean(getattr(cur, "yt_video_id", "") or "")) and (not cur.is_playable or not cur.subsonic_song_id) and cur.source != "subsonic":
+        try:
+            want_dur_s = int((cur.duration_ms or 0) / 1000) if (cur.duration_ms or 0) else None
+        except Exception:
+            want_dur_s = None
+        try:
+            r = find_track(title=cur.title or "", artist=cur.artist or "", album=cur.album or None, duration_seconds=want_dur_s, limit=9)
+            if r.found and r.video_id:
+                cur.yt_video_id = r.video_id
+                db.commit()
+                LOG.info("[stream] resolved yt id lazily vid=%s conf=%.2f title=%r artist=%r", r.video_id, r.confidence, cur.title, cur.artist)
+        except Exception as e:
+            LOG.warning("[stream] lazy yt id search failed: %s", e)
+
     if (cur.yt_video_id and (
         (not cur.is_playable or not cur.subsonic_song_id) or (cur.source != "subsonic" and (not cur.inbound_path or not os.path.exists(cur.inbound_path)))
     )):
@@ -1073,6 +1107,19 @@ async def request_fulfillment(queue_item_id: str, db: Session = Depends(get_db),
         raise HTTPException(status_code=404, detail="Queue item not found.")
     if qi.is_playable and qi.source == "subsonic":
         return {"ok": True, "status": "ALREADY_PLAYABLE"}
+    if not qi.yt_video_id:
+        # Try to find a YouTube id lazily from the track intent.
+        try:
+            want_dur_s = int((qi.duration_ms or 0) / 1000) if (qi.duration_ms or 0) else None
+        except Exception:
+            want_dur_s = None
+        try:
+            r = find_track(title=qi.title or "", artist=qi.artist or "", album=qi.album or None, duration_seconds=want_dur_s, limit=9)
+            if r.found and r.video_id:
+                qi.yt_video_id = r.video_id
+                db.commit()
+        except Exception:
+            pass
 
     if not qi.yt_video_id:
         return {"ok": False, "status": "NO_YT_ID"}

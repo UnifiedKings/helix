@@ -31,6 +31,16 @@ from .routers.album import router as album_router
 from .routers.stations import router as stations_router
 from .routers.likes import router as likes_router
 from .routers.dislikes import router as dislikes_router
+import logging
+import sys
+
+logging.basicConfig(
+    level=logging.INFO,
+    stream=sys.stdout,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    force=True,  # key: overrides existing logging config
+)
+
 
 logging.basicConfig(level=getattr(logging, os.getenv("HELIX_LOG_LEVEL","INFO").upper(), logging.INFO))
 

@@ -31,7 +31,7 @@ _mb_client: Optional[MusicBrainzClient] = None
 def _client() -> MusicBrainzClient:
     global _mb_client
     if _mb_client is None:
-        _mb_client = MusicBrainzClient(user_agent="Helix/0.0.18 (station-discovery)", min_interval_ms=1100, timeout_s=20)
+        _mb_client = MusicBrainzClient(user_agent="Helix/0.0.20 (station-discovery)", min_interval_ms=20, timeout_s=20)
     return _mb_client
 
 
@@ -64,10 +64,29 @@ async def lookup_recording(
         return hit
 
     # Include artists + releases for album/year + cover art lookup.
-    data = await _client().lookup("recording", rid, inc="artists+releases")
+    data = await _client().lookup("recording", rid, inc="artists")
     _rec_cache.set(key, data, ttl_seconds=cache_ttl_s)
     return data
 
+
+
+
+async def lookup_recording_full(
+    recording_mbid: str,
+    *,
+    cache_ttl_s: int = 30 * 24 * 3600,
+) -> Dict[str, Any]:
+    """Full recording lookup including releases for album/year + cover art (heavier)."""
+    rid = (recording_mbid or "").strip()
+    if not rid:
+        return {}
+    key = f"rec_full:{rid}"
+    hit = _rec_cache.get(key)
+    if hit is not None:
+        return hit
+    data = await _client().lookup("recording", rid, inc="artists+releases")
+    _rec_cache.set(key, data, ttl_seconds=cache_ttl_s)
+    return data
 
 def simplify_recording(rec: Dict[str, Any]) -> Tuple[str, str, str, int, int, str]:
     """Return (title, artist, album, duration_ms, year, release_mbid)."""

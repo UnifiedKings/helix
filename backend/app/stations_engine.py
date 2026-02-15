@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
+import time
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -416,23 +417,90 @@ async def generate_and_append_station_track(
     era_start = int(getattr(station, "era_start", 0) or 0)
     era_end = int(getattr(station, "era_end", 0) or 0)
 
-    # Only resolve a bounded number of MB recordings per request to keep station refresh snappy.
-    max_to_consider = 220
+    # --- Selection strategy: cheap LB filtering first, then lazy MB resolution ---
+    t0 = time.time()
 
-    for it in lb_items[:max_to_consider]:
+    def _it_title(it: Dict[str, Any]) -> str:
+        return _clean(str(it.get("recording_name") or it.get("track_name") or it.get("title") or it.get("name") or ""))
+
+    def _it_artist(it: Dict[str, Any]) -> str:
+        return _clean(str(it.get("similar_artist_name") or it.get("artist_name") or it.get("artist") or ""))
+
+    # Observability counters
+    rej = {"no_mbid": 0, "recent_track": 0, "disliked": 0, "cooldown": 0, "blacklist": 0, "seed_alt": 0, "recent_pair": 0}
+
+    # Cheap scan cap (no MB calls)
+    max_fast_consider = 600
+    scored: List[Tuple[float, Dict[str, Any]]] = []
+
+    for it in lb_items[:max_fast_consider]:
+        rec_mbid = _clean(str(it.get("recording_mbid") or ""))
+        if not rec_mbid:
+            rej["no_mbid"] += 1
+            continue
+        if rec_mbid in recent_rec_ids:
+            rej["recent_track"] += 1
+            continue
+        if f"mb:{rec_mbid}" in disliked_keys:
+            rej["disliked"] += 1
+            continue
+
+        title_hint = _it_title(it)
+        artist_hint = _it_artist(it)
+        na_hint = _norm_artist(artist_hint) if artist_hint else ""
+
+        if na_hint and na_hint in blacklist:
+            rej["blacklist"] += 1
+            continue
+        if artist_cooldown > 0 and na_hint and na_hint in cooldown_artists:
+            rej["cooldown"] += 1
+            continue
+        if seed_core and (not allow_seed_alts) and title_hint and _norm_title_core(title_hint) == seed_core:
+            rej["seed_alt"] += 1
+            continue
+        if title_hint and artist_hint and _norm_pair(title_hint, artist_hint) in recent:
+            rej["recent_pair"] += 1
+            continue
+
+        # Cheap score
+        score = random.random() * 0.5
+        if station.seed_artist and na_hint and na_hint == _norm_artist(station.seed_artist):
+            score += 1.0 * seed_infl
+        if na_hint:
+            score -= {0: 0.0, 1: 0.8, 2: 1.5}[artist_variety] * float(recent_counts.get(na_hint, 0))
+        if title_hint and _looks_like_variant(title_hint):
+            score -= 0.15
+        try:
+            lcount = float(it.get("total_listen_count") or 0)
+            if lcount > 0:
+                score += min(0.35, (lcount ** 0.5) / 2000.0)
+        except Exception:
+            pass
+
+        scored.append((score, it))
+
+    if not scored:
+        LOG.warning("[station] no candidates after fast-pass filters station=%s user=%s seed=%r rej=%s", station_id, user_id, station.seed_artist, rej)
+        return None
+
+    scored.sort(key=lambda x: x[0], reverse=True)
+    shortlist = [it for _, it in scored[:30]]
+
+    # Slow pass: resolve only top-K via MusicBrainz (cached)
+    mb_lookups = 0
+    mb_lookup_cap = 8
+    best: Optional[Tuple[float, Dict[str, Any]]] = None
+
+    for it in shortlist:
+        if mb_lookups >= mb_lookup_cap:
+            break
         rec_mbid = _clean(str(it.get("recording_mbid") or ""))
         if not rec_mbid:
             continue
 
-        if rec_mbid in recent_rec_ids:
-            continue
-
-        if f"mb:{rec_mbid}" in disliked_keys:
-            continue
-
-        # Resolve recording metadata from MusicBrainz (cached).
         try:
-            rec = await lookup_recording(rec_mbid)
+            rec = await lookup_recording(rec_mbid)  # minimal (artists only)
+            mb_lookups += 1
         except Exception:
             continue
 
@@ -445,45 +513,31 @@ async def generate_and_append_station_track(
             continue
         if artist_cooldown > 0 and na in cooldown_artists:
             continue
-
-        if seed_core and (not allow_seed_alts):
-            if _norm_title_core(title) == seed_core:
-                continue
-
-        # Era filter (best-effort; relies on MB release date)
+        if seed_core and (not allow_seed_alts) and _norm_title_core(title) == seed_core:
+            continue
         if (era_start or era_end) and year:
             if era_start and year < era_start:
                 continue
             if era_end and year > era_end:
                 continue
-
         if _norm_pair(title, artist) in recent:
             continue
 
-        # --- Scoring ---
-        score = random.random() * 0.5  # controlled randomness
-
-        # Prefer seed artist based on seed_influence.
-        if station.seed_artist and na == _norm_artist(station.seed_artist):
-            score += 1.0 * seed_infl
-
-        # Variety penalty
-        score -= variety_penalty * float(recent_counts.get(na, 0))
-
-        # Penalize obvious variants
-        if _looks_like_variant(title):
-            score -= 0.15
-
-        # Slight boost for higher listen count within the returned pool (keeps things sane).
+        # Rescore with canonical fields
+        score = random.random() * 0.3
         try:
             lcount = float(it.get("total_listen_count") or 0)
             if lcount > 0:
                 score += min(0.35, (lcount ** 0.5) / 2000.0)
         except Exception:
             pass
+        if station.seed_artist and na == _norm_artist(station.seed_artist):
+            score += 1.0 * seed_infl
+        score -= {0: 0.0, 1: 0.8, 2: 1.5}[artist_variety] * float(recent_counts.get(na, 0))
+        if _looks_like_variant(title):
+            score -= 0.15
 
         if best is None or score > best[0]:
-            # stash resolved fields to avoid repeating MB lookups
             pick = dict(it)
             pick["_title"] = title
             pick["_artist"] = artist
@@ -494,28 +548,14 @@ async def generate_and_append_station_track(
             best = (score, pick)
 
     if best is None:
-        pick = lb_items[0]
-        # best-effort metadata
-        rec_mbid = _clean(str(pick.get("recording_mbid") or ""))
-        try:
-            rec = await lookup_recording(rec_mbid) if rec_mbid else {}
-        except Exception:
-            rec = {}
-        title, artist, album, duration_ms, year, release_mbid = simplify_recording(rec)
-        pick = dict(pick)
-        pick["_title"] = title
-        pick["_artist"] = artist
-        pick["_album"] = album
-        pick["_duration_ms"] = duration_ms
-        pick["_year"] = year
-        pick["_release_mbid"] = release_mbid
-        LOG.warning(
-            "[station] no candidate passed filters; falling back to first LB result station=%s user=%s",
-            station_id,
-            user_id,
-        )
-    else:
-        pick = best[1]
+        LOG.warning("[station] no candidate passed slow-pass filters station=%s user=%s seed=%r mb_lookups=%s rej=%s", station_id, user_id, station.seed_artist, mb_lookups, rej)
+        return None
+
+    pick = best[1]
+
+    total_ms = int((time.time() - t0) * 1000)
+    LOG.info("[station] select station=%s user=%s seed=%r lb_items=%d shortlist=%d mb_lookups=%d total_ms=%d rej=%s",
+             station_id, user_id, station.seed_artist, len(lb_items), len(shortlist), mb_lookups, total_ms, rej)
 
     title = _clean(str(pick.get("_title") or ""))
     artist = _clean(str(pick.get("_artist") or ""))

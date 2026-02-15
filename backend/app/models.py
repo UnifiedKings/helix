@@ -89,6 +89,10 @@ class QueueItem(Base):
     yt_video_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
     yt_browse_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
+    # Optional MusicBrainz identifiers (used for station discovery + stable de-dupe)
+    mb_recording_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    mb_artist_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+
     # Inbound (ASAP) playback file path when a track is downloaded but not yet imported.
     inbound_path: Mapped[str] = mapped_column(Text, nullable=False, default="")
     # download_status: DOWNLOADING | DOWNLOADED | FINALIZED | (empty)
@@ -119,6 +123,9 @@ class ListenHistoryItem(Base):
     subsonic_song_id: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     yt_video_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
     yt_browse_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    mb_recording_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    mb_artist_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
 
     event: Mapped[str] = mapped_column(String(16), nullable=False, default="skipped")  # skipped | completed
     reason: Mapped[str] = mapped_column(String(32), nullable=False, default="")  # next | prev | jump | removed_current | replaced_queue | ended
