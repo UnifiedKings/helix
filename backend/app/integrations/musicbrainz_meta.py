@@ -31,7 +31,7 @@ _mb_client: Optional[MusicBrainzClient] = None
 def _client() -> MusicBrainzClient:
     global _mb_client
     if _mb_client is None:
-        _mb_client = MusicBrainzClient(user_agent="Helix/0.0.20 (station-discovery)", min_interval_ms=20, timeout_s=20)
+        _mb_client = MusicBrainzClient(user_agent="Helix/0.0.20 (station-discovery)", min_interval_ms=1000, timeout_s=20)
     return _mb_client
 
 

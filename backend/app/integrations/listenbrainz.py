@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
+
+
 
 import httpx
 
@@ -11,20 +14,55 @@ from ..cache import TTLCache
 LB_BASE = "https://api.listenbrainz.org"
 
 
-class ListenBrainzClient:
-    """Thin async client with basic politeness throttling.
+def _now_s() -> float:
+    return time.time()
 
-    ListenBrainz returns X-RateLimit-* headers; we also keep a small
-    min-interval throttle to be friendly.
+
+def _safe_snip(b: bytes, limit: int = 300) -> str:
+    try:
+        s = b.decode("utf-8", errors="replace")
+    except Exception:
+        return ""
+    s = s.replace("\n", " ").replace("\r", " ")
+    return s[:limit]
+
+
+class ListenBrainzClient:
+    """Thin async client with basic politeness throttling + auth + rate-limit handling.
+
+    Notes:
+      - LB Radio endpoints now require an Authorization header (Token ...). :contentReference[oaicite:6]{index=6}
+      - ListenBrainz uses X-RateLimit-* headers. :contentReference[oaicite:7]{index=7}
     """
 
-    def __init__(self, user_agent: str, min_interval_ms: int = 250, timeout_s: int = 20):
+    def __init__(
+        self,
+        user_agent: str,
+        *,
+        token: str = "",
+        min_interval_ms: int = 250,
+        timeout_s: int = 20,
+        max_retries: int = 2,
+    ):
         self._user_agent = user_agent
+        self._token = (token or "").strip()
         self._min_interval = max(0.0, float(min_interval_ms) / 1000.0)
         self._timeout = timeout_s
+        self._max_retries = max(0, int(max_retries))
+
         self._lock = asyncio.Lock()
         self._last_request_at = 0.0
-        self._client = httpx.AsyncClient(timeout=timeout_s, headers={"User-Agent": user_agent, "Accept": "application/json"})
+
+        headers = {
+            "User-Agent": user_agent,
+            "Accept": "application/json",
+        }
+        if self._token:
+            # ListenBrainz expects: Authorization: Token <user-token>
+            # :contentReference[oaicite:8]{index=8}
+            headers["Authorization"] = f"Token {self._token}"
+
+        self._client = httpx.AsyncClient(timeout=timeout_s, headers=headers)
 
     async def close(self) -> None:
         await self._client.aclose()
@@ -33,18 +71,86 @@ class ListenBrainzClient:
         if self._min_interval <= 0:
             return
         async with self._lock:
-            now = time.time()
+            now = _now_s()
             wait = self._min_interval - (now - self._last_request_at)
             if wait > 0:
                 await asyncio.sleep(wait)
-            self._last_request_at = time.time()
+            self._last_request_at = _now_s()
 
-    async def get_json(self, path: str, params: Dict[str, str]) -> Dict[str, Any]:
+    @staticmethod
+    def _compute_backoff_seconds(r: httpx.Response) -> float:
+        # Prefer Retry-After, then X-RateLimit-Reset (epoch seconds)
+        ra = (r.headers.get("Retry-After") or "").strip()
+        if ra:
+            try:
+                return max(0.0, float(ra))
+            except Exception:
+                pass
+
+        reset = (r.headers.get("X-RateLimit-Reset") or "").strip()
+        if reset:
+            try:
+                reset_epoch = float(reset)
+                return max(0.0, reset_epoch - _now_s())
+            except Exception:
+                pass
+
+        # fallback: small backoff
+        return 1.0
+
+    async def get_json(
+        self,
+        path: str,
+        params: Dict[str, Union[str, int, List[str]]],
+        *,
+        require_auth: bool = False,
+    ) -> Dict[str, Any]:
+        # If caller says auth is required but we have no token, fail early with a clear error.
+        if require_auth and not self._token:
+            raise RuntimeError(
+                "ListenBrainz auth token is required for this endpoint. "
+                "Set LISTENBRAINZ_TOKEN in the environment."
+            )
+
         await self._throttle()
         url = f"{LB_BASE}{path}"
-        r = await self._client.get(url, params=params)
-        r.raise_for_status()
-        return r.json() if r.content else {}
+
+        last_exc: Optional[Exception] = None
+        for attempt in range(self._max_retries + 1):
+            try:
+                r = await self._client.get(url, params=params)
+
+                if r.status_code in (429, 503):
+                    # Rate limit / temporary overload
+                    wait_s = self._compute_backoff_seconds(r)
+                    if attempt < self._max_retries:
+                        await asyncio.sleep(wait_s)
+                        continue
+
+                if 400 <= r.status_code:
+                    # Log enough to understand what's happening (HTML/Anubis, auth, etc.)
+                    snip = _safe_snip(r.content)
+                    # We raise with a message that includes status and snippet.
+                    raise httpx.HTTPStatusError(
+                        f"ListenBrainz {r.status_code} for {path} params={params} body='{snip}'",
+                        request=r.request,
+                        response=r,
+                    )
+
+                return r.json() if r.content else {}
+
+            except Exception as e:
+                last_exc = e
+                if attempt < self._max_retries:
+                    # small exponential-ish backoff
+                    await asyncio.sleep(0.4 * (attempt + 1))
+                    continue
+                break
+
+        # Exhausted retries
+        if last_exc:
+            raise last_exc
+        return {}
 
 
 _lb_client: Optional[ListenBrainzClient] = None
@@ -53,7 +159,14 @@ _lb_client: Optional[ListenBrainzClient] = None
 def _client() -> ListenBrainzClient:
     global _lb_client
     if _lb_client is None:
-        _lb_client = ListenBrainzClient(user_agent="Helix/0.0.18 (station-discovery)")
+        token = os.getenv("LISTENBRAINZ_TOKEN", "").strip()
+        _lb_client = ListenBrainzClient(
+            user_agent="Helix/0.0.18 (contact@aidanbrennan.dev)",
+            token=token,
+            min_interval_ms=250,
+            timeout_s=20,
+            max_retries=2,
+        )
     return _lb_client
 
 
@@ -87,14 +200,16 @@ async def lb_radio_for_artist(
     if hit is not None:
         return hit
 
-    params = {
+    params: Dict[str, Union[str, int, List[str]]] = {
         "mode": mode,
         "max_similar_artists": str(int(max_similar_artists)),
         "max_recordings_per_artist": str(int(max_recordings_per_artist)),
         "pop_begin": str(int(pop_begin)),
         "pop_end": str(int(pop_end)),
     }
-    data = await _client().get_json(f"/1/lb-radio/artist/{seed}", params=params)
+
+    # LB Radio requires auth now. :contentReference[oaicite:9]{index=9}
+    data = await _client().get_json(f"/1/lb-radio/artist/{seed}", params=params, require_auth=True)
     _lb_radio_cache.set(key, data, ttl_seconds=cache_ttl_s)
     return data
 
@@ -124,13 +239,15 @@ async def lb_radio_for_tags(
         return hit
 
     # ListenBrainz accepts repeated tag params; httpx allows list values.
-    params: Dict[str, Any] = {
+    params: Dict[str, Union[str, int, List[str]]] = {
         "tag": tag_list,
         "operator": operator,
         "count": str(int(count)),
         "pop_begin": str(int(pop_begin)),
         "pop_end": str(int(pop_end)),
     }
-    data = await _client().get_json("/1/lb-radio/tags", params=params)  # type: ignore[arg-type]
+
+    # Treat tags radio as requiring auth too to match current LB Radio policy. :contentReference[oaicite:10]{index=10}
+    data = await _client().get_json("/1/lb-radio/tags", params=params, require_auth=True)
     _lb_radio_cache.set(key, data, ttl_seconds=cache_ttl_s)
     return data

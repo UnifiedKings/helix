@@ -246,3 +246,98 @@ def get_album_full(browse_id: str) -> Dict[str, Any]:
         "ytmusic_url": f"https://music.youtube.com/browse/{bid}",
         "tracks": tracks,
     }
+
+def find_song(
+    title: str,
+    artist: str,
+    *,
+    limit: int = 10,
+) -> Optional[YTMusicSong]:
+    """
+    Search YouTube Music for a track and return the best matching YTMusicSong.
+
+    Strongly prefers exact title + artist matches.
+    Rejects bogus "views" album strings.
+    """
+
+    q_title = (title or "").strip()
+    q_artist = (artist or "").strip()
+
+    if not q_title:
+        return None
+
+    query = f"{q_artist} - {q_title}" if q_artist else q_title
+    c = _client()
+
+    try:
+        results = c.search(query, filter="songs", limit=int(limit) if limit else 10) or []
+    except Exception:
+        return None
+
+    best_score = -1.0
+    best_song: Optional[YTMusicSong] = None
+
+    q_title_l = q_title.lower()
+    q_artist_l = q_artist.lower()
+
+    for it in results:
+        if not isinstance(it, dict):
+            continue
+
+        video_id = str(it.get("videoId") or "")
+        if not video_id:
+            continue
+
+        title_res = str(it.get("title") or "").strip()
+
+        artists_raw = it.get("artists") or []
+        artist_res = ""
+        if isinstance(artists_raw, list) and artists_raw:
+            artist_res = str(artists_raw[0].get("name") or "").strip()
+
+        album = ""
+        album_obj = it.get("album")
+        if isinstance(album_obj, dict):
+            album = str(album_obj.get("name") or "").strip()
+
+        # Guard against accidental "123K views"
+        if album and "views" in album.lower():
+            album = ""
+
+        duration_seconds = _duration_to_seconds(it.get("duration"))
+
+        thumbnails = it.get("thumbnails") or []
+        thumbnail_url = ""
+        if isinstance(thumbnails, list) and thumbnails:
+            thumbnail_url = str(thumbnails[-1].get("url") or "")
+
+        score = 0.0
+
+        # Exact title match
+        if title_res.lower() == q_title_l:
+            score += 2.0
+        elif q_title_l in title_res.lower():
+            score += 1.0
+
+        # Exact artist match
+        if q_artist_l and artist_res.lower() == q_artist_l:
+            score += 2.0
+        elif q_artist_l and q_artist_l in artist_res.lower():
+            score += 1.0
+
+        # Bonus if album exists
+        if album:
+            score += 0.5
+
+        if score > best_score:
+            best_score = score
+            best_song = YTMusicSong(
+                video_id=video_id,
+                title=title_res,
+                artist=artist_res,
+                album=album,
+                duration_seconds=duration_seconds,
+                thumbnail_url=thumbnail_url,
+            )
+
+    return best_song

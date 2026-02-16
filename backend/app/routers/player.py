@@ -18,7 +18,6 @@ from ..schemas import PlayerPlayAlbumRequest, PlayerPlayTrackRequest, PlayerJump
 from ..settings_store import get_settings
 from ..integrations.subsonic import SubsonicClient
 from ..integrations.ytmusic_api import get_album_full
-from ..integrations.ytmusic_search import find_track
 from ..download_manager import DOWNLOAD_MANAGER, DownloadJob
 from ..stations_engine import generate_and_append_station_track
 
@@ -33,6 +32,63 @@ _ALBUM_FILLING: set[tuple[str, str]] = set()
 
 def _clean(s: str) -> str:
     return " ".join((s or "").strip().split())
+
+
+def _is_views_album(s: str) -> bool:
+    ss = _clean(s).lower()
+    if not ss:
+        return False
+    return ("views" in ss) and bool(re.search(r"\bviews\b", ss))
+
+def _pick_best_song_result(songs, *, want_title: str, want_artist: str, want_vid: str = ""):
+    wt = _clean(want_title).lower()
+    wa = _clean(want_artist).lower()
+    wv = _clean(want_vid)
+    best = None
+    best_score = -1.0
+    for s in songs or []:
+        title = _clean(str(s.get("title") or ""))
+        artist = _clean(str(s.get("artist") or ""))
+        album = _clean(str(s.get("album") or ""))
+        vid = _clean(str(s.get("video_id") or ""))
+        if _is_views_album(album):
+            continue
+        sc = 0.0
+        if wv and vid and vid == wv:
+            sc += 5.0
+        if title and wt and title.lower() == wt:
+            sc += 2.0
+        if artist and wa and artist.lower() == wa:
+            sc += 2.0
+        if album:
+            sc += 0.5
+        if sc > best_score:
+            best_score = sc
+            best = s
+    return best
+
+def _pick_best_album_result(albums, *, want_album: str, want_artist: str):
+    wa = _clean(want_album).lower()
+    wr = _clean(want_artist).lower()
+    best = None
+    best_score = -1.0
+    for a in albums or []:
+        title = _clean(str(a.get("title") or ""))
+        artist = _clean(str(a.get("artist") or ""))
+        if _is_views_album(title):
+            continue
+        sc = 0.0
+        if title and wa and title.lower() == wa:
+            sc += 2.0
+        if artist and wr and artist.lower() == wr:
+            sc += 2.0
+        if _clean(str(a.get("browse_id") or "")):
+            sc += 0.5
+        if sc > best_score:
+            best_score = sc
+            best = a
+    return best
+
 
 def _norm_text(s: str) -> str:
     """Normalize text for Subsonic matching: strip, collapse whitespace, normalize unicode apostrophes, and lowercase."""
@@ -532,7 +588,44 @@ async def queue_append_track(payload: PlayerQueueAppendTrackRequest, db: Session
     duration_ms = _infer_int(payload.duration_ms, 0)
     art_url = _clean(payload.art_url or "")
     yt_video_id = _clean(getattr(payload, "yt_video_id", None) or "")
+    yt_browse_id = _clean(getattr(payload, "yt_browse_id", None) or "")
+    rec_id = _clean(getattr(payload, "recording_id", None) or "")
 
+    # Enrich metadata from YouTube Music (album/art/browseId). Source of truth for tagging.
+    if (not art_url) and yt_video_id:
+        art_url = f"https://i.ytimg.com/vi/{yt_video_id}/hqdefault.jpg"
+    try:
+        y = search_ytmusic(f"{artist} - {title}", song_limit=10, album_limit=10) or {"songs": [], "albums": []}
+        s0 = _pick_best_song_result(y.get("songs") or [], want_title=title, want_artist=artist, want_vid=yt_video_id)
+        if s0:
+            alb = _clean(str(s0.get("album") or ""))
+            if alb and (not _is_views_album(alb)):
+                album = alb
+            thumb = _clean(str(s0.get("thumbnail_url") or ""))
+            if thumb:
+                art_url = thumb
+            vid2 = _clean(str(s0.get("video_id") or ""))
+            if vid2 and (not yt_video_id):
+                yt_video_id = vid2
+        if artist and album and (not yt_browse_id):
+            a0 = _pick_best_album_result(y.get("albums") or [], want_album=album, want_artist=artist)
+            if a0:
+                bid = _clean(str(a0.get("browse_id") or ""))
+                if bid:
+                    yt_browse_id = bid
+    except Exception as e:
+        LOG.warning("[queue_append_track] ytmusic enrichment failed title=%r artist=%r err=%s", title, artist, e)
+
+    if not album:
+        raise HTTPException(status_code=422, detail="Album is required but could not be resolved from YouTube Music for this track.")
+
+
+    if (not art_url) and yt_video_id:
+        art_url = f"https://i.ytimg.com/vi/{yt_video_id}/hqdefault.jpg"
+
+
+    if not album:
+        raise HTTPException(status_code=422, detail="Album is required but could not be resolved for this track.")
     client = await _subsonic_client_from_settings(settings)
     try:
         song = await client.search_song_best(title=title, artist=artist, duration_ms=duration_ms or None)
@@ -549,6 +642,8 @@ async def queue_append_track(payload: PlayerQueueAppendTrackRequest, db: Session
         duration_ms=duration_ms or 0,
         art_url=art_url,
     )
+    item.mb_recording_id = rec_id
+    item.yt_browse_id = yt_browse_id
     item.yt_video_id = yt_video_id
     if song and song.get("id"):
         item.source = "subsonic"
@@ -560,6 +655,18 @@ async def queue_append_track(payload: PlayerQueueAppendTrackRequest, db: Session
         item.subsonic_song_id = ""
         item.is_playable = False
         item.error = "NOT_IN_LIBRARY"
+
+        # Resolve YT album browseId for metadata repair + cover saving.
+        try:
+            if artist and album:
+                y2 = search_ytmusic(f"{artist} {album}", song_limit=0, album_limit=6) or {"albums": []}
+                albums2 = y2.get("albums") or []
+                if albums2:
+                    bid = _clean(str(albums2[0].get("browse_id") or ""))
+                    if bid:
+                        item.yt_browse_id = bid
+        except Exception:
+            pass
 
         # Background download so it's ready by the time it reaches the top.
         if yt_video_id:
@@ -948,10 +1055,32 @@ async def stream_item(queue_item_id: str, db: Session = Depends(get_db), user: U
             r = find_track(title=cur.title or "", artist=cur.artist or "", album=cur.album or None, duration_seconds=want_dur_s, limit=9)
             if r.found and r.video_id:
                 cur.yt_video_id = r.video_id
+                if not _clean(getattr(cur, "art_url", "") or ""):
+                    cur.art_url = f"https://i.ytimg.com/vi/{r.video_id}/hqdefault.jpg"
                 db.commit()
                 LOG.info("[stream] resolved yt id lazily vid=%s conf=%.2f title=%r artist=%r", r.video_id, r.confidence, cur.title, cur.artist)
         except Exception as e:
             LOG.warning("[stream] lazy yt id search failed: %s", e)
+
+    # Always run album repair for consistency (MusicBrainz, best-effort).
+    # This ensures downloaded tracks have stable {artist}/{album} foldering and avoids "Unknown Album".
+    try:
+        mbid = _clean(getattr(cur, "mb_recording_id", "") or "")
+        if mbid:
+            rec = await lookup_recording_full(mbid)
+            t_title, t_artist, t_album, t_dur_ms, t_year, t_rel = simplify_recording(rec)
+            if t_title:
+                cur.title = t_title
+            if t_artist:
+                cur.artist = t_artist
+            if t_album:
+                cur.album = t_album
+            if t_dur_ms and (not cur.duration_ms or cur.duration_ms <= 0):
+                cur.duration_ms = int(t_dur_ms)
+            db.commit()
+    except Exception:
+        pass
+
 
     if (cur.yt_video_id and (
         (not cur.is_playable or not cur.subsonic_song_id) or (cur.source != "subsonic" and (not cur.inbound_path or not os.path.exists(cur.inbound_path)))
@@ -1000,10 +1129,11 @@ async def stream_item(queue_item_id: str, db: Session = Depends(get_db), user: U
                 title=cur.title,
                 artist=_clean(cur.artist) or "Unknown Artist",
                 album=cur.album or "",
+                album_artist=_clean(cur.artist) or "Unknown Artist",
+                browse_id=_clean(getattr(cur, "yt_browse_id", "") or ""),
                 art_url=cur.art_url or "",
                 track_no=_infer_int(getattr(cur, "position", 0), 0) + 1,
                 duration_ms=int(cur.duration_ms or 0),
-                browse_id=_clean(getattr(cur, "yt_browse_id", "") or ""),
                 priority=0,
             )
             LOG.info("[stream] downloading vid=%s title=%r artist=%r album=%r", vid, job.title, job.artist, job.album)

@@ -17,6 +17,8 @@ from .integrations.listenbrainz import lb_radio_for_artist, lb_radio_for_tags
 from .integrations.musicbrainz_meta import lookup_artist_mbid_by_name, lookup_recording, simplify_recording
 from .integrations.subsonic import SubsonicClient
 
+from .integrations.ytmusic_api import find_song
+
 LOG = logging.getLogger("helix.stations")
 
 
@@ -552,6 +554,25 @@ async def generate_and_append_station_track(
         return None
 
     pick = best[1]
+    # --- Resolve YouTube thumbnail immediately (Option A) ---
+    try:
+        r = find_song(title=str(pick.get("_title") or ""), artist=str(pick.get("_artist") or ""), limit=10)
+        if r:
+            pick["artist"] = r.artist
+            pick["_album"] = r.album
+            pick["_art_url"] = r.thumbnail_url
+            print(f"Found album: {r.album}")
+            vid = str(r.video_id)
+            pick["yt_video_id"] = vid
+        #/*
+        #if getattr(r, "found", False) and getattr(r, "video_id", ""):
+        #    print("Song not found. Big sad.")
+        #    pick["_art_url"] = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+        #
+
+
+    except Exception:
+        pass
 
     total_ms = int((time.time() - t0) * 1000)
     LOG.info("[station] select station=%s user=%s seed=%r lb_items=%d shortlist=%d mb_lookups=%d total_ms=%d rej=%s",
@@ -560,18 +581,11 @@ async def generate_and_append_station_track(
     title = _clean(str(pick.get("_title") or ""))
     artist = _clean(str(pick.get("_artist") or ""))
     album = _clean(str(pick.get("_album") or ""))
+    art_url = pick.get("_art_url")
     duration_ms = int(pick.get("_duration_ms") or 0)
-
+    yt_video_id = pick["yt_video_id"]
     mb_recording_id = _clean(str(pick.get("recording_mbid") or ""))
     mb_artist_id = _clean(str(pick.get("similar_artist_mbid") or ""))
-
-    # Cover art from Cover Art Archive (best-effort)
-    art_url = ""
-    rel = _clean(str(pick.get("_release_mbid") or ""))
-    if rel:
-        art_url = f"https://coverartarchive.org/release/{rel}/front-500"
-
-    yt_video_id = ""  # found lazily during fulfillment (stream time)
 
     # Match to Subsonic (fast path) but do NOT prefer it.
     song = None
@@ -629,7 +643,7 @@ async def generate_and_append_station_track(
         user_id,
         title,
         artist,
-        yt_video_id,
+        #yt_video_id,
         qitem.source,
         artist_cooldown,
         round(d * 100.0),

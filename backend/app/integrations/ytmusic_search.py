@@ -32,6 +32,8 @@ class YTResult:
     title: str = ""
     uploader: str = ""
     duration_seconds: Optional[int] = None
+    album: str = ""
+    artist: str = ""
 
     @property
     def youtube_url(self) -> str:
@@ -121,6 +123,7 @@ def find_track(
     limit: int = 7,
 ) -> YTResult:
     # Query format that tends to behave well.
+    print(f"Searching for {title} by {artist}")
     q = f"{artist} - {title}"
     if album:
         q = f"{q} \"{album}\""

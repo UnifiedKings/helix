@@ -489,7 +489,7 @@ class DownloadManager:
 
             # Repair missing/bad metadata using album context whenever possible.
             # This is critical for deterministic storage and Navidrome display.
-            if (not job.album_artist or _looks_like_views(job.album_artist) or not job.album or not job.artist or _looks_like_views(job.artist)) and job.browse_id:
+            if job.browse_id:
                 try:
                     full = get_album_full(job.browse_id) or {}
                     alb_title = (full.get('title') or '').strip()

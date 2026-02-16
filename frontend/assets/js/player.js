@@ -6,14 +6,14 @@ const LAST_STATE_KEY = "helix_last_player_state_v1";
 
 function saveLastState(state) {
   try { localStorage.setItem(LAST_STATE_KEY, JSON.stringify(state)); } catch {}
-}
+    }
 
 function loadLastState() {
   try {
     const raw = localStorage.getItem(LAST_STATE_KEY);
     return raw ? JSON.parse(raw) : null;
   } catch { return null; }
-}
+    }
 
 
 // -----------------------------------------------------------------------------
@@ -33,10 +33,12 @@ function getGlobalState() {
       audio: null,
       lastNowId: null,
       pollTimer: null,
+      postRefreshForId: null,
+      postRefreshTimer: null,
     };
   }
   return window.__HELIX_PLAYER_STATE__;
-}
+    }
 
 function getOrCreateAudio() {
   const gs = getGlobalState();
@@ -65,16 +67,16 @@ function getOrCreateAudio() {
   document.body.appendChild(el);
   gs.audio = el;
   return gs.audio;
-}
+    }
 
 function qs(id) {
   return document.getElementById(id);
-}
+    }
 
 function setText(id, v) {
   const el = qs(id);
   if (el) el.textContent = v || "";
-}
+    }
 
 function setImg(id, src) {
   const el = qs(id);
@@ -84,7 +86,7 @@ function setImg(id, src) {
     return;
   }
   el.src = src;
-}
+    }
 
 function setBuffering(isBuf) {
   const gs = getGlobalState();
@@ -99,7 +101,7 @@ function setBuffering(isBuf) {
   } else if (hero) {
     hero.removeAttribute("data-helix-loading");
   }
-}
+    }
 
 function formatTime(sec) {
   if (!isFinite(sec) || sec < 0) return "0:00";
@@ -107,7 +109,7 @@ function formatTime(sec) {
   const m = Math.floor(s / 60);
   const r = s % 60;
   return `${m}:${String(r).padStart(2, "0")}`;
-}
+    }
 
 // Deterministic pseudo-waveform (visual only).
 function makeWaveformValues(key, n = 120) {
@@ -132,7 +134,7 @@ function makeWaveformValues(key, n = 120) {
     vals[i] = shaped;
   }
   return vals;
-}
+    }
 
 function drawWave(canvas, values, progress01) {
   if (!canvas) return;
@@ -180,7 +182,7 @@ function drawWave(canvas, values, progress01) {
     ctx.fillStyle = barCenter <= playedX ? played : base;
     ctx.fillRect(x, y, barW, hh);
   }
-}
+    }
 
 function ensureProgressBindings(audio) {
   const gs = getGlobalState();
@@ -270,12 +272,12 @@ function ensureProgressBindings(audio) {
   requestAnimationFrame(updateUI);
 
   gs.__updateProgressUI = updateUI;
-}
+    }
 
 function clamp01(v) {
   if (!isFinite(v)) return 1;
   return Math.min(1, Math.max(0, v));
-}
+    }
 
 function ensureVolumeBindings(audio) {
   const gs = getGlobalState();
@@ -347,7 +349,7 @@ function ensureVolumeBindings(audio) {
     if (v > 0.001) gs.__lastNonZeroVol = v;
     updateIcon();
   });
-}
+    }
 
 
 function bindButtons() {
@@ -459,7 +461,7 @@ function bindButtons() {
       } catch {}
     });
   }
-}
+    }
 
 function renderQueue(queue, currentIndex) {
   const list = qs("npQueueList");
@@ -503,7 +505,7 @@ function renderQueue(queue, currentIndex) {
   });
 
   setText("npQueueCount", `${visible.length} songs`);
-}
+    }
 
 function _fmtDateLabel(iso) {
   try {
@@ -512,7 +514,7 @@ function _fmtDateLabel(iso) {
   } catch {
     return iso || "";
   }
-}
+    }
 
 async function renderHistory(items) {
   const list = document.getElementById("npHistoryList");
@@ -667,7 +669,7 @@ async function renderHistory(items) {
 
     list.appendChild(row);
   }
-}
+    }
 
 let __openQueueMenuEl = null;
 
@@ -676,7 +678,7 @@ function closeOpenQueueMenu() {
     __openQueueMenuEl.remove();
     __openQueueMenuEl = null;
   }
-}
+    }
 
 function openQueueMenu(anchorBtn, queueItem) {
   closeOpenQueueMenu();
@@ -729,7 +731,7 @@ function openQueueMenu(anchorBtn, queueItem) {
   };
   document.addEventListener("mousedown", onDocDown, true);
   document.addEventListener("keydown", onKey, true);
-}
+    }
 
 function updatePlayerBar(st) {
   const np = st.now_playing;
@@ -766,7 +768,7 @@ setImg("npNowImg", np.art_url || "");
 // Queue panel is optional (Now Playing v2 hides it)
 if (document.getElementById("npQueueList")) {
   renderQueue(st.queue, st.current_index);
-}
+    }
 
   // play/pause icon
   const bPlay = qs("pbPlay");
@@ -832,13 +834,13 @@ function applyStationUI(wrapEl, idsPrefix) {
   } else {
     wrapEl.style.display = "none";
   }
-}
+    }
 
 // v1 (old) ids
 applyStationUI(modeWrap, "npStation");
 // v2 ids
 applyStationUI(modeWrapV2, "npNowStation");
-}
+    }
 
 async function syncOnce(forceLoadStream) {
   const gs = getGlobalState();
@@ -894,6 +896,23 @@ async function syncOnce(forceLoadStream) {
     audio.src = backend.playerStreamUrl(np.id);
     // Force reload even if the URL is similar / cached.
     try { audio.load(); } catch {}
+    // One-shot refresh shortly after starting a new stream. The backend may
+// resolve yt_video_id/art_url lazily at stream-time, so we re-fetch state
+// to update artwork without requiring a full page reload.
+    if (gs.postRefreshTimer) {
+  clearTimeout(gs.postRefreshTimer);
+  gs.postRefreshTimer = null;
+    }
+    gs.postRefreshForId = np.id;
+    gs.postRefreshTimer = setTimeout(() => {
+  // Only refresh if we're still on the same now-playing item.
+  try {
+    const curId = getGlobalState().lastNowId;
+    if (curId && curId === getGlobalState().postRefreshForId) {
+      syncOnce(false).catch(() => {});
+    }
+  } catch {}
+    }, 100);
   }
 
   try { const fn = getGlobalState().__updateProgressUI; if (fn) fn(); } catch {}
@@ -904,7 +923,7 @@ async function syncOnce(forceLoadStream) {
     audio.pause();
 
   }
-}
+    }
 
 async function syncOnceWithRetry(forceLoadStream) {
   const delays = [0, 200, 800, 2000];
@@ -931,7 +950,7 @@ async function syncOnceWithRetry(forceLoadStream) {
   } catch {}
 
   throw lastErr;
-}
+    }
 
 export function startPlayerPolling() {
   const gs = getGlobalState();
@@ -972,4 +991,4 @@ export function startPlayerPolling() {
       syncOnce(force).catch(() => {});
     });
   }
-}
+    }
