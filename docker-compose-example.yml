@@ -22,3 +22,5 @@ services:
 
       #Your files will be stored based on the beets config
       - ./beets_config:/data/helix/beets
+    environment:
+      LISTENBRAINZ_TOKEN: insert-listenbrainz-token-here
