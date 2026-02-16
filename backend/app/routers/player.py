@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 import os
 import logging
@@ -28,6 +29,43 @@ LOG = logging.getLogger("helix.player")
 
 # Prevent duplicate background fills per (user_id, browse_id)
 _ALBUM_FILLING: set[tuple[str, str]] = set()
+
+
+
+# Prevent duplicate station prefetch per user while a track is playing.
+_STATION_PREFETCH_TASKS: dict[str, asyncio.Task] = {}
+
+async def _prefetch_next_station_item(user_id: str, station_id: str) -> None:
+    """Ensure there's at least one queued item after the current index for the active station."""
+    try:
+        db = SessionLocal()
+        try:
+            sess = db.get(PlaybackSession, user_id)
+            if not sess or not sess.is_playing or sess.active_station_id != station_id:
+                return
+            next_pos = int(sess.current_index or 0) + 1
+            exists = db.execute(
+                select(QueueItem.id).where(
+                    QueueItem.session_user_id == user_id,
+                    QueueItem.position == next_pos,
+                )
+            ).first()
+            if exists:
+                return
+            settings = get_settings(db)
+            await generate_and_append_station_track(
+                db,
+                user_id,
+                station_id,
+                settings=settings,
+                advance_to_new_item=False,
+            )
+        finally:
+            db.close()
+    except Exception as e:
+        LOG.warning("[station-prefetch] failed user=%s station=%s err=%r", user_id, station_id, e)
+    finally:
+        _STATION_PREFETCH_TASKS.pop(user_id, None)
 
 
 def _clean(s: str) -> str:
@@ -1043,6 +1081,17 @@ async def stream_item(queue_item_id: str, db: Session = Depends(get_db), user: U
     cur = next((i for i in items if i.id == queue_item_id), None)
     if not cur:
         raise HTTPException(status_code=404, detail="Queue item not found.")
+    sess = db.get(PlaybackSession, user.id)
+    # While a station track is playing, prefetch the next pick in the background.
+    try:
+        if sess and sess.is_playing and sess.active_station_id and (cur.position == int(sess.current_index or 0)):
+            if user.id not in _STATION_PREFETCH_TASKS:
+                _STATION_PREFETCH_TASKS[user.id] = asyncio.create_task(
+                    _prefetch_next_station_item(user.id, sess.active_station_id)
+                )
+    except Exception:
+        pass
+
     # If the item isn't playable from Subsonic yet, try to resolve it from Subsonic first (fast path),
     # otherwise fulfill ASAP from YT Music (download) only when this item is being streamed (front of queue).
     # If we have no YT id (common for station-discovered tracks), attempt to find one lazily.
