@@ -24,28 +24,27 @@ function bindOnce(el, key, fn) {
 async function refreshSettings(dom) {
   const s = await backend.adminGetSettings();
 
+  // Subsonic / Navidrome
   if (dom.subsonicBaseUrl) dom.subsonicBaseUrl.value = s.subsonic_base_url ?? "";
   if (dom.subsonicUsername) dom.subsonicUsername.value = s.subsonic_username ?? "";
   // For security, never auto-fill the password field.
   if (dom.subsonicPassword) dom.subsonicPassword.value = "";
-  if (dom.firstPlayTimeout) dom.firstPlayTimeout.value = s.fulfillment_first_play_timeout_seconds ?? 10;
-  if (dom.versionPreference) dom.versionPreference.value = s.fulfillment_version_preference ?? "prefer_studio";
 
+  // Player
+  if (dom.playerMaxQueueItems) dom.playerMaxQueueItems.value = s.player_max_queue_items ?? 50;
+
+  // Search
   if (dom.searchDefaultCountry) dom.searchDefaultCountry.value = (s.search_default_country ?? "US");
   if (dom.searchHideNonOfficial) dom.searchHideNonOfficial.checked = !!(s.search_hide_non_official ?? true);
-  if (dom.searchPreferOriginal) dom.searchPreferOriginal.checked = !!(s.search_prefer_original_release ?? false);
+  if (dom.searchPreferOriginal) dom.searchPreferOriginal.checked = !!(s.search_prefer_original_release ?? true);
   if (dom.searchHideTracksWithoutArt) dom.searchHideTracksWithoutArt.checked = !!(s.search_hide_tracks_without_art ?? false);
-
-  // Backend key is artist_images_enable_wikipedia (MusicBrainz -> Wikipedia thumbnail lookup).
-  if (dom.artistImagesEnableWikidata) dom.artistImagesEnableWikidata.checked = !!(s.artist_images_enable_wikipedia ?? true);
-  if (dom.imageProxyEnabled) dom.imageProxyEnabled.checked = !!(s.image_proxy_enabled ?? true);
-  if (dom.imageCacheMaxMb) dom.imageCacheMaxMb.value = s.image_cache_max_mb ?? 500;
-  if (dom.imageCacheThumbPx) dom.imageCacheThumbPx.value = s.image_cache_thumb_px ?? 256;
-  if (dom.imageCacheTtlDays) dom.imageCacheTtlDays.value = s.image_cache_ttl_days ?? 90;
   if (dom.searchCacheTtlSeconds) dom.searchCacheTtlSeconds.value = s.search_cache_ttl_seconds ?? 300;
+
+  // MusicBrainz
   if (dom.musicbrainzMinIntervalMs) dom.musicbrainzMinIntervalMs.value = s.musicbrainz_min_interval_ms ?? 1000;
   if (dom.musicbrainzUserAgent) dom.musicbrainzUserAgent.value = s.musicbrainz_user_agent ?? "";
 }
+
 
 async function saveSettings(dom) {
   setText(dom.settingsStatus, "Saving…");
@@ -53,34 +52,29 @@ async function saveSettings(dom) {
     const patch = {
       subsonic_base_url: (dom.subsonicBaseUrl?.value || "").trim(),
       subsonic_username: (dom.subsonicUsername?.value || "").trim(),
-      fulfillment_first_play_timeout_seconds: parseInt(dom.firstPlayTimeout?.value || "10", 10),
-      fulfillment_version_preference: dom.versionPreference?.value || "prefer_studio",
+      // Only send password if provided (blank means "leave as-is").
+      ...(dom.subsonicPassword?.value ? { subsonic_password: dom.subsonicPassword.value } : {}),
+
+      player_max_queue_items: parseInt(dom.playerMaxQueueItems?.value || "50", 10),
 
       search_default_country: (dom.searchDefaultCountry?.value || "US").trim().toUpperCase(),
       search_hide_non_official: !!dom.searchHideNonOfficial?.checked,
       search_prefer_original_release: !!dom.searchPreferOriginal?.checked,
       search_hide_tracks_without_art: !!dom.searchHideTracksWithoutArt?.checked,
-
-      // Backend key is artist_images_enable_wikipedia
-      artist_images_enable_wikipedia: !!dom.artistImagesEnableWikidata?.checked,
-      image_proxy_enabled: !!dom.imageProxyEnabled?.checked,
-      image_cache_max_mb: parseInt(dom.imageCacheMaxMb?.value || "500", 10),
-      image_cache_thumb_px: parseInt(dom.imageCacheThumbPx?.value || "256", 10),
-      image_cache_ttl_days: parseInt(dom.imageCacheTtlDays?.value || "90", 10),
       search_cache_ttl_seconds: parseInt(dom.searchCacheTtlSeconds?.value || "300", 10),
+
       musicbrainz_min_interval_ms: parseInt(dom.musicbrainzMinIntervalMs?.value || "1000", 10),
       musicbrainz_user_agent: (dom.musicbrainzUserAgent?.value || "").trim(),
     };
 
-    const pw = (dom.subsonicPassword?.value || "");
-    if (pw.length > 0) patch.subsonic_password = pw;
-
-    await backend.adminUpdateSettings(patch);
+    await backend.adminPatchSettings(patch);
     setText(dom.settingsStatus, "Saved.");
+    await refreshSettings(dom);
   } catch (e) {
     setText(dom.settingsStatus, e?.message || String(e));
   }
 }
+
 
 async function refreshUsers(dom) {
   if (!dom.userTableWrap) return;
@@ -151,20 +145,14 @@ export async function init() {
     logoutLink: $("logoutLink"),
 
     // Settings
+    playerMaxQueueItems: $("playerMaxQueueItems"),
     subsonicBaseUrl: $("subsonicBaseUrl"),
     subsonicUsername: $("subsonicUsername"),
     subsonicPassword: $("subsonicPassword"),
-    firstPlayTimeout: $("firstPlayTimeout"),
-    versionPreference: $("versionPreference"),
     searchDefaultCountry: $("searchDefaultCountry"),
     searchHideNonOfficial: $("searchHideNonOfficial"),
     searchPreferOriginal: $("searchPreferOriginal"),
     searchHideTracksWithoutArt: $("searchHideTracksWithoutArt"),
-    artistImagesEnableWikidata: $("artistImagesEnableWikidata"),
-    imageProxyEnabled: $("imageProxyEnabled"),
-    imageCacheMaxMb: $("imageCacheMaxMb"),
-    imageCacheThumbPx: $("imageCacheThumbPx"),
-    imageCacheTtlDays: $("imageCacheTtlDays"),
     searchCacheTtlSeconds: $("searchCacheTtlSeconds"),
     musicbrainzMinIntervalMs: $("musicbrainzMinIntervalMs"),
     musicbrainzUserAgent: $("musicbrainzUserAgent"),

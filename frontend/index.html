@@ -4,11 +4,11 @@
   <meta charset="utf-8" />
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png">
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Helix — Now Playing</title>
+  <title>Helix</title>
   <link rel="stylesheet" href="assets/css/app.css" />
 </head>
 <body>
-  <div class="topbar pandoraTop">
+<div class="topbar pandoraTop">
     <div class="navLeft">
       <a class="navLink" href="index.html" data-nav="now">Now Playing</a>
       <a class="navLink" href="my-collection.html" data-nav="collection">My Collection</a>
@@ -29,7 +29,9 @@
     </div>
   </div>
 
-    <main class="shell shellNowPlaying shellNowPlayingV2">
+<div id="helixHeaderSlot"></div>
+
+<main class="shell shellNowPlaying shellNowPlayingV2">
     <section class="npPanel npNow">
       <div class="npNowArtWrap">
         <img id="npNowImg" class="npNowImg" alt="Now playing cover" loading="lazy" />
@@ -56,7 +58,8 @@
       <div id="npHistoryList" class="npHistList"></div>
     </section>
   </main>
-  <div class="playerBar" role="region" aria-label="Player">
+
+<div class="playerBar" role="region" aria-label="Player">
     <div class="playerRow">
       <div class="playerLeft">
         <img id="pbThumb" class="pbThumb" alt="Cover" loading="lazy" />
@@ -75,8 +78,7 @@
           <input class="pbVol" id="pbVol" type="range" min="0" max="100" value="100" step="1" aria-label="Volume slider" />
         </div>
         <button class="iconBtn" id="pbLike" title="Like" type="button"></button>
-        <button class="iconBtn" id="pbDislike" title="Dislike" type="button">👎</button>
-        <button class="iconBtn" title="Shuffle" type="button" disabled>🔀</button>
+        <button class="iconBtn" id="pbDislike" title="Dislike" type="button"></button>
       </div>
       <div class="playerRight">
         <div class="muted" id="pbMeta"></div>
@@ -91,7 +93,15 @@
       <div class="pbTime" id="pbDur">0:00</div>
     </div>
   </div>
-
-  <script type="module" src="assets/js/router.js"></script>
+<div id="globalLoading" class="globalLoading hidden">
+  <div class="globalLoadingCard">
+    <div class="spinner"></div>
+    <div class="globalLoadingText">
+      <div class="title">Loading…</div>
+      <div class="subtitle" id="globalLoadingSub">Working on it</div>
+    </div>
+  </div>
+</div>
+<script type="module" src="assets/js/spa-router.js"></script>
 </body>
 </html>

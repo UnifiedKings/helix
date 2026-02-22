@@ -23,7 +23,6 @@ from .schemas import (
 from .security import hash_password, verify_password, new_session_token
 from .auth import SESSION_COOKIE, get_current_user, require_admin
 from .settings_store import get_settings, patch_settings
-from app.integrations.slskd_http import SlskdClient
 from .routers.search import router as search_router
 from .routers.player import router as player_router
 from .routers.ytmusic import router as ytmusic_router
@@ -73,16 +72,6 @@ def _startup():
 
     DOWNLOAD_MANAGER.set_settings_getter(_settings_getter)
     DOWNLOAD_MANAGER.start()
-
-@app.on_event("startup")
-def validate_slskd():
-    # Keep this sanity check because the fulfillment engine is expected to talk to slskd.
-    client = SlskdClient()
-    try:
-        client.ping()
-    except Exception as e:
-        raise RuntimeError(f"Cannot reach slskd: {e}")
-
 
 app.include_router(search_router)
 app.include_router(album_router)

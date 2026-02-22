@@ -6,6 +6,7 @@ import time
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
+import traceback
 
 import httpx
 
@@ -13,11 +14,11 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import Session
 
 from .models import Station, StationTag, QueueItem, PlaybackSession, ListenHistoryItem, DislikedTrack
-from .integrations.listenbrainz import lb_radio_for_artist, lb_radio_for_tags
-from .integrations.musicbrainz_meta import lookup_artist_mbid_by_name, lookup_recording, simplify_recording
+from .integrations.listenbrainz import lb_radio_for_artist, lb_radio_for_tags, lb_similar_artists_for_artist, lb_top_recordings_for_artist
+from .integrations.musicbrainz import lookup_artist_mbid_by_name, lookup_recording, simplify_recording
 from .integrations.subsonic import SubsonicClient
 
-from .integrations.ytmusic_api import find_song
+from .integrations.ytmusic import find_song
 
 LOG = logging.getLogger("helix.stations")
 
@@ -254,7 +255,267 @@ async def _subsonic_client_from_settings(settings: Dict[str, Any]) -> SubsonicCl
     return SubsonicClient(base_url=base_url, username=username, password=password, client_name=client_name, api_version=api_version, timeout_s=timeout_s)
 
 
-async def generate_and_append_station_track(
+async def generate_and_append_station_track(db: Session, user_id: str, station_id: str, *, settings: Dict[str, Any], advance_to_new_item: bool) -> Optional[QueueItem]:
+    station = db.get(Station, station_id)
+    if not station or station.user_id != user_id:
+        return None
+    # NOTE: These currently-unused values are intentionally not loaded here.
+    # We want station behavior to be driven only by settings that affect output.
+    await ensure_station_tags(db, station)
+    _recent_pairs(db, user_id, limit=200)
+
+    # Station settings used by the current algorithm.
+    # Discovery controls how likely the station is to wander into less-similar artists.
+    # (Implemented as weighted sampling over a ranked similar-artist list.)
+    discovery = float(getattr(station, "discovery", 0.35) or 0.35)  # 0..1
+    discovery = max(0.0, min(1.0, discovery))
+
+    # Don't repeat the same artist within X tracks.
+    artist_cooldown = int(getattr(station, "artist_cooldown", 5) or 5)
+    artist_cooldown = max(0, min(50, artist_cooldown))
+
+    blacklist = {_norm_artist(a) for a in _parse_artist_list(str(getattr(station, "artist_blacklist", "") or ""))}
+    cooldown_artists = set(_norm_artist(a) for a in _recent_artists(db, user_id, limit=max(artist_cooldown, 1)))
+    #This checks the songs in queue that are not yet in history to prevent
+    #Accidental repeats of an artist.
+    try:
+        tail = db.execute(
+            select(QueueItem.artist)
+            .where(QueueItem.session_user_id == user_id)
+            .order_by(QueueItem.position.desc())
+            .limit(max(artist_cooldown, 1))
+        ).all()
+        for (a,) in tail:
+            na2 = _norm_artist(str(a or ""))
+            if na2:
+                cooldown_artists.add(na2)
+    except Exception:
+        pass
+    recent_counts = _recent_artist_counts(db, user_id, window=50)
+    #Normalises the seed string.
+    seed_core = _norm_title_core(station.seed_title or "") if (station.seed_type or "").lower() == "track" else ""
+    seed_type = (station.seed_type or "artist").lower().strip()
+
+    # Ensure MBID exists for the seed artist, otherwise we cannot fetch a ranked similar list.
+    mb_artist_id = _clean(getattr(station, "mb_artist_id", "") or "")
+    if not mb_artist_id and station.seed_artist:
+        try:
+            mb_artist_id = await lookup_artist_mbid_by_name(station.seed_artist)
+        except Exception as e:
+            LOG.warning("mb artist lookup failed for %r: %s", station.seed_artist, e)
+            mb_artist_id = ""
+        if mb_artist_id:
+            station.mb_artist_id = mb_artist_id
+            station.updated_at = datetime.utcnow()
+            db.commit()
+    if not mb_artist_id:
+        return None
+
+    # Pull a ranked similar-artist list (includes score) and then add the seed artist into
+    # the candidate pool as an explicit option.
+    similar_artists = await lb_similar_artists_for_artist(mb_artist_id, limit=100)
+
+    # Candidate list: seed first, then similar list. Deduplicate by MBID.
+    seed_artist_name = _clean(station.seed_artist or "")
+    candidates: List[Dict[str, Any]] = []
+    seen_mbids = set()
+
+    # Seed artist in pool (requested).
+    if mb_artist_id:
+        candidates.append({"artist_mbid": mb_artist_id, "artist_name": seed_artist_name, "score": None})
+        seen_mbids.add(mb_artist_id)
+
+    for a in (similar_artists or []):
+        am = _clean(str(a.get("artist_mbid") or ""))
+        if not am or am in seen_mbids:
+            continue
+        seen_mbids.add(am)
+        candidates.append(a)
+
+    # Filter by blacklist/cooldown.
+    filtered: List[Dict[str, Any]] = []
+    for a in candidates:
+        an = _clean_artist_name(a)
+        if not an:
+            continue
+        if an in blacklist or an in cooldown_artists:
+            continue
+        filtered.append(a)
+
+    if not filtered:
+        return None
+
+    # Weighted sampling over the ranked list.
+    # discovery=0 => very head-heavy; discovery=1 => much flatter distribution.
+    n = len(filtered)
+    exponent = 4.0 - (3.5 * discovery)  # 4.0..0.5
+    weights: List[float] = []
+    if n <= 1:
+        weights = [1.0] * n
+    else:
+        for i in range(n):
+            r = i / float(n - 1)
+            # (1-r)^exponent strongly favors early ranks at low discovery.
+            w = pow(max(1e-6, 1.0 - r), exponent)
+            weights.append(w)
+
+    # Try a few different artists if top-recordings lookup flakes.
+    selected_track = None
+    random_artist: Dict[str, Any] | None = None
+    tried_mbids: set[str] = set()
+    for _attempt in range(min(6, n)):
+        # pick artist (avoid repeats during this generation attempt)
+        pick_pool = [a for a in filtered if str(a.get("artist_mbid") or "") not in tried_mbids]
+        if not pick_pool:
+            break
+        if len(pick_pool) == len(filtered):
+            # normal weights apply
+            random_artist = _weighted_choice(filtered, weights)
+        else:
+            # recompute weights for the reduced pool by preserving relative order
+            tmp_w = []
+            for a in pick_pool:
+                try:
+                    idx = filtered.index(a)
+                    tmp_w.append(weights[idx] if idx < len(weights) else 1.0)
+                except Exception:
+                    tmp_w.append(1.0)
+            random_artist = _weighted_choice(pick_pool, tmp_w)
+
+        am = _clean(str(random_artist.get("artist_mbid") or ""))
+        if am:
+            tried_mbids.add(am)
+
+        LOG.info("[station] picked artist=%s (%s) discovery=%.3f", _clean_artist_name(random_artist), random_artist.get("artist_mbid"), discovery)
+
+        try:
+            selected_track = await select_random_station_track_with_artist(station, random_artist)
+            if selected_track:
+                break
+        except Exception as e:
+            LOG.warning("listenbrainz popularity/top-recordings failed for artist=%s: %s", _clean_artist_name(random_artist), e)
+            selected_track = None
+
+    if not selected_track or not random_artist:
+        return None
+    print(selected_track)
+    #Need to clean the names for best searching capability
+    cleaned_track_name = _clean_recording_name(selected_track)
+    cleaned_artist_name = _clean_artist_name(random_artist)
+    song_on_yt = find_song_on_yt(cleaned_track_name, cleaned_artist_name)
+    subsonic_track = await match_track_to_subsonic(settings=settings, title=cleaned_track_name, artist=cleaned_artist_name, duration_ms=song_on_yt.duration_seconds)
+    pos = _next_queue_position(db, user_id=user_id)
+    if (subsonic_track):
+        pass
+    qitem = QueueItem(
+        session_user_id=user_id,
+        position=pos,
+        kind="song",
+        title=song_on_yt.title,
+        artist=song_on_yt.artist,
+        album=song_on_yt.album,
+        duration_ms=song_on_yt.duration_seconds,
+        art_url=song_on_yt.thumbnail_url,
+        source="missing"
+    )
+    qitem.yt_video_id = song_on_yt.video_id
+    qitem.yt_browse_id = ""
+    qitem.mb_recording_id = selected_track["recording_mbid"]
+    qitem.mb_artist_id = random_artist["artist_mbid"]
+    if subsonic_track and subsonic_track.get("id"):
+        qitem.source = "subsonic"
+        qitem.subsonic_song_id = str(subsonic_track.get("id"))
+        qitem.is_playable = True
+        qitem.error = ""
+    else:
+        qitem.subsonic_song_id = ""
+        qitem.is_playable = False
+        qitem.error = "NOT_IN_LIBRARY"
+    db.add(qitem)
+    sess = db.get(PlaybackSession, user_id)
+    if sess and advance_to_new_item:
+        # If we are at the end of the queue, move to the newly appended item.
+        sess.current_index = pos
+        sess.is_playing = True
+        sess.updated_at = datetime.utcnow()
+    db.commit()
+    LOG.info(
+        "[station] appended station=%s user=%s pick=%r - %r yt=%s src=%s cfg={cooldown:%s discover:%s ssblacklist:%s}",
+        station_id,
+        user_id,
+        song_on_yt.title,
+        song_on_yt.artist,
+        song_on_yt.video_id,
+        qitem.source,
+        artist_cooldown,
+        round(discovery * 100.0),
+        len(blacklist)
+    )
+    print(blacklist)
+    print(cooldown_artists)
+    return qitem
+
+    
+#TODO: Add artist cooldown onto here when I figure out what key it is.
+async def select_random_station_track_with_artist(station, artist):
+    popular_tracks_for_artist = await lb_top_recordings_for_artist(artist, 20)
+    if not popular_tracks_for_artist:
+        raise RuntimeError("no top recordings returned")
+    selected_track = random.choice(popular_tracks_for_artist)
+    print(f"Selected track: {selected_track}")
+    return selected_track
+
+def _clean_recording_name(it: Dict[str, Any]):
+    return _clean(str(it.get("recording_name") or it.get("track_name") or it.get("title") or it.get("name") or ""))
+
+def _clean_artist_name(it: Dict[str, Any]):
+    return _clean(str(it.get("similar_artist_name") or it.get("artist_name") or it.get("artist") or ""))
+
+def find_song_on_yt(title, artist, limit=10):
+    found_song = find_song(title=title, artist=artist, limit=limit)
+    return found_song
+
+async def match_track_to_subsonic(settings, title, artist, duration_ms):
+    # Match to Subsonic (fast path) but do NOT prefer it.
+    song = None
+    client = await _subsonic_client_from_settings(settings)
+    try:
+        song = await client.search_song_best(title=title, artist=artist, duration_ms=duration_ms or None)
+    except Exception:
+        song = None
+    finally:
+        try:
+            await client.close()
+        except Exception:
+            pass
+
+    return song
+
+
+def _weighted_choice(items: List[Any], weights: List[float]) -> Any:
+    """Return a single item sampled proportional to `weights`.
+
+    Falls back to uniform choice if weights are invalid.
+    """
+    if not items:
+        raise ValueError("items is empty")
+    if not weights or len(weights) != len(items):
+        return random.choice(items)
+    try:
+        total = float(sum(max(0.0, float(w)) for w in weights))
+        if total <= 0.0:
+            return random.choice(items)
+        r = random.random() * total
+        acc = 0.0
+        for it, w in zip(items, weights):
+            acc += max(0.0, float(w))
+            if acc >= r:
+                return it
+    except Exception:
+        return random.choice(items)
+    return items[-1]
+
+async def generate_and_append_station_track_old(
     db: Session,
     user_id: str,
     station_id: str,
@@ -262,13 +523,12 @@ async def generate_and_append_station_track(
     settings: Dict[str, Any],
     advance_to_new_item: bool,
 ) -> Optional[QueueItem]:
+    await generate_and_append_station_track_2(db=db, user_id=user_id, station_id=station_id, settings=settings, advance_to_new_item=advance_to_new_item)
     station = db.get(Station, station_id)
     if not station or station.user_id != user_id:
         return None
-
     tags = await ensure_station_tags(db, station)
     recent = _recent_pairs(db, user_id, limit=200)
-
     # Station settings
     d = float(getattr(station, "discovery", 0.35) or 0.35)  # 0..1
     d = max(0.0, min(1.0, d))
@@ -281,6 +541,11 @@ async def generate_and_append_station_track(
     allow_seed_alts = bool(int(getattr(station, "allow_seed_alternates", 0) or 0))
     tag_strictness = int(getattr(station, "tag_strictness", 70) or 70)
     tag_strictness = max(0, min(100, tag_strictness))
+
+    # New: sample from the top X most popular tracks for the selected artist.
+    # 0 disables this behavior.
+    popular_track_pool_size = int(getattr(station, "popular_track_pool_size", 10) or 10)
+    popular_track_pool_size = max(0, min(200, popular_track_pool_size))
 
     blacklist = {_norm_artist(a) for a in _parse_artist_list(str(getattr(station, "artist_blacklist", "") or ""))}
 
@@ -302,7 +567,6 @@ async def generate_and_append_station_track(
     except Exception:
         pass
     recent_counts = _recent_artist_counts(db, user_id, window=50)
-
     seed_core = _norm_title_core(station.seed_title or "") if (station.seed_type or "").lower() == "track" else ""
 
     # --- Candidate generation (ListenBrainz radio) ---
@@ -310,6 +574,7 @@ async def generate_and_append_station_track(
     # Map popularity_bias (0..100 popular..obscure) to a ListenBrainz popularity range (0..100).
     pop_bias = int(getattr(station, "popularity_bias", 50) or 50)
     pop_bias = max(0, min(100, pop_bias))
+    #print(f"popularity bias: {pop_bias}")
     # popular -> higher pop range; obscure -> lower pop range
     pop_hi = int(round(100 - (pop_bias * 0.6)))
     pop_lo = max(0, pop_hi - 30)
@@ -330,6 +595,13 @@ async def generate_and_append_station_track(
     seed_type = (station.seed_type or "artist").lower().strip()
     if seed_type == "artist":
         mb_artist_id = _clean(getattr(station, "mb_artist_id", "") or "")
+        #similar_artists = await lb_similar_artists_for_artist(mb_artist_id, 30)
+        #print(similar_artists)
+        #first_artist = similar_artists[0]
+        #print(first_artist)
+        #first_artist = first_artist["artist_mbid"]
+        #popular_tracks = await lb_top_recordings_for_artist(first_artist, 20)
+        #print(len(popular_tracks))
         if not mb_artist_id and station.seed_artist:
             try:
                 mb_artist_id = await lookup_artist_mbid_by_name(station.seed_artist)
@@ -392,7 +664,7 @@ async def generate_and_append_station_track(
         return None
 
     random.shuffle(lb_items)
-
+    #print(lb_items)
     # Recent IDs for de-dupe
     recent_rec_ids = _recent_recording_ids(db, user_id, limit=600)
 
@@ -486,14 +758,61 @@ async def generate_and_append_station_track(
         return None
 
     scored.sort(key=lambda x: x[0], reverse=True)
-    shortlist = [it for _, it in scored[:30]]
 
-    # Slow pass: resolve only top-K via MusicBrainz (cached)
+    # --- New behavior: pick an artist first, then sample from their top-N popular tracks ---
+    chosen_pool: Optional[List[Dict[str, Any]]] = None
+    chosen_artist_norm: str = ""
+    if popular_track_pool_size > 0:
+        by_artist: Dict[str, List[Tuple[float, Dict[str, Any]]]] = {}
+        for score, it in scored:
+            a = _it_artist(it)
+            na = _norm_artist(a)
+            if not na:
+                continue
+            by_artist.setdefault(na, []).append((score, it))
+
+        # Rank artists by their best candidate score.
+        artist_rank: List[Tuple[float, str]] = []
+        for na, items in by_artist.items():
+            best_score = max(s for (s, _) in items)
+            artist_rank.append((best_score, na))
+        artist_rank.sort(reverse=True)
+
+        # Choose among the top few artists using a soft weighted random.
+        top_artists = artist_rank[:25]
+        if top_artists:
+            min_s = min(s for (s, _) in top_artists)
+            weights = [max(0.01, (s - min_s) + 0.05) for (s, _) in top_artists]
+            chosen_artist_norm = random.choices([na for (_, na) in top_artists], weights=weights, k=1)[0]
+
+            # Gather tracks for that artist, prefer most popular.
+            items = [it for (_, it) in by_artist.get(chosen_artist_norm, [])]
+            def _lcount(x: Dict[str, Any]) -> float:
+                try:
+                    #print("total listen count: " + str(x["total_listen_count"]))
+                    return float(x["total_listen_count"] or 0)
+                except Exception:
+                    traceback.print_exc()
+                    #print("Disaster! Issue getting total_listen_count")
+                    return 0.0
+            items.sort(key=_lcount, reverse=True)
+            #print(items)
+            if popular_track_pool_size:
+                items = items[:popular_track_pool_size]
+            # Shuffle so the final pick is random within the popularity pool.
+            random.shuffle(items)
+            chosen_pool = items
+
+    # If the new behavior is disabled or fails to form a pool, fall back to legacy shortlist.
+    if not chosen_pool:
+        chosen_pool = [it for _, it in scored[:30]]
+
+    # Slow pass: resolve via MusicBrainz (cached)
     mb_lookups = 0
-    mb_lookup_cap = 8
+    mb_lookup_cap = 10
     best: Optional[Tuple[float, Dict[str, Any]]] = None
 
-    for it in shortlist:
+    for it in chosen_pool:
         if mb_lookups >= mb_lookup_cap:
             break
         rec_mbid = _clean(str(it.get("recording_mbid") or ""))
@@ -525,8 +844,12 @@ async def generate_and_append_station_track(
         if _norm_pair(title, artist) in recent:
             continue
 
-        # Rescore with canonical fields
-        score = random.random() * 0.3
+        # If we successfully chose an artist in the first phase, enforce it here.
+        if chosen_artist_norm and na and na != chosen_artist_norm:
+            continue
+
+        # Score is only used as a tie-breaker / minor preference (still mostly random within pool).
+        score = random.random() * 0.25
         try:
             lcount = float(it.get("total_listen_count") or 0)
             if lcount > 0:
@@ -561,7 +884,7 @@ async def generate_and_append_station_track(
             pick["artist"] = r.artist
             pick["_album"] = r.album
             pick["_art_url"] = r.thumbnail_url
-            print(f"Found album: {r.album}")
+            #print(f"Found album: {r.album}")
             vid = str(r.video_id)
             pick["yt_video_id"] = vid
         #/*
@@ -575,15 +898,15 @@ async def generate_and_append_station_track(
         pass
 
     total_ms = int((time.time() - t0) * 1000)
-    LOG.info("[station] select station=%s user=%s seed=%r lb_items=%d shortlist=%d mb_lookups=%d total_ms=%d rej=%s",
-             station_id, user_id, station.seed_artist, len(lb_items), len(shortlist), mb_lookups, total_ms, rej)
+    LOG.info("[station] select station=%s user=%s seed=%r lb_items=%d pool=%d mb_lookups=%d total_ms=%d rej=%s artist_pool=%s",
+             station_id, user_id, station.seed_artist, len(lb_items), len(chosen_pool or []), mb_lookups, total_ms, rej, popular_track_pool_size)
 
     title = _clean(str(pick.get("_title") or ""))
     artist = _clean(str(pick.get("_artist") or ""))
     album = _clean(str(pick.get("_album") or ""))
     art_url = pick.get("_art_url")
     duration_ms = int(pick.get("_duration_ms") or 0)
-    yt_video_id = pick["yt_video_id"]
+    yt_video_id = str(pick.get("yt_video_id") or "")
     mb_recording_id = _clean(str(pick.get("recording_mbid") or ""))
     mb_artist_id = _clean(str(pick.get("similar_artist_mbid") or ""))
 
@@ -638,12 +961,12 @@ async def generate_and_append_station_track(
     db.commit()
 
     LOG.info(
-        "[station] appended station=%s user=%s pick=%r - %r yt=%s src=%s cfg={cooldown:%s discover:%s seed:%s variety:%s allow_alts:%s tag_strict:%s blacklist:%s}",
+        "[station] appended station=%s user=%s pick=%r - %r yt=%s src=%s cfg={cooldown:%s discover:%s seed:%s variety:%s allow_alts:%s tag_strict:%s artist_pool:%s blacklist:%s}",
         station_id,
         user_id,
         title,
         artist,
-        #yt_video_id,
+        yt_video_id,
         qitem.source,
         artist_cooldown,
         round(d * 100.0),
@@ -651,6 +974,7 @@ async def generate_and_append_station_track(
         artist_variety,
         allow_seed_alts,
         tag_strictness,
+        popular_track_pool_size,
         len(blacklist),
     )
     return qitem

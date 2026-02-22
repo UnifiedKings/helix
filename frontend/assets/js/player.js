@@ -31,7 +31,7 @@ function getGlobalState() {
   if (!window.__HELIX_PLAYER_STATE__) {
     window.__HELIX_PLAYER_STATE__ = {
       audio: null,
-      lastNowId: null,
+      lastNowKey: null,
       pollTimer: null,
       postRefreshForId: null,
       postRefreshTimer: null,
@@ -95,12 +95,6 @@ function setBuffering(isBuf) {
   const meta = base ? (gs.__isBuffering ? `${base} • Loading…` : base) : (gs.__isBuffering ? "Loading…" : "");
   setText("pbMeta", meta);
   // Also reflect on Now Playing header if present
-  const hero = document.getElementById("npHeroSub");
-  if (hero && gs.__isBuffering) {
-    hero.setAttribute("data-helix-loading", "1");
-  } else if (hero) {
-    hero.removeAttribute("data-helix-loading");
-  }
     }
 
 function formatTime(sec) {
@@ -129,7 +123,7 @@ function makeWaveformValues(key, n = 120) {
     x ^= (x << 5) >>> 0;
     // 0..1
     const u = (x >>> 0) / 4294967295;
-    // shape: bias towards middle, add gentle peaks
+    // shape: bias towards middle, add gentle peakss
     const shaped = Math.pow(u, 0.55) * 0.85 + 0.15;
     vals[i] = shaped;
   }
@@ -375,9 +369,26 @@ function bindButtons() {
       audio.play().catch(() => {});
     });
   }
-  if (bPrev && !bPrev.__helixBound) {
-    bPrev.__helixBound = true;
-    bPrev.addEventListener("click", async () => { await backend.playerPrev(); await syncOnce(true); });
+  if (bPrev && !bPrev.__helixBound) 
+    {
+      bPrev.__helixBound = true;
+      bPrev.addEventListener("click", async () => {
+  try {
+    const st = await backend.playerState();
+
+    // If playing a station, just restart the track
+    if (st && st.active_station_id) {
+      await backend.playerSeek(0);
+    } else {
+      // Non-station (album/queue mode) behaves normally
+      await backend.playerPrev();
+    }
+
+    document.dispatchEvent(
+      new CustomEvent("helix-player-refresh", { detail: { forceLoadStream: true } })
+    );
+  } catch {}
+      });
   }
   if (bNext && !bNext.__helixBound) {
     bNext.__helixBound = true;
@@ -386,15 +397,15 @@ function bindButtons() {
   if (bPlay && !bPlay.__helixBound) {
     bPlay.__helixBound = true;
     bPlay.addEventListener("click", async () => {
-      const st = await backend.playerState();
-      if (st.is_playing) {
+      //const st = await backend.playerState();
+      const audio = getOrCreateAudio();
+      var is_playing = !audio.paused
+      if (is_playing) {
+        audio.pause();
         await backend.playerPause();
-        const audio = getOrCreateAudio();
-        if (audio) audio.pause();
       } else {
+        audio.play().catch(() => {});
         await backend.playerResume();
-        const audio = getOrCreateAudio();
-        if (audio) audio.play().catch(() => {});
       }
       await syncOnce(false);
     });
@@ -449,7 +460,6 @@ function bindButtons() {
         });
 
         // Visually toggle
-        //bDislike.textContent = (res && res.disliked) ? "🚫" : "👎";
         bDislike.innerHTML = icons.thumbDown(res.disliked)
         // If user disliked the currently playing song, immediately skip it.
         if (res && res.disliked) {
@@ -463,275 +473,15 @@ function bindButtons() {
   }
     }
 
-function renderQueue(queue, currentIndex) {
-  const list = qs("npQueueList");
-  if (!list) return;
-  list.innerHTML = "";
 
-  const start = Math.max(0, Number.isFinite(currentIndex) ? currentIndex : 0);
-  const full = queue || [];
-  const visible = full.slice(start);
-
-  visible.forEach((q, visIdx) => {
-    const realIdx = start + visIdx;
-    const row = document.createElement("div");
-    // In the visible list, the currently playing item is always the first row.
-    row.className = "npQueueItem" + (visIdx === 0 ? " active" : "");
-    row.innerHTML = `
-      <div class="left">
-        <div class="t">${q.title || ""}</div>
-        <div class="a">${q.artist || ""}</div>
-      </div>
-      <button class="resultMenuBtn npQueueMenuBtn" type="button" aria-label="Queue menu" title="More">⋯</button>
-    `;
-
-    row.addEventListener("click", async () => {
-      try {
-        await backend.playerJump(realIdx);
-        await syncOnceWithRetry(true);
-      } catch {}
-    });
-
-    const menuBtn = row.querySelector(".npQueueMenuBtn");
-    if (menuBtn) {
-      menuBtn.addEventListener("click", (ev) => {
-        ev.preventDefault();
-        ev.stopPropagation();
-        openQueueMenu(menuBtn, q);
-      });
-    }
-
-    list.appendChild(row);
-  });
-
-  setText("npQueueCount", `${visible.length} songs`);
-    }
-
-function _fmtDateLabel(iso) {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString();
-  } catch {
-    return iso || "";
-  }
-    }
-
-async function renderHistory(items) {
-  const list = document.getElementById("npHistoryList");
-  if (!list) return;
-
-  list.innerHTML = "";
-  const max = Array.isArray(items) ? items.slice(0, 30) : [];
-
-  // Prevent stale async "is liked" checks from clobbering a user click (fixes flicker).
-  const likeSeqByHistoryId = new Map();
-
-  for (const h of max) {
-    const row = document.createElement("div");
-    row.className = "npHistRow";
-
-    const img = document.createElement("img");
-    img.className = "npHistThumb";
-    img.alt = "Cover";
-    if (h.art_url) img.src = h.art_url;
-
-    const text = document.createElement("div");
-    text.className = "npHistText";
-
-    const song = document.createElement("div");
-    song.className = "npHistSong";
-    song.textContent = h.title || "—";
-
-    const meta = document.createElement("div");
-    meta.className = "npHistMeta";
-    const albumPart = (h.album ? ` — ${h.album}` : "");
-    meta.textContent = `${h.artist || ""}${albumPart}`;
-
-    text.appendChild(song);
-    text.appendChild(meta);
-
-    const actions = document.createElement("div");
-    actions.className = "npHistActions";
-
-    const likeBtn = document.createElement("button");
-    likeBtn.className = "npHistBtn";
-    likeBtn.title = "Thumb up";
-    likeBtn.type = "button";
-    likeBtn.innerHTML = icons.thumbUp(false);
-
-    // Bind stable identifiers/payload to the button to avoid any mismatch across re-renders.
-    const hid = String(h.id || "");
-    likeBtn.dataset.hid = hid;
-    likeBtn.dataset.subsonicSongId = (h.subsonic_song_id || "").trim();
-    likeBtn.dataset.ytVideoId = (h.yt_video_id || "").trim();
-    likeBtn.dataset.ytBrowseId = (h.yt_browse_id || "").trim();
-    likeBtn.dataset.title = h.title || "";
-    likeBtn.dataset.artist = h.artist || "";
-    likeBtn.dataset.album = h.album || "";
-    likeBtn.dataset.durationMs = String(h.duration_ms || 0);
-    likeBtn.dataset.artUrl = h.art_url || "";
-    likeBtn.dataset.source = h.source || "";
-    likeBtn.dataset.liked = "0";
-    likeBtn.dataset.userTouched = "0";
-
-    const replayBtn = document.createElement("button");
-    replayBtn.className = "npHistBtn";
-    replayBtn.title = "Replay";
-    replayBtn.type = "button";
-    replayBtn.innerHTML = icons.replay();
-
-    // Best-effort: if we have stable ids, reflect liked state.
-    const sid = likeBtn.dataset.subsonicSongId || "";
-    const vid = likeBtn.dataset.ytVideoId || "";
-    if ((sid || vid) && hid) {
-      const seq = (likeSeqByHistoryId.get(hid) || 0) + 1;
-      likeSeqByHistoryId.set(hid, seq);
-      const callSid = sid;
-      const callVid = vid;
-      backend.likesIsLiked({ subsonic_song_id: callSid || null, yt_video_id: callVid || null })
-        .then((r) => {
-          if ((likeSeqByHistoryId.get(hid) || 0) !== seq) return;
-          if ((likeBtn.dataset.userTouched || "0") === "1") return;
-          // Ensure this callback still corresponds to the same row payload.
-          if ((likeBtn.dataset.subsonicSongId || "") !== callSid) return;
-          if ((likeBtn.dataset.ytVideoId || "") !== callVid) return;
-          const liked = !!(r && r.liked);
-          likeBtn.dataset.liked = liked ? "1" : "0";
-          likeBtn.innerHTML = icons.thumbUp(liked);
-        })
-        .catch(() => {});
-    }
-
-
-    likeBtn.addEventListener("click", async (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      try {
-        // Mark as user-touched so pending is-liked checks don't override state.
-        likeBtn.dataset.userTouched = "1";
-
-        // Optimistic toggle to prevent flicker/latency.
-        const curLiked = (likeBtn.dataset.liked || "0") === "1";
-        const optimistic = !curLiked;
-        likeBtn.dataset.liked = optimistic ? "1" : "0";
-        likeBtn.innerHTML = icons.thumbUp(optimistic);
-        likeBtn.disabled = true;
-
-        const r = await backend.likesToggle({
-          title: likeBtn.dataset.title || "",
-          artist: likeBtn.dataset.artist || "",
-          album: likeBtn.dataset.album || "",
-          duration_ms: parseInt(likeBtn.dataset.durationMs || "0", 10) || 0,
-          art_url: likeBtn.dataset.artUrl || "",
-          source: likeBtn.dataset.source || "",
-          subsonic_song_id: likeBtn.dataset.subsonicSongId || "",
-          yt_video_id: likeBtn.dataset.ytVideoId || "",
-          yt_browse_id: likeBtn.dataset.ytBrowseId || "",
-        });
-
-        const liked = !!(r && r.liked);
-        likeBtn.dataset.liked = liked ? "1" : "0";
-        likeBtn.innerHTML = icons.thumbUp(liked);
-      } catch (e) {
-        console.error(e);
-        // If request failed, revert optimistic state.
-        const cur = (likeBtn.dataset.liked || "0") === "1";
-        likeBtn.dataset.liked = cur ? "0" : "1";
-        likeBtn.innerHTML = icons.thumbUp((likeBtn.dataset.liked || "0") === "1");
-      } finally {
-        likeBtn.disabled = false;
-      }
-    });
-
-    replayBtn.addEventListener("click", async (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      try {
-        replayBtn.disabled = true;
-        const gs = getGlobalState();
-        const a = gs.audio || document.getElementById("helix-audio");
-        const posMs = a ? Math.round((a.currentTime || 0) * 1000) : 0;
-        await backend.playerReplayFromHistory(h.id, posMs);
-        document.dispatchEvent(new CustomEvent("helix-player-refresh", { detail: { forceLoadStream: true } }));
-      } catch (e) {
-        console.error(e);
-      } finally {
-        replayBtn.disabled = false;
-      }
-    });
-
-    actions.appendChild(likeBtn);
-    actions.appendChild(replayBtn);
-
-    row.appendChild(img);
-    row.appendChild(text);
-    row.appendChild(actions);
-
-    list.appendChild(row);
-  }
-    }
-
-let __openQueueMenuEl = null;
-
-function closeOpenQueueMenu() {
-  if (__openQueueMenuEl) {
-    __openQueueMenuEl.remove();
-    __openQueueMenuEl = null;
-  }
-    }
-
-function openQueueMenu(anchorBtn, queueItem) {
-  closeOpenQueueMenu();
-
-  const menu = document.createElement("div");
-  menu.className = "resultMenu";
-  menu.innerHTML = `
-    <button type="button" class="resultMenuItem" data-act="remove">Remove from queue</button>
-  `;
-
-  const rect = anchorBtn.getBoundingClientRect();
-  menu.style.position = "fixed";
-  menu.style.top = `${Math.round(rect.bottom + 6)}px`;
-  const desiredLeft = Math.round(rect.right - 220);
-  const maxLeft = Math.max(8, window.innerWidth - 228);
-  menu.style.left = `${Math.min(maxLeft, Math.max(8, desiredLeft))}px`;
-  menu.style.zIndex = "9999";
-
-  menu.addEventListener("click", async (ev) => {
-    const btn = ev.target.closest?.("button[data-act]");
-    if (!btn) return;
-    ev.preventDefault();
-    ev.stopPropagation();
-    try {
-      await backend.playerQueueRemoveItem(queueItem.id);
-      await syncOnceWithRetry(true);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      closeOpenQueueMenu();
-    }
-  });
-
-  document.body.appendChild(menu);
-  __openQueueMenuEl = menu;
-
-  const onDocDown = (ev) => {
-    if (ev.target === anchorBtn) return;
-    if (menu.contains(ev.target)) return;
-    closeOpenQueueMenu();
-    document.removeEventListener("mousedown", onDocDown, true);
-    document.removeEventListener("keydown", onKey, true);
-  };
-  const onKey = (ev) => {
-    if (ev.key === "Escape") {
-      closeOpenQueueMenu();
-      document.removeEventListener("mousedown", onDocDown, true);
-      document.removeEventListener("keydown", onKey, true);
-    }
-  };
-  document.addEventListener("mousedown", onDocDown, true);
-  document.addEventListener("keydown", onKey, true);
-    }
+function nowPlayingKey(np){
+  if (!np) return null;
+  return (
+    (np.subsonic_song_id ? String(np.subsonic_song_id) : "") ||
+    (np.yt_video_id ? String(np.yt_video_id) : "") ||
+    ((np.title || "") + "|||" + (np.artist || "") + "|||" + (np.album || ""))
+  );
+}
 
 function updatePlayerBar(st) {
   const np = st.now_playing;
@@ -739,9 +489,10 @@ function updatePlayerBar(st) {
 
   // waveform for progress bar (visual)
   const gs = getGlobalState();
-  if (np.id && np.id !== gs.__waveKey) {
-    gs.__waveKey = np.id;
-    gs.__waveValues = makeWaveformValues(np.id, 120);
+  const wKey = nowPlayingKey(np) || np.id;
+  if (wKey && wKey !== gs.__waveKey) {
+    gs.__waveKey = wKey;
+    gs.__waveValues = makeWaveformValues(String(wKey), 120);
   }
 
   // Player bar
@@ -751,34 +502,11 @@ function updatePlayerBar(st) {
   gs2.__pbMetaBase = (np.album ? np.album : "");
   setText("pbMeta", gs2.__isBuffering ? (gs2.__pbMetaBase ? `${gs2.__pbMetaBase} • Loading…` : "Loading…") : gs2.__pbMetaBase);
   setImg("pbThumb", np.art_url || "");
-
-// Now Playing page (v1 + v2 ids)
-setText("npTitle", np.title);
-setText("npArtist", np.artist);
-setImg("npThumb", np.art_url || "");
-
-setText("npHeroTitle", np.title);
-setText("npHeroSub", np.album ? `${np.artist} — ${np.album}` : np.artist);
-setImg("npHeroImg", np.art_url || "");
-
-setText("npNowTitle", np.title);
-setText("npNowArtist", np.artist);
-setImg("npNowImg", np.art_url || "");
-
-// Queue panel is optional (Now Playing v2 hides it)
-if (document.getElementById("npQueueList")) {
-  renderQueue(st.queue, st.current_index);
-    }
+  // (Now Playing page UI moved to assets/js/pages/now-playing.js)
 
   // play/pause icon
   const bPlay = qs("pbPlay");
   if (bPlay) bPlay.textContent = st.is_playing ? "⏸" : "▶";
-
-  // autoplay toggle UI (Now Playing page)
-  const ap = document.getElementById("autoplayToggle");
-  const apTitle = document.querySelector(".npToggleTitle");
-  if (ap) ap.checked = !!st.autoplay_enabled;
-  if (apTitle) apTitle.textContent = st.autoplay_enabled ? "Autoplay is on" : "Autoplay is off";
 
   // like button
   const likeBtn = document.getElementById("pbLike");
@@ -803,7 +531,7 @@ if (document.getElementById("npQueueList")) {
   // dislike button
   if (dislikeBtn && likeKey && gs3.__lastDislikeKey !== likeKey) {
     gs3.__lastDislikeKey = likeKey;
-    dislikeBtn.textContent = "👎";
+    dislikeBtn.innerHTML = icons.thumbDown();
     backend.dislikesIsDisliked({ yt_video_id: np.yt_video_id || null, subsonic_song_id: np.subsonic_song_id || null })
       .then((r) => { dislikeBtn.innerHTML = icons.thumbDown(!!(r && r.disliked)) })
       .catch(() => { dislikeBtn.innerHTML = icons.thumbDown()});
@@ -847,6 +575,11 @@ async function syncOnce(forceLoadStream) {
   const st = await backend.playerState();
   // Cache latest good state for fast restore on hard refresh.
   try { localStorage.setItem("helix_last_player_state", JSON.stringify(st)); } catch {}
+
+  // Persist latest player state for pages to render.
+  gs.__lastStatus = st;
+  gs.__lastNowPlaying = st && st.now_playing ? st.now_playing : null;
+
   bindButtons();
 
   const np = st.now_playing;
@@ -857,16 +590,11 @@ async function syncOnce(forceLoadStream) {
 
   updatePlayerBar(st);
 
-  // Now Playing v2: populate recent history panel if present.
-  if (document.getElementById("npHistoryList")) {
-    try {
-      const sid = (st && st.active_station_id) ? st.active_station_id : null;
-      const hist = await backend.getListeningHistory(sid);
-      await renderHistory(hist && hist.items ? hist.items : []);
-    } catch (e) {
-      // non-fatal
-    }
-  }
+  // Notify page modules (e.g., now-playing.js) of fresh state.
+  try {
+    document.dispatchEvent(new CustomEvent("helix-player-state", { detail: { status: st, now_playing: np } }));
+  } catch {}
+
 
   const audio = getOrCreateAudio();
   if (!audio) return;
@@ -888,8 +616,9 @@ async function syncOnce(forceLoadStream) {
     });
   }
 
-  const shouldLoad = forceLoadStream || (np.id && np.id !== gs.lastNowId);
-  gs.lastNowId = np.id;
+    const curNowKey = nowPlayingKey(np) || (np && np.id ? String(np.id) : null);
+  const shouldLoad = forceLoadStream || (curNowKey && curNowKey !== gs.lastNowKey);
+  gs.lastNowKey = curNowKey;
 
   if (shouldLoad) {
     // Always stream from backend so browser doesn't need Subsonic credentials.
@@ -907,7 +636,7 @@ async function syncOnce(forceLoadStream) {
     gs.postRefreshTimer = setTimeout(() => {
   // Only refresh if we're still on the same now-playing item.
   try {
-    const curId = getGlobalState().lastNowId;
+        const curId = getGlobalState().lastNowKey;
     if (curId && curId === getGlobalState().postRefreshForId) {
       syncOnce(false).catch(() => {});
     }
@@ -951,6 +680,14 @@ async function syncOnceWithRetry(forceLoadStream) {
 
   throw lastErr;
     }
+
+export function getPlayerSnapshot() {
+  const gs = getGlobalState();
+  return {
+    status: gs.__lastStatus || null,
+    now_playing: gs.__lastNowPlaying || null,
+  };
+}
 
 export function startPlayerPolling() {
   const gs = getGlobalState();

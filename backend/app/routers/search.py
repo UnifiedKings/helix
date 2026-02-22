@@ -16,8 +16,6 @@ from ..models import User
 from ..settings_store import get_settings
 from ..cache import TTLCache
 from ..integrations.musicbrainz import MusicBrainzClient
-from ..integrations.wikipedia import parse_wikipedia_url, fetch_wikipedia_thumbnail, search_wikipedia_title
-from ..image_proxy import fetch_cached_image
 
 
 router = APIRouter(prefix="/api", tags=["search"])
@@ -192,54 +190,3 @@ def _canonical_track_key(title: str, artist: str) -> str:
     t = re.sub(r"\s+", " ", t).strip().lower()
     a = re.sub(r"\s+", " ", (artist or "").strip().lower())
     return f"{t}::{a}"
-
-
-
-@router.get("/img")
-async def img_proxy(
-    u: str = Query(..., description="Remote image URL"),
-    db: Session = Depends(get_db),
-):
-    settings = get_settings(db)
-    # Public-but-safe image proxy: allowlist remote hosts to avoid open-proxy abuse.
-    from urllib.parse import urlparse
-
-    allowed_hosts = {
-        "coverartarchive.org",
-        "commons.wikimedia.org",
-        "upload.wikimedia.org",
-    }
-    try:
-        host = (urlparse(u).hostname or "").lower()
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid image URL")
-    if host not in allowed_hosts:
-        raise HTTPException(status_code=400, detail="Image host not allowed")
-
-    if not settings.get("image_proxy_enabled", True):
-        # Let the client fetch directly.
-        return RedirectResponse(url=u, status_code=302)
-
-    max_mb = int(settings.get("image_cache_max_mb", 500) or 500)
-    ttl_days = int(settings.get("image_cache_ttl_days", 90) or 90)
-    try:
-        data, ctype = await fetch_cached_image(
-            u,
-            max_mb=max_mb,
-            ttl_days=ttl_days,
-            user_agent=str(settings.get("http_user_agent") or settings.get("musicbrainz_user_agent") or "Helix/0.1 (admin@example.invalid)"),
-        )
-    except Exception as e:
-        # If the upstream blocks our server-side fetch (common with Wikimedia), fall back to redirecting the client.
-        try:
-            import httpx
-            if isinstance(e, httpx.HTTPStatusError):
-                code = e.response.status_code
-                if code in (403, 404):
-                    return RedirectResponse(url=u, status_code=302)
-        except Exception:
-            pass
-        raise HTTPException(status_code=400, detail=str(e))
-    from fastapi import Response
-
-    return Response(content=data, media_type=ctype, headers={"Cache-Control": "public, max-age=86400"})

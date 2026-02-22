@@ -1,0 +1,88 @@
+/* Listening history page */
+.historyLayout {
+  display:flex;
+  gap: 18px;
+  align-items:flex-start;
+
+}
+
+.historyCol {
+  flex: 1 1 520px;
+  min-width: 320px;
+
+}
+
+.historyDetail {
+  flex: 0 0 320px;
+  max-width: 360px;
+  border-left: 1px solid rgba(255,255,255,0.08);
+  padding-left: 18px;
+
+}
+
+.historyDetail .detailThumb {
+  width: 220px;
+  height: 220px;
+  border-radius: 14px;
+  object-fit: cover;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+
+}
+
+.historyDetail .detailTitle {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 12px;
+
+}
+
+.historyDetail .detailSub {
+  margin-top: 6px;
+
+}
+
+.historyDetail .detailMeta {
+  margin-top: 10px;
+
+}
+
+.historyRow {
+  cursor: pointer;
+  border-radius: 12px;
+  padding: 8px;
+
+}
+
+.historyRow:hover {
+  background: rgba(255,255,255,0.06);
+
+}
+
+.historyRow.isSelected {
+  background: rgba(255,255,255,0.09);
+  outline: 1px solid rgba(255,255,255,0.08);
+
+}
+
+@media (max-width: 980px) {
+  .historyLayout {
+    flex-direction: column;
+
+  }
+
+  .historyDetail {
+    border-left: none;
+    padding-left: 0;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding-top: 16px;
+    max-width: none;
+
+  }
+
+  .historyDetail .detailThumb {
+    width: 180px;
+    height: 180px;
+
+  }
+
+}

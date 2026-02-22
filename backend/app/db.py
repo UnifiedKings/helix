@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from sqlalchemy import text
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker, DeclarativeBase, Session
 
@@ -16,6 +17,12 @@ class Base(DeclarativeBase):
 def init_db() -> None:
     from . import models  # noqa: F401
     Base.metadata.create_all(bind=engine)
+
+    # Lightweight forward migrations for SQLite. (create_all does not alter existing tables.)
+    with engine.begin() as conn:
+        cols = {row[1] for row in conn.execute(text("PRAGMA table_info(stations)")).fetchall()}
+        if "popular_track_pool_size" not in cols:
+            conn.execute(text("ALTER TABLE stations ADD COLUMN popular_track_pool_size INTEGER NOT NULL DEFAULT 10"))
 
 
 def get_db() -> Session:

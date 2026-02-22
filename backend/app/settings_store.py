@@ -56,23 +56,18 @@ DEFAULTS: dict[str, Any] = {
     "search_hide_tracks_without_art": False,
 
     # --- Artist image enrichment ---
-    # If True, Helix will try to resolve artist photos via MusicBrainz -> Wikipedia (page summary thumbnail).
-    "artist_images_enable_wikipedia": True,
 
     # If True, and no Wikidata photo is available, fall back to representative album art for the artist.
     "artist_images_fallback_to_album_art": True,
 
     # If True, Helix will proxy & cache remote thumbnails (Wikimedia / Cover Art Archive) to improve speed and stability.
-    "image_proxy_enabled": True,
 
     # Maximum on-disk size (MB) for the thumbnail cache.
-    "image_cache_max_mb": 500,
 
     # Target thumbnail width for proxied images.
     "image_cache_thumb_px": 256,
 
     # How long (days) to keep cached thumbnails before they become eligible for eviction.
-    "image_cache_ttl_days": 90,
 
     # Caching for search responses (seconds). Keep short so results stay responsive, but avoid hammering upstream services.
     "search_cache_ttl_seconds": 300,

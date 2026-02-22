@@ -7,8 +7,8 @@ from fastapi import APIRouter, Depends, Query
 from ..auth import get_current_user
 from ..models import User
 from ..cache import TTLCache
-from ..integrations.ytmusic_search import find_album, find_track
-from ..integrations.ytmusic_api import search_ytmusic
+from ..integrations.ytmusic import find_album, find_track
+from ..integrations.ytmusic import search_ytmusic
 
 
 router = APIRouter(prefix="/api/ytmusic", tags=["ytmusic"])

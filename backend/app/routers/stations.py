@@ -9,7 +9,7 @@ from sqlalchemy import select
 
 from ..auth import get_current_user
 from ..db import get_db
-from ..models import User, Station, PlaybackSession, QueueItem
+from ..models import User, Station, PlaybackSession, QueueItem, ListenHistoryItem
 from ..schemas import StationCreateRequest, StationUpdateRequest, StationResponse, StationPlayRequest
 from ..settings_store import get_settings
 from ..stations_engine import generate_and_append_station_track
@@ -17,8 +17,20 @@ from ..stations_engine import generate_and_append_station_track
 
 router = APIRouter(prefix="/api/stations", tags=["stations"])
 
+def _thumb_for_station(db: Session, station_id: str) -> str:
+    """Phase 1: derive a station thumbnail from recent station listen history."""
+    row = db.execute(
+        select(ListenHistoryItem.art_url)
+        .where(ListenHistoryItem.station_id == station_id)
+        .where(ListenHistoryItem.art_url != "")
+        .order_by(ListenHistoryItem.created_at.desc())
+        .limit(1)
+    ).first()
+    return (row[0] if row and row[0] else "")
 
-def _to_station(s: Station) -> StationResponse:
+
+
+def _to_station(s: Station, thumbnail_url: str = "") -> StationResponse:
     return StationResponse(
         id=s.id,
         name=s.name,
@@ -36,8 +48,10 @@ def _to_station(s: Station) -> StationResponse:
         era_end=int(getattr(s, "era_end", 0) or 0),
         popularity_bias=int(getattr(s, "popularity_bias", 50) or 50),
         tag_strictness=int(getattr(s, "tag_strictness", 70) or 70),
+        popular_track_pool_size=int(getattr(s, "popular_track_pool_size", 10) or 10),
         artist_blacklist=str(getattr(s, "artist_blacklist", "") or ""),
         temperature=float(getattr(s, "temperature", 0.9) or 0.9),
+        thumbnail_url=thumbnail_url or "",
         created_at=s.created_at.isoformat() + "Z",
         updated_at=s.updated_at.isoformat() + "Z",
     )
@@ -48,7 +62,7 @@ def list_stations(db: Session = Depends(get_db), user: User = Depends(get_curren
     rows = db.execute(
         select(Station).where(Station.user_id == user.id).order_by(Station.updated_at.desc())
     ).scalars().all()
-    return [_to_station(s) for s in rows]
+    return [_to_station(s, _thumb_for_station(db, s.id)) for s in rows]
 
 
 @router.post("", response_model=StationResponse)
@@ -78,6 +92,7 @@ def create_station(payload: StationCreateRequest, db: Session = Depends(get_db),
         era_end=max(0, min(3000, int(payload.era_end or 0))),
         popularity_bias=max(0, min(100, int(payload.popularity_bias or 50))),
         tag_strictness=max(0, min(100, int(payload.tag_strictness or 70))),
+        popular_track_pool_size=max(0, min(200, int(payload.popular_track_pool_size or 10))),
         artist_blacklist=(payload.artist_blacklist or ""),
         temperature=max(0.2, min(2.0, float(payload.temperature or 0.9))),
         created_at=datetime.utcnow(),
@@ -86,7 +101,7 @@ def create_station(payload: StationCreateRequest, db: Session = Depends(get_db),
     db.add(s)
     db.commit()
     db.refresh(s)
-    return _to_station(s)
+    return _to_station(s, _thumb_for_station(db, s.id))
 
 
 @router.patch("/{station_id}", response_model=StationResponse)
@@ -115,6 +130,8 @@ def update_station(station_id: str, payload: StationUpdateRequest, db: Session =
         st.popularity_bias = max(0, min(100, int(payload.popularity_bias)))
     if payload.tag_strictness is not None:
         st.tag_strictness = max(0, min(100, int(payload.tag_strictness)))
+    if payload.popular_track_pool_size is not None:
+        st.popular_track_pool_size = max(0, min(200, int(payload.popular_track_pool_size)))
     if payload.artist_blacklist is not None:
         st.artist_blacklist = payload.artist_blacklist or ""
 

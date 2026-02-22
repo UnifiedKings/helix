@@ -393,24 +393,36 @@ class DownloadManager:
                 self._q.task_done()
 
     async def _finalize_worker(self):
+        """Finalize/import downloads one-at-a-time (FIFO).
+
+        This enables safe prefetching of upcoming tracks without bulk-import behavior.
+        """
         while True:
             try:
-                await asyncio.sleep(2)
+                await asyncio.sleep(1)
 
-                # Trigger finalize when idle OR thresholds reached
-                idle = self._q.empty()
-                age = time.time() - self._last_finalize_at
-                count = len(self._downloaded_since_finalize)
-
-                if count == 0:
+                if not self._downloaded_since_finalize:
                     continue
 
-                if idle or count >= self.max_batch_tracks or age >= self.max_batch_age_s:
-                    await self.finalize_batch()
-            except Exception:
-                # never crash worker
-                continue
+                # First downloaded video that is not currently being streamed.
+                vid = None
+                for v in list(dict.fromkeys(self._downloaded_since_finalize)):
+                    if v not in self._active_streams:
+                        vid = v
+                        break
+                if not vid:
+                    continue
 
+                # Finalize just this one vid using the existing batch pipeline.
+                saved = list(self._downloaded_since_finalize)
+                try:
+                    self._downloaded_since_finalize = [vid]
+                    await self.finalize_batch()
+                finally:
+                    # Restore and ensure the finalized vid isn't left pending.
+                    self._downloaded_since_finalize = [x for x in saved if x != vid]
+            except Exception:
+                continue
     async def finalize_batch(self):
         async with self._finalize_lock:
             vids = list(dict.fromkeys(self._downloaded_since_finalize))
@@ -421,6 +433,18 @@ class DownloadManager:
             vids = [v for v in vids if v not in self._active_streams]
             if not vids:
                 return
+
+            # Capture metadata for Subsonic re-check after import/scan (best-effort).
+            _wait_targets: Dict[str, Tuple[str, str, Optional[int]]] = {}
+            for _v in vids:
+                _j = self._jobs.get(_v)
+                if not _j:
+                    continue
+                _t = (_j.title or '').strip()
+                _a = (_j.artist or '').strip()
+                _d = int(_j.duration_ms) if getattr(_j, 'duration_ms', None) else None
+                if _t and _a:
+                    _wait_targets[_v] = (_t, _a, _d)
 
             # Remux downloaded audio into Ogg Opus (.opus) before tagging/import.
             # We avoid converting during ASAP playback to keep start time fast.
@@ -463,8 +487,8 @@ class DownloadManager:
             except Exception:
                 OggOpus = None  # type: ignore
 
-        from .integrations.ytmusic_api import get_album_full
-        from .integrations.ytmusic_api import get_album_full
+        from .integrations.ytmusic import get_album_full
+        from .integrations.ytmusic import get_album_full
 
         def _looks_like_views(s: str) -> bool:
             ss = (s or "").strip().lower()
@@ -626,8 +650,18 @@ class DownloadManager:
                     timeout_s = int(settings.get("subsonic_timeout_s") or 20)
                     c = SubsonicClient(base_url=base_url, username=username, password=password, client_name=client_name, api_version=api_version, timeout_s=timeout_s)
                     try:
-                        await c.start_scan()
+                        ok = await c.start_scan()
+                        if not ok:
+                            LOG.warning('[subsonic] startScan failed (continuing)')
                     finally:
+                        # Wait briefly for newly imported tracks to become visible via Subsonic,
+                        # to avoid re-downloading/re-importing due to index lag.
+                        try:
+                            for _v, (_t, _a, _d) in _wait_targets.items():
+                                # Keep this bounded; we only need enough to make the next lookup succeed.
+                                await c.wait_for_song_best(title=_t, artist=_a, duration_ms=_d, timeout_s=30, poll_s=2.0)
+                        except Exception:
+                            pass
                         await c.close()
         except Exception:
             pass
@@ -647,6 +681,19 @@ async def finalize_video_ids(self, vids: List[str]) -> None:
         ensure_beets_config()
         # Deduplicate, preserve order
         vids = list(dict.fromkeys([v for v in vids if v]))
+
+        # Capture metadata for Subsonic re-check after import/scan (best-effort).
+        _wait_targets: Dict[str, Tuple[str, str, Optional[int]]] = {}
+        for _v in vids:
+            _j = self._jobs.get(_v)
+            if not _j:
+                continue
+            _t = (_j.title or '').strip()
+            _a = (_j.artist or '').strip()
+            _d = int(_j.duration_ms) if getattr(_j, 'duration_ms', None) else None
+            if _t and _a:
+                _wait_targets[_v] = (_t, _a, _d)
+
 
         # Remux/tag each file and import it individually so it is moved out of INBOUND_DIR.
         try:
@@ -810,7 +857,15 @@ async def finalize_video_ids(self, vids: List[str]) -> None:
                     timeout_s = int(settings.get("subsonic_timeout_s") or 20)
                     c = SubsonicClient(base_url=base_url, username=username, password=password, client_name=client_name, api_version=api_version, timeout_s=timeout_s)
                     try:
-                        await c.start_scan()
+                        ok = await c.start_scan()
+                        if not ok:
+                            LOG.warning('[subsonic] startScan failed (continuing)')
+                        # Wait briefly for newly imported tracks to become visible via Subsonic.
+                        try:
+                            for _v, (_t, _a, _d) in _wait_targets.items():
+                                await c.wait_for_song_best(title=_t, artist=_a, duration_ms=_d, timeout_s=30, poll_s=2.0)
+                        except Exception:
+                            pass
                     finally:
                         await c.close()
         except Exception:

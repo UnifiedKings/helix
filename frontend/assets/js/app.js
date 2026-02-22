@@ -290,7 +290,7 @@ function buildRow(item) {
           seed_title: tTitle,
         });
 
-        await backend.stationsPlay(created.id, true);
+        await playStation(created.id)
         window.location.href = "index.html";
         return;
       }
@@ -759,4 +759,18 @@ export async function init() {
   if (els.input && q) els.input.value = q;
   setActiveTab(tab || "all");
   runSearch({ q, tab: tab || "all", source: source || "ytmusic" });
+}
+
+
+async function playStation(id)
+{
+  console.log("Playing station " + id)
+  showLoading("Starting station...")
+  try{
+    await backend.stationsPlay(id, true);
+    document.dispatchEvent(new CustomEvent("helix-player-refresh", { detail: { forceLoadStream: true } }));
+  }
+  finally {
+    document.addEventListener("helix-player-state", () => hideLoading());
+  }
 }

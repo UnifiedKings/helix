@@ -1,4 +1,11 @@
-export function esc(s) { return (s ?? "").toString(); }
+export function esc(v) {
+  return String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 export function fmtMs(ms) {
   if (!ms || isNaN(ms)) return "";

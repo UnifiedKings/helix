@@ -227,6 +227,7 @@ export async function stationsCreate(payload) {
 }
 
 export async function stationsPlay(station_id, reset = true) {
+  console.log("Calling backend")
   return api(`/api/stations/${encodeURIComponent(station_id)}/play`, {
     method: "POST",
     body: JSON.stringify({ reset: !!reset }),

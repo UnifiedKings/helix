@@ -1,0 +1,290 @@
+
+.playerRow {
+  display: grid;
+  grid-template-columns: 320px 1fr 320px;
+  gap: 12px;
+  align-items: center;
+  width: 70%
+
+}
+
+.playerLeft {
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  min-width: 0;
+
+}
+
+.pbThumb {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  object-fit: cover;
+  background:#0b0f14;
+  flex: 0 0 auto;
+
+}
+
+.pbText {
+  min-width: 0;
+
+}
+
+.pbTitle {
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+}
+
+.pbSub {
+  color:#aab2c0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+}
+
+.playerCenter {
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  justify-content: center;
+
+}
+
+.playerRight {
+  display:flex;
+  justify-content:flex-end;
+  min-width: 0;
+
+}
+
+.playerProgress {
+  display: grid;
+  grid-template-columns: 52px 1fr 52px;
+  gap: 10px;
+  align-items: center;
+  width: 70%;
+}
+
+.pbTime {
+  font-size: 12px;
+  color: rgba(255,255,255,0.70);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+
+}
+
+.playerProgress .pbTime:first-child {
+  text-align: left;
+
+}
+
+.playerProgress .pbTime:last-child {
+  text-align: right;
+
+}
+
+.pbTrack {
+  position: relative;
+  height: 18px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  overflow: hidden;
+  cursor: pointer;
+
+}
+
+.pbTrack:focus {
+  outline: 2px solid rgba(45,108,223,0.9);
+  outline-offset: 2px;
+
+}
+
+.pbWave {
+  display: block;
+  width: 100%;
+  height: 100%;
+
+}
+
+.playerRight  {
+  display:none;
+
+}
+
+.playerLeft  {
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  min-width: 0;
+
+}
+
+.pbThumb  {
+  width: 46px;
+  height: 46px;
+  border-radius: 10px;
+  border: 1px solid #232833;
+  object-fit: cover;
+  background:#0b0f14;
+
+}
+
+.pbText  {
+  min-width: 0;
+
+}
+
+.pbTitle  {
+  font-weight: 700;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 360px;
+
+}
+
+.pbSub  {
+  color:#aab2c0;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 360px;
+
+}
+
+.playerCenter  {
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  justify-content: center;
+
+}
+
+.playerRight  {
+  display:flex;
+  justify-content:flex-end;
+
+}
+
+.playerBar  {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 72px;
+  background: rgba(15, 18, 23, 0.92);
+  border-top: 1px solid #232833;
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  padding: 0 18px;
+  backdrop-filter: blur(10px);
+  gap: 10px;
+  z-index: 30;
+  padding-top: 1rem;
+  padding-bottom: 6rem;
+  flex-direction: column;
+}
+
+.playerLeft  {
+  display:flex;
+  gap: 10px;
+  align-items:center;
+  min-width: 240px;
+
+}
+
+.pbThumb  {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid #232833;
+  object-fit: cover;
+  background:#0b0f14;
+
+}
+
+.pbTitle  {
+  font-size: 12px;
+  font-weight: 650;
+
+}
+
+.pbSub  {
+  font-size: 11px;
+  color:#aab2c0;
+  margin-top: 2px;
+
+}
+
+.playerCenter  {
+  display:flex;
+  gap: 12px;
+  align-items:center;
+  justify-content:center;
+
+}
+
+.playerRight  {
+  min-width: 140px;
+  display:flex;
+  justify-content:flex-end;
+
+}
+
+.pbVolume
+ {
+  display: flex;
+  flex-direction: row;
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+
+}
+
+.pbVolume::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #ffffff;
+  border: 2px solid #2d6cdf;
+  margin-top: -4px;
+
+}
+
+.pbVolume::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+
+}
+
+.pbVolume:focus-visible {
+  box-shadow: 0 0 0 3px rgba(45,108,223,0.35);
+
+}
+
+.pbVol::-moz-range-thumb  {
+  border-radius: 50%;
+  background: #060707;
+  cursor: pointer;
+  /* Firefox centers the thumb automatically, no margin adjustment needed */
+
+}
+
+.pbVol::-moz-range-track  {
+  height: 10px;
+  background: #3a3939;
+  border-radius: 5px;
+  cursor: pointer;
+
+}

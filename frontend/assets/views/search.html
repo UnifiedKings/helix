@@ -1,0 +1,43 @@
+<div class="Page PageSearch">
+<header class="searchHeader">
+    <div class="searchTabs" role="tablist" aria-label="Search filters">
+      <button class="tabBtn" data-tab="all" role="tab" aria-selected="true">All</button>
+      <button class="tabBtn" data-tab="albums" role="tab">Albums</button>
+      <button class="tabBtn" data-tab="songs" role="tab">Songs</button>
+    </div>
+
+    <div class="row" style="margin-top:8px">
+      <div class="status" id="status">Type to search</div>
+    </div>
+  </header>
+<main>
+  <div id="search-container">
+    <section class="results card">
+      <h2>Results</h2>
+      <div class="list" id="results"></div>
+      <div class="footer">
+        <div class="status" id="count"></div>
+      </div>
+    </section>
+    
+    <section class="details card">
+      <h2>Details</h2>
+    </div>
+      
+      <div class="detailsTop" id="detailsTop">
+        <img id="coverImg" class="thumbLg" alt="Cover art" loading="lazy" />
+        <div class="detailsTopText">
+          <div class="muted" id="coverCaption"></div>
+        </div>
+      </div>
+
+      <div id="details" class="meta">
+        <div class="k">Tip</div>
+        <div class="v">Search for a track or album, then click a result.</div>
+      </div>
+
+      <div class="links" id="links"></div>
+    </section>
+  </main>
+
+</div>

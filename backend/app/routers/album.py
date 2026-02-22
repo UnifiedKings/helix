@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..auth import get_current_user
 from ..models import User
-from ..integrations.ytmusic_api import get_album_full
+from ..integrations.ytmusic import get_album_full
 
 
 router = APIRouter(prefix="/api", tags=["album"])

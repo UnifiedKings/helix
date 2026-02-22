@@ -1,0 +1,175 @@
+/* Stations page */
+.stations  {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+
+}
+
+@media (max-width: 900px) {
+  .stations  {
+    grid-template-columns: repeat(2, 1fr);
+
+  }
+
+}
+
+.stationName  {
+  font-weight: 750;
+
+}
+
+.stations  {
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+
+}
+
+@media (max-width: 980px) {
+  .stations  {
+    grid-template-columns: 1fr;
+
+  }
+
+}
+
+.stationIcon  {
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  border: 1px solid #232833;
+  background:#0b0f14;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+
+}
+
+.stationName  {
+  font-weight: 650;
+
+}
+
+.stationGrid {
+  display:grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap:16px;
+  width:100%;
+
+}
+
+.stationCard {
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  position: relative;
+  border-radius:14px;
+  background: rgba(0,0,0,0.15);
+  background-color: rgba(0,0,0,0.15);
+  overflow:hidden;
+  cursor:pointer;
+  transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+  height: 13rem;
+  width: 13rem;
+  flex-direction: column;
+
+}
+
+.stationCard::before  {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  /* ← adjust tint strength here */
+  z-index: 1;
+  padding: 10px;
+
+}
+
+.stationCard:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255,255,255,0.16);
+  background: rgba(0,0,0,0.22);
+
+}
+
+.stationMeta {
+  text-align: center;
+  margin-top: 1rem;
+}
+
+.stationMeta .title {
+  font-weight:700;
+  margin-bottom:4px;
+  font-size: 13px;
+  white-space:nowrap;
+  overflow: scroll;
+  text-overflow:ellipsis;
+
+}
+
+.stationMeta .subtitle {
+  font-size:12px;
+  opacity:0.75;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+
+}
+
+
+.stationActions button {
+  padding:8px 10px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.55);
+
+}
+
+.stationActions button:hover {
+  background: rgba(0,0,0,0.75);
+
+}
+
+.stationActions {
+  position: absolute;
+  inset: 0;
+  /* fill entire card */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 1rem;
+  opacity: 0;
+}
+
+.stationActions button{
+  width: 5rem;
+}
+
+.stationCard:hover .stationActions  {
+  opacity: 1;
+
+}
+
+.stationCard::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+  to bottom,
+  rgba(0,0,0,0.15) 0%,
+  rgba(0,0,0,0.35) 60%,
+  rgba(0,0,0,0.75) 100%
+  );
+  pointer-events: none;
+
+}
+
+.stationCard > * {
+  position: relative;
+  z-index: 2;
+
+}

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import asyncio
+import anyio
 import re
+import time
 import os
 import logging
 from typing import Any, Dict, List, Optional, Tuple
@@ -18,7 +20,7 @@ from ..models import User, PlaybackSession, QueueItem, ListenHistoryItem, Statio
 from ..schemas import PlayerPlayAlbumRequest, PlayerPlayTrackRequest, PlayerJumpRequest, PlayerQueueItem, PlayerStateResponse, PlayerQueueAppendTrackRequest, PlayerQueueAppendAlbumRequest, PlayerRemoveQueueItemResponse, PlayerHistoryItem, PlayerHistoryResponse, PlayerActionRequest, PlayerReplayRequest, AutoplaySetRequest
 from ..settings_store import get_settings
 from ..integrations.subsonic import SubsonicClient
-from ..integrations.ytmusic_api import get_album_full
+from ..integrations.ytmusic import get_album_full
 from ..download_manager import DOWNLOAD_MANAGER, DownloadJob
 from ..stations_engine import generate_and_append_station_track
 
@@ -34,6 +36,137 @@ _ALBUM_FILLING: set[tuple[str, str]] = set()
 
 # Prevent duplicate station prefetch per user while a track is playing.
 _STATION_PREFETCH_TASKS: dict[str, asyncio.Task] = {}
+
+# Background download prefetch tasks per user
+_DOWNLOAD_PREFETCH_TASKS: dict[str, asyncio.Task] = {}
+_LAST_STARTSCAN_TS: float = 0.0
+
+def _prefetch_ahead_count() -> int:
+    # Default prefetch is 1 (next track). Set HELIX_PREFETCH_AHEAD=2/3 to download further ahead.
+    try:
+        return max(0, int(os.getenv("HELIX_PREFETCH_AHEAD", "1")))
+    except Exception:
+        return 1
+
+async def _prefetch_next_downloads(user_id: str) -> None:
+    """Prefetch downloads for upcoming queue items (FIFO) so playback doesn't stall.
+
+    This does not change playback order. It simply starts download/import for the next N
+    items after the current index, one at a time via DownloadManager.
+    """
+    try:
+        db = SessionLocal()
+        try:
+            settings = get_settings(db)
+            sess = db.get(PlaybackSession, user_id)
+            if not sess:
+                return
+
+            items = db.execute(
+                select(QueueItem)
+                .where(QueueItem.session_user_id == user_id)
+                .order_by(QueueItem.position.asc())
+            ).scalars().all()
+
+            if not items:
+                return
+
+            ahead = _prefetch_ahead_count()
+            if ahead <= 0:
+                return
+
+            cur_idx = int(sess.current_index or 0)
+            start = cur_idx + 1
+            end = min(len(items), start + ahead)
+
+            client = await _subsonic_client_from_settings(settings)
+            # Best-effort: trigger a scan occasionally so new imports become searchable quickly.
+            global _LAST_STARTSCAN_TS
+            now = time.time()
+            if (now - _LAST_STARTSCAN_TS) > 30:
+                try:
+                    await client.start_scan()
+                    _LAST_STARTSCAN_TS = now
+                except Exception:
+                    pass
+
+            for pos in range(start, end):
+                qi = items[pos]
+
+                # If already playable in Subsonic, skip.
+                if getattr(qi, "source", "") == "subsonic" and (qi.subsonic_song_id or ""):
+                    continue
+
+                # Re-check Subsonic by metadata to avoid re-download of existing library tracks.
+                try:
+                    want_ms = int(qi.duration_ms or 0) if getattr(qi, "duration_ms", None) else None
+                    found = await client.search_song_best(
+                        title=str(qi.title or ""),
+                        artist=str(qi.artist or ""),
+                        duration_ms=want_ms,
+                    )
+                    if found and found.get("id"):
+                        qi.source = "subsonic"
+                        qi.subsonic_song_id = str(found.get("id"))
+                        qi.is_playable = True
+                        qi.error = ""
+                        db.commit()
+                        continue
+                except Exception:
+                    pass
+
+                vid = _clean(getattr(qi, "yt_video_id", "") or "")
+                if not vid:
+                    continue
+
+                if DOWNLOAD_MANAGER.is_ready(vid):
+                    continue
+
+                # Lower priority number == sooner. Keep prefetch behind "play now".
+                prio = 20 + (pos - start)
+                await DOWNLOAD_MANAGER.enqueue_normal(DownloadJob(
+                    video_id=vid,
+                    url=f"https://music.youtube.com/watch?v={vid}",
+                    title=qi.title,
+                    artist=qi.artist,
+                    album=qi.album or "",
+                    art_url=qi.art_url or "",
+                    track_no=0,
+                    duration_ms=int(qi.duration_ms or 0),
+                    priority=prio,
+                ))
+        finally:
+            db.close()
+    except Exception as e:
+        LOG.warning("[download-prefetch] failed user=%s err=%r", user_id, e)
+    finally:
+        _DOWNLOAD_PREFETCH_TASKS.pop(user_id, None)
+
+async def _schedule_download_prefetch_async(user_id: str) -> None:
+    t = _DOWNLOAD_PREFETCH_TASKS.get(user_id)
+    if t and not t.done():
+        return
+    _DOWNLOAD_PREFETCH_TASKS[user_id] = asyncio.create_task(_prefetch_next_downloads(user_id))
+
+def _schedule_download_prefetch(user_id: str) -> None:
+    """Schedule download prefetch from both sync and async request contexts."""
+    try:
+        # If we're already in the event loop (async endpoint), schedule directly.
+        asyncio.get_running_loop()
+        # Create task inside the loop context.
+        try:
+            t = _DOWNLOAD_PREFETCH_TASKS.get(user_id)
+            if t and not t.done():
+                return
+            _DOWNLOAD_PREFETCH_TASKS[user_id] = asyncio.create_task(_prefetch_next_downloads(user_id))
+        except Exception:
+            return
+    except RuntimeError:
+        # Sync endpoint (threadpool): hop into the main loop safely.
+        try:
+            anyio.from_thread.run(_schedule_download_prefetch_async, user_id)
+        except Exception:
+            return
 
 async def _prefetch_next_station_item(user_id: str, station_id: str) -> None:
     """Ensure there's at least one queued item after the current index for the active station."""
@@ -409,6 +542,7 @@ def state(db: Session = Depends(get_db), user: User = Depends(get_current_user))
                 }
             except Exception:
                 active_station = None
+    _schedule_download_prefetch(user.id)
     return PlayerStateResponse(
         is_playing=bool(sess.is_playing),
         current_index=int(sess.current_index),
@@ -1154,6 +1288,13 @@ async def stream_item(queue_item_id: str, db: Session = Depends(get_db), user: U
             t_title_n, t_artist_n, _ = _norm_for_subsonic(cur.title or "", cur.artist or "", cur.album or "")
             LOG.info("[stream] subsonic lookup title=%r artist=%r", t_title_n, t_artist_n)
             song = await client.search_song_best(title=t_title_n, artist=t_artist_n, duration_ms=int(cur.duration_ms or 0) or None)
+            # If the library is still indexing a just-imported track, trigger a scan and retry briefly.
+            if not song:
+                try:
+                    await client.start_scan()
+                    song = await client.wait_for_song_best(title=t_title_n, artist=t_artist_n, duration_ms=int(cur.duration_ms or 0) or None, timeout_s=10, poll_s=2.0)
+                except Exception:
+                    pass
         except Exception as e:
             song = None
             LOG.warning("[stream] subsonic lookup error: %s", e)
@@ -1186,8 +1327,14 @@ async def stream_item(queue_item_id: str, db: Session = Depends(get_db), user: U
                 priority=0,
             )
             LOG.info("[stream] downloading vid=%s title=%r artist=%r album=%r", vid, job.title, job.artist, job.album)
-            inbound_path = await DOWNLOAD_MANAGER.ensure_downloaded(job)
-            stream_path = DOWNLOAD_MANAGER.ensure_stream_cache(vid, inbound_path)
+            # Prevent finalize/import from moving the inbound file while we build the stream-cache.
+            DOWNLOAD_MANAGER.mark_streaming(vid, True)
+            try:
+                inbound_path = await DOWNLOAD_MANAGER.ensure_downloaded(job)
+                stream_path = DOWNLOAD_MANAGER.ensure_stream_cache(vid, inbound_path)
+            except Exception:
+                DOWNLOAD_MANAGER.mark_streaming(vid, False)
+                raise
             cur.source = "inbound"
             cur.inbound_path = stream_path
             cur.download_status = "DOWNLOADED"
@@ -1208,7 +1355,6 @@ async def stream_item(queue_item_id: str, db: Session = Depends(get_db), user: U
         ctype = mimetypes.guess_type(file_path)[0] or "audio/ogg"
 
         async def file_iter():
-            DOWNLOAD_MANAGER.mark_streaming(cur.yt_video_id, True)
             try:
                 with open(file_path, "rb") as f:
                     while True:

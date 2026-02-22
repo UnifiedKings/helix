@@ -1,0 +1,10 @@
+/* Liked songs page */
+.likedSongsContainer
+ {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  align-items: center;
+  width: 100%
+
+}

@@ -24,3 +24,4 @@ services:
       - ./beets_config:/data/helix/beets
     environment:
       LISTENBRAINZ_TOKEN: insert-listenbrainz-token-here
+      HELIX_PREFETCH_AHEAD: 3

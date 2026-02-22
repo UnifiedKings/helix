@@ -1,0 +1,48 @@
+#subsonic-settings
+{
+    display: flex;
+    flex-direction: row;
+}
+
+#musicbrainz-settings
+{
+    display: flex;
+    flex-direction: row;
+}
+
+#ungrouped-settings
+{
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+#settings-container
+{
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+#userList
+{
+    margin-bottom: 10rem;
+}
+
+.settings-main
+{
+    width: 100%;
+    justify-content: center;
+}
+
+#settings-boxes
+{
+    display: flex;
+    flex-direction: column;
+    gap: 3rem;
+}
+
+.userTable
+{
+    margin-top: 3rem;
+}

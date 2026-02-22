@@ -1,6 +1,8 @@
 import * as backend from "../api/backend.js";
 import { startPlayerPolling } from "../player.js";
 import { requireAuth } from "../auth-guard.js";
+import {showLoading, hideLoading} from "../ui/loading.js"
+
 
 function el(id) { return document.getElementById(id); }
 
@@ -33,14 +35,7 @@ function openStationOptionsModal(station, onSave) {
 
   const s = station || {};
   const discover = Math.round((s.discovery ?? 0.35) * 100);
-  const seedInf = Math.round((s.seed_influence ?? 0.75) * 100);
   const cooldown = (s.artist_cooldown ?? 5);
-  const variety = (s.artist_variety ?? 1);
-  const allowAlts = !!s.allow_seed_alternates;
-  const tagStrict = (s.tag_strictness ?? 70);
-  const popBias = (s.popularity_bias ?? 50);
-  const eraStart = (s.era_start ?? 0);
-  const eraEnd = (s.era_end ?? 0);
   const blacklist = (s.artist_blacklist ?? "");
 
   const overlay = document.createElement("div");
@@ -63,39 +58,12 @@ function openStationOptionsModal(station, onSave) {
         </div>
 
         <div class="hxField">
-          <div class="muted">Favor artist variety</div>
-          <select class="input" data-f="variety">
-            <option value="0" ${variety === 0 ? "selected" : ""}>Low</option>
-            <option value="1" ${variety === 1 ? "selected" : ""}>Medium</option>
-            <option value="2" ${variety === 2 ? "selected" : ""}>High</option>
-          </select>
-          <div class="muted" style="font-size:12px;">Adds a long-term penalty to frequently played artists.</div>
-        </div>
-
-        <div class="hxField">
           <div class="muted">Discoverability (0–100)</div>
           <div class="hxRow">
             <input class="input" type="range" min="0" max="100" step="1" data-f="discover" value="${esc(String(discover))}" style="flex:1;" />
             <div class="muted" data-f="discoverLabel" style="min-width:34px; text-align:right;">${esc(String(discover))}</div>
           </div>
-          <div class="muted" style="font-size:12px;">Higher = more adventurous, more tag-based discovery.</div>
-        </div>
-
-        <div class="hxField">
-          <div class="muted">Seed influence (0–100)</div>
-          <div class="hxRow">
-            <input class="input" type="range" min="0" max="100" step="1" data-f="seed" value="${esc(String(seedInf))}" style="flex:1;" />
-            <div class="muted" data-f="seedLabel" style="min-width:34px; text-align:right;">${esc(String(seedInf))}</div>
-          </div>
-          <div class="muted" style="font-size:12px;">Higher = stay closer to the original station seed.</div>
-        </div>
-
-        <div class="hxField" style="grid-column: 1 / -1;">
-          <label class="hxRow" style="cursor:pointer;">
-            <input type="checkbox" data-f="allowAlts" ${allowAlts ? "checked" : ""} />
-            <span>Allow alternate versions of the seed track (covers/live/remasters)</span>
-          </label>
-          <div class="muted" style="font-size:12px;">Recommended OFF to prevent cover spam on track stations.</div>
+          <div class="muted" style="font-size:12px;">Higher = more likely to choose less-similar artists.</div>
         </div>
 
         <div class="hxField" style="grid-column: 1 / -1;">
@@ -104,47 +72,6 @@ function openStationOptionsModal(station, onSave) {
           <div class="muted" style="font-size:12px;">Never play these artists on this station.</div>
         </div>
       </div>
-
-      <details class="hxDetails">
-        <summary>Advanced options</summary>
-        <div class="hxModalGrid">
-          <div class="hxField">
-            <div class="muted">Era filter</div>
-            <select class="input" data-f="eraMode">
-              <option value="any">Any era</option>
-              <option value="last10">Last 10 years</option>
-              <option value="custom">Custom range</option>
-            </select>
-            <div class="muted" style="font-size:12px;">Note: era filtering depends on available metadata.</div>
-          </div>
-
-          <div class="hxField">
-            <div class="muted">Custom era range</div>
-            <div class="hxRow">
-              <input class="input" type="number" min="0" max="3000" step="1" data-f="eraStart" placeholder="From" value="${esc(String(eraStart || ""))}" style="width:120px;" />
-              <input class="input" type="number" min="0" max="3000" step="1" data-f="eraEnd" placeholder="To" value="${esc(String(eraEnd || ""))}" style="width:120px;" />
-            </div>
-          </div>
-
-          <div class="hxField">
-            <div class="muted">Popularity bias (0–100)</div>
-            <div class="hxRow">
-              <input class="input" type="range" min="0" max="100" step="1" data-f="pop" value="${esc(String(popBias))}" style="flex:1;" />
-              <div class="muted" data-f="popLabel" style="min-width:34px; text-align:right;">${esc(String(popBias))}</div>
-            </div>
-            <div class="muted" style="font-size:12px;">Low = popular tracks, High = deeper cuts (best-effort).</div>
-          </div>
-
-          <div class="hxField">
-            <div class="muted">Tag strictness (0–100)</div>
-            <div class="hxRow">
-              <input class="input" type="range" min="0" max="100" step="1" data-f="tagStrict" value="${esc(String(tagStrict))}" style="flex:1;" />
-              <div class="muted" data-f="tagStrictLabel" style="min-width:34px; text-align:right;">${esc(String(tagStrict))}</div>
-            </div>
-            <div class="muted" style="font-size:12px;">Higher = stricter genre consistency.</div>
-          </div>
-        </div>
-      </details>
 
       <div class="hxModalFooter">
         <div class="muted" data-f="status" style="margin-right:auto;"></div>
@@ -155,16 +82,6 @@ function openStationOptionsModal(station, onSave) {
   `;
 
   document.body.appendChild(overlay);
-
-  // initialize era mode based on stored values
-  const eraModeSel = overlay.querySelector('[data-f="eraMode"]');
-  if (eraModeSel) {
-    if (eraStart && eraEnd) {
-      eraModeSel.value = "custom";
-    } else {
-      eraModeSel.value = "any";
-    }
-  }
 
   const close = () => overlay.remove();
   overlay.addEventListener("click", (e) => {
@@ -177,54 +94,18 @@ function openStationOptionsModal(station, onSave) {
   const dSlider = overlay.querySelector('[data-f="discover"]');
   const dLab = overlay.querySelector('[data-f="discoverLabel"]');
   dSlider?.addEventListener("input", () => { if (dLab) dLab.textContent = String(dSlider.value); });
-  const sSlider = overlay.querySelector('[data-f="seed"]');
-  const sLab = overlay.querySelector('[data-f="seedLabel"]');
-  sSlider?.addEventListener("input", () => { if (sLab) sLab.textContent = String(sSlider.value); });
-  const pSlider = overlay.querySelector('[data-f="pop"]');
-  const pLab = overlay.querySelector('[data-f="popLabel"]');
-  pSlider?.addEventListener("input", () => { if (pLab) pLab.textContent = String(pSlider.value); });
-  const tSlider = overlay.querySelector('[data-f="tagStrict"]');
-  const tLab = overlay.querySelector('[data-f="tagStrictLabel"]');
-  tSlider?.addEventListener("input", () => { if (tLab) tLab.textContent = String(tSlider.value); });
 
   overlay.querySelector('[data-act="save"]').addEventListener("click", async () => {
     const status = overlay.querySelector('[data-f="status"]');
     if (status) status.textContent = "";
 
     const cooldownV = clampInt(overlay.querySelector('[data-f="cooldown"]')?.value, 0, 50, 5);
-    const varietyV = clampInt(overlay.querySelector('[data-f="variety"]')?.value, 0, 2, 1);
     const discoverV = clampInt(dSlider?.value, 0, 100, 35);
-    const seedV = clampInt(sSlider?.value, 0, 100, 75);
-    const allowV = !!overlay.querySelector('[data-f="allowAlts"]')?.checked;
     const blV = (overlay.querySelector('[data-f="blacklist"]')?.value || "");
-
-    const eraMode = overlay.querySelector('[data-f="eraMode"]')?.value || "any";
-    let eraStartV = clampInt(overlay.querySelector('[data-f="eraStart"]')?.value, 0, 3000, 0);
-    let eraEndV = clampInt(overlay.querySelector('[data-f="eraEnd"]')?.value, 0, 3000, 0);
-    if (eraMode === "any") {
-      eraStartV = 0;
-      eraEndV = 0;
-    } else if (eraMode === "last10") {
-      const year = new Date().getFullYear();
-      eraStartV = year - 10;
-      eraEndV = year;
-    } else {
-      // custom: allow 0/0 to mean any, but keep user inputs if present
-    }
-
-    const popV = clampInt(pSlider?.value, 0, 100, 50);
-    const tagV = clampInt(tSlider?.value, 0, 100, 70);
 
     const patch = {
       discovery: clampFloat(discoverV / 100, 0, 1, 0.35),
-      seed_influence: clampFloat(seedV / 100, 0, 1, 0.75),
       artist_cooldown: cooldownV,
-      artist_variety: varietyV,
-      allow_seed_alternates: allowV,
-      era_start: eraStartV,
-      era_end: eraEndV,
-      popularity_bias: popV,
-      tag_strictness: tagV,
       artist_blacklist: blV,
     };
 
@@ -257,26 +138,47 @@ async function loadStations() {
 
   for (const s of stations) {
     const row = document.createElement("div");
-    row.className = "resultCard";
+    row.className = "stationCard";
+
+    const thumbUrl = (s.thumbnail_url || "").trim();
+
+    // Apply thumbnail as card background
+    if (thumbUrl) {
+      row.style.backgroundImage = `url("${thumbUrl}")`;
+    } else {
+      row.style.backgroundImage = "";
+    }
+    const seed = esc(s.seed_artist || s.seed_title || "");
+    const initial = (s.name || "?").trim().slice(0, 1).toUpperCase();
+
     row.innerHTML = `
-      <div class="resultLeft">
-        <div class="resultText">
-          <div class="resultTitle">${esc(s.name || "")}</div>
-          <div class="resultSub muted">Seed: ${esc(s.seed_artist || s.seed_title || "")}</div>
+      <div class="stationMeta">
+        <div class="title">${esc(s.name || "")}</div>
+        <div class="subtitle">Seed: ${seed}</div>
+      </div>
+        <div class="stationActions">
+          <button class="btnPlay" type="button" data-act="play">Play</button>
+          <button class="btnOptions" type="button" data-act="opts">Options</button>
+          <button class="btnDelete" type="button" data-act="del">Delete</button>
         </div>
       </div>
-      <div class="resultActions">
-        <button class="primaryBtn" type="button" data-act="play">Play</button>
-        <button class="btn" type="button" data-act="opts">Options</button>
-        <button class="btn" type="button" data-act="del">Delete</button>
-      </div>
     `;
+row.addEventListener("click", async (ev) => {
+      const t = ev.target;
+      if (t && (t.closest && t.closest("button"))) return;
+      try {
+        await playStation(s.id);
+        document.dispatchEvent(new CustomEvent("helix-player-refresh", { detail: { forceLoadStream: true } }));
+      } catch {}
+    });
 
-    row.querySelector('[data-act="play"]').addEventListener("click", async (ev) => {
+    const _btnPlay = row.querySelector('[data-act="play"]');
+    if (_btnPlay) _btnPlay.addEventListener("click", async (ev) => {
+      console.log("Play station button detected")
       ev.preventDefault();
       ev.stopPropagation();
       try {
-        await backend.stationsPlay(s.id, true);
+        await playStation(s.id);
         // Force immediate player sync when starting playback from Stations page.
         document.dispatchEvent(new CustomEvent("helix-player-refresh", {
           detail: { forceLoadStream: true }
@@ -284,7 +186,8 @@ async function loadStations() {
       } catch {}
     });
 
-    row.querySelector('[data-act="opts"]').addEventListener("click", async (ev) => {
+    const _btnOpts = row.querySelector('[data-act="opts"]');
+    if (_btnOpts) _btnOpts.addEventListener("click", async (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       openStationOptionsModal(s, async (patch) => {
@@ -294,7 +197,8 @@ async function loadStations() {
     });
 
     
-    row.querySelector('[data-act="del"]').addEventListener("click", async (ev) => {
+    const _btnDel = row.querySelector('[data-act="del"]');
+    if (_btnDel) _btnDel.addEventListener("click", async (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
       if (!confirm(`Delete station "${s.name || ""}"?`)) return;
@@ -369,7 +273,7 @@ async function bindCreate() {
 
       if (seedType.toLowerCase() === "track") {
         try {
-          await backend.stationsPlay(created.id, true);
+          await playStation(created.id);
           window.location.href = "index.html";
           return;
         } catch {}
@@ -384,9 +288,32 @@ async function bindCreate() {
   });
 }
 
+function escapeHtml(s){
+  return String(s ?? "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#39;");
+}
+
 export async function init() {
   await requireAuth();
   startPlayerPolling();
   await bindCreate();
   await loadStations();
 }
+
+async function playStation(id)
+{
+  console.log("Playing station " + id)
+  showLoading("Starting station...")
+  try{
+    await backend.stationsPlay(id, true);
+    document.dispatchEvent(new CustomEvent("helix-player-refresh", { detail: { forceLoadStream: true } }));
+  }
+  finally {
+    document.addEventListener("helix-player-state", () => hideLoading());
+  }
+}
+// renderStations injected for grid UI

@@ -3,17 +3,40 @@ from __future__ import annotations
 import asyncio
 import os
 import time
+import random
+import socket
 from typing import Any, Dict, List, Optional, Union
 
-
-
+import urllib
+import json
 import httpx
 
 from ..cache import TTLCache
 
+
+# Simple in-memory TTL cache
+_lb_cache: Dict[str, Any] = {}
+_lb_cache_expiry: Dict[str, float] = {}
+LB_CACHE_TTL = 3600  # 1 hour
+
 LB_BASE = "https://api.listenbrainz.org"
 
+def _cache_get(key: str):
+    if key in _lb_cache and time.time() < _lb_cache_expiry.get(key, 0):
+        return _lb_cache[key]
+    return None
 
+
+def _cache_set(key: str, value):
+    _lb_cache[key] = value
+    _lb_cache_expiry[key] = time.time() + LB_CACHE_TTL
+
+
+async def _lb_get(session: aiohttp.ClientSession, url: str, params=None):
+    async with session.get(url, params=params) as resp:
+        if resp.status != 200:
+            raise RuntimeError(f"ListenBrainz API error {resp.status}")
+        return await resp.json()
 def _now_s() -> float:
     return time.time()
 
@@ -251,3 +274,195 @@ async def lb_radio_for_tags(
     data = await _client().get_json("/1/lb-radio/tags", params=params, require_auth=True)
     _lb_radio_cache.set(key, data, ttl_seconds=cache_ttl_s)
     return data
+
+async def lb_similar_artists_for_artist(
+    seed_artist_mbid: str,
+    limit: int = 30,
+    *,
+    # Dataset-hoster algorithm identifier. The hoster exposes multiple variants.
+    # This default is a good "general purpose" one and can be made configurable later.
+    algorithm: str = "session_based_days_7500_session_300_contribution_5_threshold_10_limit_100_filter_True_skip_30",
+) -> List[Dict[str, Any]]:
+    """
+    Fetch a ranked similar-artists list from the ListenBrainz dataset hoster.
+
+    Uses:
+      GET https://labs.api.listenbrainz.org/similar-artists/json?artist_mbids=<MBID>&algorithm=<ALGO>
+
+    Returns (ranked):
+      [{"artist_mbid": "...", "artist_name": "...", "score": 1234}, ...] up to `limit`
+    """
+
+    mbid = (seed_artist_mbid or "").strip().strip("+").strip()
+    if not mbid:
+        return []
+
+    algo = (algorithm or "").strip()
+    cache_key = f"similar_artists_ranked:{mbid}:{limit}:{algo}"
+    cached = _cache_get(cache_key)
+    if cached:
+        return cached
+
+    params = {
+        "artist_mbids": mbid,
+        "algorithm": algo,
+    }
+    url = f"https://labs.api.listenbrainz.org/similar-artists/json?{urllib.parse.urlencode(params)}"
+
+    def _fetch_json(u: str) -> Any:
+        req = urllib.request.Request(
+            u,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "Helix/1.0",
+            },
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
+                return json.loads(body)
+        except urllib.error.HTTPError as e:
+            try:
+                err_body = e.read().decode("utf-8", errors="replace")
+            except Exception:
+                err_body = ""
+            raise RuntimeError(f"HTTP {e.code} {e.reason} body={err_body} url={u}") from e
+
+    data = await asyncio.to_thread(_fetch_json, url)
+
+    # Dataset hoster commonly returns either:
+    #  - a list of row dicts
+    #  - or a dict containing one or more lists
+    rows: List[Dict[str, Any]] = []
+    if isinstance(data, list):
+        rows = [r for r in data if isinstance(r, dict)]
+    elif isinstance(data, dict):
+        if isinstance(data.get("similar_artists"), list):
+            rows = [r for r in (data.get("similar_artists") or []) if isinstance(r, dict)]
+        elif isinstance(data.get("data"), list):
+            rows = [r for r in (data.get("data") or []) if isinstance(r, dict)]
+        else:
+            # best-effort: flatten any list values
+            for v in data.values():
+                if isinstance(v, list):
+                    rows.extend([r for r in v if isinstance(r, dict)])
+
+    results: List[Dict[str, Any]] = []
+    seen = set()
+    for r in rows:
+        # Skip the reference artist row(s) which typically have no score.
+        score = r.get("score")
+        if score is None:
+            continue
+
+        sim_mbid = (r.get("artist_mbid") or "").strip().strip("+").strip()
+        sim_name = (r.get("name") or r.get("artist_name") or "").strip()
+        if not sim_mbid or not sim_name:
+            continue
+        if sim_mbid in seen:
+            continue
+        seen.add(sim_mbid)
+        try:
+            score_i = int(score)
+        except Exception:
+            score_i = None
+        results.append({"artist_mbid": sim_mbid, "artist_name": sim_name, "score": score_i})
+
+    # Ensure most-similar first (highest score). If API is already ordered, this is a no-op.
+    results.sort(key=lambda x: (x.get("score") is None, -(x.get("score") or 0)))
+    results = results[: max(0, int(limit))]
+    _cache_set(cache_key, results)
+    return results
+
+async def lb_top_recordings_for_artist(
+    artist: Union[str, Dict[str, Any]],
+    limit: int = 10,
+) -> List[Dict[str, Any]]:
+    """
+    Uses:
+      GET https://api.listenbrainz.org/1/popularity/top-recordings-for-artist/{artist_mbid}
+
+    No aiohttp: urllib in a thread.
+    """
+
+    # Normalize input
+    if isinstance(artist, dict):
+        artist_mbid = (artist.get("artist_mbid") or "").strip().strip("+").strip()
+    else:
+        artist_mbid = (artist or "").strip().strip("+").strip()
+
+    if not artist_mbid:
+        return []
+
+    cache_key = f"top_recordings:{artist_mbid}:{limit}"
+    cached = _cache_get(cache_key)
+    if cached:
+        return cached
+
+    # FORCE versioned endpoint to avoid 410 Gone
+    url = f"https://api.listenbrainz.org/1/popularity/top-recordings-for-artist/{artist_mbid}"
+
+    def _fetch_json(u: str) -> Dict[str, Any]:
+        req = urllib.request.Request(
+            u,
+            headers={
+                "Accept": "application/json",
+                "User-Agent": "Helix/1.0",
+            },
+            method="GET",
+        )
+
+        # Retry transient network failures (connection reset, timeouts, brief 5xx).
+        last_exc: Exception | None = None
+        for attempt in range(5):
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    body = resp.read().decode("utf-8", errors="replace")
+                    return json.loads(body)
+            except urllib.error.HTTPError as e:
+                # Retry some server-side errors and rate limiting.
+                if e.code in (429, 500, 502, 503, 504) and attempt < 4:
+                    last_exc = e
+                else:
+                    try:
+                        err_body = e.read().decode("utf-8", errors="replace")
+                    except Exception:
+                        err_body = ""
+                    raise RuntimeError(f"HTTP {e.code} {e.reason} body={err_body} url={u}") from e
+            except (ConnectionResetError, socket.timeout, TimeoutError, OSError, urllib.error.URLError) as e:
+                last_exc = e
+
+            if attempt < 4:
+                # backoff + jitter
+                base = 0.35 * (2 ** attempt)
+                time.sleep(base + random.random() * 0.2)
+
+        raise RuntimeError(f"network error after retries: {last_exc}") from last_exc
+
+    try:
+        data = await asyncio.to_thread(_fetch_json, url)
+    except Exception as e:
+        # Include url so you can confirm instantly what is being hit
+        raise RuntimeError(f"ListenBrainz popularity request failed: {e}") from e
+
+    recordings = []
+    if isinstance(data, dict):
+        recordings = (data.get("payload") or {}).get("recordings") or []
+    elif isinstance(data, list):
+        recordings = data
+    else:
+        recordings = []
+
+
+    results: List[Dict[str, Any]] = []
+    for rec in recordings[: max(0, limit)]:
+        results.append({
+            "recording_mbid": rec.get("recording_mbid"),
+            "recording_name": rec.get("recording_name"),
+            "artist_name": rec.get("artist_name"),
+            "listen_count": rec.get("listen_count"),
+        })
+
+    _cache_set(cache_key, results)
+    return results

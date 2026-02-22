@@ -1,0 +1,180 @@
+/* Artist page */
+.artistRow  {
+  display:flex;
+  gap: 22px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+
+}
+
+.artistBubble .name  {
+  margin-top: 8px;
+  font-size: 13px;
+
+}
+
+.artistRow  {
+  display:flex;
+  gap: 26px;
+  overflow:auto;
+  padding: 10px 0;
+
+}
+
+.artist  {
+  flex: 0 0 auto;
+  text-align:center;
+
+}
+
+.artist img  {
+  width: 124px;
+  height: 124px;
+  border-radius: 999px;
+  border: 1px solid #232833;
+  object-fit: cover;
+  background:#0b0f14;
+
+}
+
+.artist .name  {
+  margin-top: 10px;
+  font-size: 13px;
+
+}
+
+.artistHero  {
+  position: relative;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-radius: 18px;
+  overflow: hidden;
+  margin-bottom: 18px;
+
+}
+
+.artistHeroBg  {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  filter: blur(18px);
+  transform: scale(1.15);
+  opacity: 0.45;
+
+}
+
+.artistHeroInner  {
+  position: relative;
+  padding: 26px 26px 22px;
+
+}
+
+.artistHeroTitle  {
+  font-size: 46px;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+
+}
+
+.artistHeroSub  {
+  font-size: 14px;
+  margin-top: 6px;
+
+}
+
+.artistHeroActions  {
+  margin-top: 16px;
+
+}
+
+.artistGrid  {
+  display: grid;
+  grid-template-columns: 360px 1fr;
+  gap: 28px;
+
+}
+
+.artistPortraitWrap  {
+  width: 320px;
+  height: 320px;
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid #232833;
+  background: #0b0f14;
+
+}
+
+.artistPortrait  {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+
+}
+
+.artistSectionHeader h2  {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+
+}
+
+.artistTrackList  {
+  margin-top: 12px;
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  overflow: hidden;
+
+}
+
+.artistTrackRow  {
+  display: grid;
+  grid-template-columns: 34px 1fr 72px 56px;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+
+}
+
+.artistTrackRow:first-child  {
+  border-top: none;
+
+}
+
+.artistTrackRow .idx  {
+  color: #aab2c0;
+  font-size: 12px;
+
+}
+
+.artistTrackRow .title  {
+  font-size: 13px;
+  font-weight: 650;
+
+}
+
+.artistTrackRow .actions  {
+  display: flex;
+  justify-content: flex-end;
+
+}
+
+@media (max-width: 980px)  {
+  .artistGrid  {
+    grid-template-columns: 1fr;
+
+  }
+
+  .artistPortraitWrap  {
+    width: 220px;
+    height: 220px;
+
+  }
+
+  .artistHeroTitle  {
+    font-size: 34px;
+
+  }
+
+}

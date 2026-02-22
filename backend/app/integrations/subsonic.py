@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import time
 import hashlib
 import os
 import random
@@ -125,3 +127,43 @@ class SubsonicClient:
             return True
         except Exception:
             return False
+
+    async def get_song(self, song_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a song by id (best-effort)."""
+        if not song_id:
+            return None
+        url = f"{self.base_url}/rest/getSong.view"
+        params = {"id": song_id, **self._auth_params()}
+        r = await self._http.get(url, params=params)
+        r.raise_for_status()
+        data = (r.json() or {}).get("subsonic-response", {}) or {}
+        return data.get("song")
+
+    async def wait_for_song_best(
+        self,
+        title: str,
+        artist: str,
+        duration_ms: Optional[int] = None,
+        timeout_s: int = 45,
+        poll_s: float = 2.0,
+    ) -> Optional[Dict[str, Any]]:
+        """Poll Subsonic until a best-match song appears or timeout."""
+        end = time.time() + max(1, int(timeout_s))
+        # quick initial try
+        try:
+            s = await self.search_song_best(title=title, artist=artist, duration_ms=duration_ms)
+            if s and s.get("id"):
+                return s
+        except Exception:
+            pass
+
+        while time.time() < end:
+            await asyncio.sleep(max(0.25, float(poll_s)))
+            try:
+                s = await self.search_song_best(title=title, artist=artist, duration_ms=duration_ms)
+                if s and s.get("id"):
+                    return s
+            except Exception:
+                continue
+        return None
+

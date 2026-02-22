@@ -177,6 +177,7 @@ class StationCreateRequest(BaseModel):
     era_end: int = 0
     popularity_bias: int = 50
     tag_strictness: int = 70
+    popular_track_pool_size: int = 10
     artist_blacklist: str = ""
     temperature: float = 0.9
 
@@ -192,6 +193,7 @@ class StationUpdateRequest(BaseModel):
     era_end: Optional[int] = None
     popularity_bias: Optional[int] = None
     tag_strictness: Optional[int] = None
+    popular_track_pool_size: Optional[int] = None
     artist_blacklist: Optional[str] = None
 
 
@@ -212,10 +214,12 @@ class StationResponse(BaseModel):
     era_end: int = 0
     popularity_bias: int = 50
     tag_strictness: int = 70
+    popular_track_pool_size: int = 10
     artist_blacklist: str = ""
     temperature: float = 0.9
     created_at: str
     updated_at: str
+    thumbnail_url: str = ""
 
 
 class StationPlayRequest(BaseModel):

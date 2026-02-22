@@ -174,6 +174,10 @@ class Station(Base):
     popularity_bias: Mapped[int] = mapped_column(nullable=False, default=50)  # 0..100 (popular..obscure)
     tag_strictness: Mapped[int] = mapped_column(nullable=False, default=70)   # 0..100 (loose..strict)
 
+    # When selecting a track for a chosen artist, randomly sample from the top X most popular
+    # tracks for that artist (per ListenBrainz listen counts). 0 disables this behavior.
+    popular_track_pool_size: Mapped[int] = mapped_column(nullable=False, default=10)
+
     # newline/comma separated list of artist names to never play on this station
     artist_blacklist: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
