@@ -139,6 +139,63 @@ class SubsonicClient:
         data = (r.json() or {}).get("subsonic-response", {}) or {}
         return data.get("song")
 
+    async def search_albums_by_artist(self, artist: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Best-effort: return a list of albums for the given artist name.
+
+        We use Subsonic's search3 endpoint because it's widely supported by Subsonic-compatible
+        servers (including Navidrome). Results are filtered to match the artist name (normalized).
+        """
+        artist = (artist or "").strip()
+        if not artist:
+            return []
+        url = f"{self.base_url}/rest/search3.view"
+        params = {"query": artist, **self._auth_params()}
+        r = await self._http.get(url, params=params)
+        r.raise_for_status()
+        data = (r.json() or {}).get("subsonic-response", {})
+        res = data.get("searchResult3", {}) or {}
+        albums: List[Dict[str, Any]] = res.get("album") or []
+        if not albums:
+            return []
+
+        na = _norm(artist)
+        out: List[Dict[str, Any]] = []
+        seen = set()
+        for a in albums:
+            # Prefer albums whose artist matches.
+            aa = _norm(str(a.get("artist") or ""))
+            if na and aa and aa != na:
+                continue
+            cover = str(a.get("coverArt") or "").strip()
+            if not cover:
+                continue
+            aid = str(a.get("id") or "").strip()
+            if aid and aid in seen:
+                continue
+            if aid:
+                seen.add(aid)
+            out.append(a)
+            if len(out) >= int(limit):
+                break
+        return out
+
+    async def fetch_cover_art_bytes(self, cover_id: str, *, size: int = 512) -> Optional[bytes]:
+        """Fetch cover art bytes by cover id. Returns None on failure."""
+        cover_id = (cover_id or "").strip()
+        if not cover_id:
+            return None
+        url = f"{self.base_url}/rest/getCoverArt.view"
+        params: Dict[str, Any] = {"id": cover_id, **self._auth_params()}
+        # Many servers support 'size' for resizing. It's safe to try.
+        if size:
+            params["size"] = int(size)
+        try:
+            r = await self._http.get(url, params=params)
+            r.raise_for_status()
+            return r.content
+        except Exception:
+            return None
+
     async def wait_for_song_best(
         self,
         title: str,

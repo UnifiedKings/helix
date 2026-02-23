@@ -60,7 +60,7 @@
 }
 
 .stationCard {
-  background-size: cover;
+  background-size: contain !important;
   background-position: center;
   background-repeat: no-repeat;
   position: relative;

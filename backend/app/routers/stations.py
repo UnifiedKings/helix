@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from datetime import datetime
+import os
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
 
@@ -12,7 +14,8 @@ from ..db import get_db
 from ..models import User, Station, PlaybackSession, QueueItem, ListenHistoryItem
 from ..schemas import StationCreateRequest, StationUpdateRequest, StationResponse, StationPlayRequest
 from ..settings_store import get_settings
-from ..stations_engine import generate_and_append_station_track
+from ..stations_engine import generate_and_append_station_track, StationSeedArtistNotFound, StationGenerationError
+from ..station_covers import ensure_station_cover
 
 
 router = APIRouter(prefix="/api/stations", tags=["stations"])
@@ -27,6 +30,10 @@ def _thumb_for_station(db: Session, station_id: str) -> str:
         .limit(1)
     ).first()
     return (row[0] if row and row[0] else "")
+
+
+def _cover_url(station_id: str) -> str:
+    return f"/api/stations/{station_id}/cover"
 
 
 
@@ -51,7 +58,8 @@ def _to_station(s: Station, thumbnail_url: str = "") -> StationResponse:
         popular_track_pool_size=int(getattr(s, "popular_track_pool_size", 10) or 10),
         artist_blacklist=str(getattr(s, "artist_blacklist", "") or ""),
         temperature=float(getattr(s, "temperature", 0.9) or 0.9),
-        thumbnail_url=thumbnail_url or "",
+        # Station cards should represent the seed artist, not the last played track.
+        thumbnail_url=thumbnail_url or _cover_url(s.id),
         created_at=s.created_at.isoformat() + "Z",
         updated_at=s.updated_at.isoformat() + "Z",
     )
@@ -62,7 +70,7 @@ def list_stations(db: Session = Depends(get_db), user: User = Depends(get_curren
     rows = db.execute(
         select(Station).where(Station.user_id == user.id).order_by(Station.updated_at.desc())
     ).scalars().all()
-    return [_to_station(s, _thumb_for_station(db, s.id)) for s in rows]
+    return [_to_station(s, _cover_url(s.id)) for s in rows]
 
 
 @router.post("", response_model=StationResponse)
@@ -101,7 +109,56 @@ def create_station(payload: StationCreateRequest, db: Session = Depends(get_db),
     db.add(s)
     db.commit()
     db.refresh(s)
-    return _to_station(s, _thumb_for_station(db, s.id))
+    return _to_station(s, _cover_url(s.id))
+
+
+@router.get("/{station_id}/cover")
+async def station_cover(station_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    st = db.get(Station, station_id)
+    if not st or st.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Station not found")
+
+    settings = get_settings(db)
+    # Best effort: generate/cached cover. If subsonic is not configured, fall back to a simple
+    # generated cover (still cached).
+    try:
+        from ..stations_engine import _subsonic_client_from_settings
+
+        sub = await _subsonic_client_from_settings(settings)
+        try:
+            img_path = await ensure_station_cover(
+                station_id=st.id,
+                seed_artist=st.seed_artist or st.seed_title or st.name or "Station",
+                subsonic=sub,
+                size=640,
+                tiles=4,
+            )
+        finally:
+            try:
+                await sub.close()
+            except Exception:
+                pass
+    except Exception:
+        # If we cannot build via Subsonic (misconfigured), still create a deterministic cover
+        # using gradient tiles only by calling ensure_station_cover with an empty client.
+        # We do this by creating a tiny fake client interface.
+        class _Fake:
+            async def search_albums_by_artist(self, artist: str, limit: int = 50):
+                return []
+
+            async def fetch_cover_art_bytes(self, cover_id: str, *, size: int = 512):
+                return None
+
+        img_path = await ensure_station_cover(
+            station_id=st.id,
+            seed_artist=st.seed_artist or st.seed_title or st.name or "Station",
+            subsonic=_Fake(),
+            size=640,
+            tiles=4,
+        )
+
+    # Allow browsers to cache for a while; the backend will rebuild on its own schedule.
+    return FileResponse(img_path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=3600"})
 
 
 @router.patch("/{station_id}", response_model=StationResponse)
@@ -167,8 +224,44 @@ async def play_station(station_id: str, payload: StationPlayRequest, db: Session
 
     db.commit()
 
-    # Ensure at least one item exists
-    await generate_and_append_station_track(db, user.id, st.id, settings=settings, advance_to_new_item=True)
+    # Generate the current item immediately. Then prefetch ahead in the background so /play returns fast.
+    try:
+        ahead = max(0, int(os.getenv("HELIX_PREFETCH_AHEAD", "1")))
+    except Exception:
+        ahead = 1
+
+    try:
+        first = await generate_and_append_station_track(db, user.id, st.id, settings=settings, advance_to_new_item=True)
+        if not first:
+            raise StationGenerationError("Unable to generate station right now.", status_code=503)
+    except StationSeedArtistNotFound as e:
+        # Surface a user-friendly error to the frontend.
+        raise HTTPException(status_code=400, detail=str(e))
+    except StationGenerationError as e:
+        raise HTTPException(status_code=getattr(e, 'status_code', 503), detail=str(getattr(e, 'detail', str(e))))
+
+    if ahead > 0:
+        import asyncio
+        from ..db import SessionLocal
+
+        async def _prefetch_more():
+            # Use a fresh DB session (the request-bound db will be closed after response).
+            db2 = SessionLocal()
+            try:
+                settings2 = get_settings(db2)
+                for _ in range(ahead):
+                    try:
+                        await generate_and_append_station_track(db2, user.id, st.id, settings=settings2, advance_to_new_item=False)
+                    except Exception:
+                        # Prefetch should never crash the request path.
+                        break
+            finally:
+                try:
+                    db2.close()
+                except Exception:
+                    pass
+
+        asyncio.create_task(_prefetch_more())
 
     # Reuse player state endpoint shape by importing lazily
     from .player import state as player_state

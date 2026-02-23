@@ -1,11 +1,26 @@
 const API_BASE = (window.MR_API_BASE || window.MR_CONFIG?.API_BASE || "").replace(/\/$/, "");
 
 async function api(path, opts = {}) {
-  const res = await fetch(API_BASE + path, {
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
-    ...opts,
-  });
+  // Add a hard timeout so UI actions (like starting a station) cannot hang forever
+  // if the backend takes too long or the network drops.
+  const timeoutMs = Number(window.MR_API_TIMEOUT_MS || 15000);
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+
+  let res;
+  try {
+    res = await fetch(API_BASE + path, {
+      credentials: "include",
+      headers: { "Content-Type": "application/json", ...(opts.headers || {}) },
+      signal: ctrl.signal,
+      ...opts,
+    });
+  } catch (e) {
+    if (e && (e.name === "AbortError")) throw new Error("Request timed out");
+    throw e;
+  } finally {
+    clearTimeout(t);
+  }
 
   let data = null;
   const ct = res.headers.get("content-type") || "";

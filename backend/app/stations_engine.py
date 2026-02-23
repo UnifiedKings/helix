@@ -23,6 +23,26 @@ from .integrations.ytmusic import find_song
 LOG = logging.getLogger("helix.stations")
 
 
+class StationSeedArtistNotFound(Exception):
+    """Raised when a station's seed artist cannot be resolved to a MusicBrainz artist MBID."""
+
+    def __init__(self, seed_artist: str):
+        seed_artist = (seed_artist or "").strip()
+        msg = "Seed artist not found on MusicBrainz."
+        if seed_artist:
+            msg = f"Seed artist not found on MusicBrainz: {seed_artist}"
+        super().__init__(msg)
+
+
+class StationGenerationError(Exception):
+    """Raised when a station cannot generate a next item."""
+
+    def __init__(self, detail: str, *, status_code: int = 503):
+        super().__init__(detail)
+        self.status_code = int(status_code)
+        self.detail = str(detail)
+
+
 def _clean(s: str) -> str:
     return " ".join((s or "").strip().split())
 
@@ -111,8 +131,10 @@ async def _mb_lookup_artist_id_by_name(name: str) -> str:
     if not q:
         return ""
     url = "https://musicbrainz.org/ws/2/artist"
+    # Use a conservative search, then validate the top hit so obviously-nonexistent artists
+    # don't silently resolve to an unrelated artist.
     params = {"query": q, "limit": "1", "fmt": "json"}
-    headers = {"User-Agent": "Helix/0.0.13 (station-tags)"}
+    headers = {"User-Agent": "Helix/0.0.13 (station-mbid-lookup)"}
     async with httpx.AsyncClient(timeout=15.0) as client:
         r = await client.get(url, params=params, headers=headers)
         r.raise_for_status()
@@ -120,7 +142,24 @@ async def _mb_lookup_artist_id_by_name(name: str) -> str:
     artists = data.get("artists") or []
     if not artists:
         return ""
-    return str(artists[0].get("id") or "")
+
+    top = artists[0] or {}
+    top_id = str(top.get("id") or "").strip()
+    top_name = _clean(str(top.get("name") or ""))
+    # MusicBrainz search provides a score (0-100). Require a strong match OR an exact name match.
+    try:
+        score = int(top.get("score") or 0)
+    except Exception:
+        score = 0
+
+    q_norm = _clean(q).lower()
+    name_norm = top_name.lower()
+
+    # Accept exact match; otherwise require a high score.
+    if name_norm != q_norm and score < 90:
+        return ""
+    return top_id
+
 
 
 async def _mb_fetch_artist_tags(artist_id: str) -> List[Tuple[str, float]]:
@@ -309,11 +348,18 @@ async def generate_and_append_station_track(db: Session, user_id: str, station_i
             station.updated_at = datetime.utcnow()
             db.commit()
     if not mb_artist_id:
-        return None
+        raise StationSeedArtistNotFound(station.seed_artist or "")
 
-    # Pull a ranked similar-artist list (includes score) and then add the seed artist into
-    # the candidate pool as an explicit option.
-    similar_artists = await lb_similar_artists_for_artist(mb_artist_id, limit=100)
+    lb_similar_failed = False
+# Pull a ranked similar-artist list (includes score) and then add the seed artist into
+    # the candidate pool as an explicit option. If this fetch fails transiently, degrade
+    # gracefully by using only the seed artist.
+    try:
+        similar_artists = await lb_similar_artists_for_artist(mb_artist_id, limit=100)
+    except Exception as e:
+        LOG.warning("listenbrainz similar-artists failed: %s", e)
+        lb_similar_failed = True
+        similar_artists = []
 
     # Candidate list: seed first, then similar list. Deduplicate by MBID.
     seed_artist_name = _clean(station.seed_artist or "")
@@ -360,6 +406,8 @@ async def generate_and_append_station_track(db: Session, user_id: str, station_i
             weights.append(w)
 
     # Try a few different artists if top-recordings lookup flakes.
+    lb_errors = 0
+    no_recordings = 0
     selected_track = None
     random_artist: Dict[str, Any] | None = None
     tried_mbids: set[str] = set()
@@ -394,19 +442,24 @@ async def generate_and_append_station_track(db: Session, user_id: str, station_i
                 break
         except Exception as e:
             LOG.warning("listenbrainz popularity/top-recordings failed for artist=%s: %s", _clean_artist_name(random_artist), e)
+            # Distinguish between empty-data vs network/service errors.
+            if str(e).strip().lower().startswith("no top recordings"):
+                no_recordings += 1
+            else:
+                lb_errors += 1
             selected_track = None
 
     if not selected_track or not random_artist:
-        return None
-    print(selected_track)
+        # Nothing could be generated. Surface a user-facing error so the UI can stop spinning.
+        if no_recordings > 0 and lb_errors == 0 and not lb_similar_failed:
+            raise StationGenerationError(f"No ListenBrainz recordings found for artist: {station.seed_artist or ''}", status_code=404)
+        raise StationGenerationError("Unable to generate station right now (ListenBrainz unavailable). Try again.", status_code=503)
     #Need to clean the names for best searching capability
     cleaned_track_name = _clean_recording_name(selected_track)
     cleaned_artist_name = _clean_artist_name(random_artist)
     song_on_yt = find_song_on_yt(cleaned_track_name, cleaned_artist_name)
     subsonic_track = await match_track_to_subsonic(settings=settings, title=cleaned_track_name, artist=cleaned_artist_name, duration_ms=song_on_yt.duration_seconds)
     pos = _next_queue_position(db, user_id=user_id)
-    if (subsonic_track):
-        pass
     qitem = QueueItem(
         session_user_id=user_id,
         position=pos,
@@ -440,7 +493,7 @@ async def generate_and_append_station_track(db: Session, user_id: str, station_i
         sess.updated_at = datetime.utcnow()
     db.commit()
     LOG.info(
-        "[station] appended station=%s user=%s pick=%r - %r yt=%s src=%s cfg={cooldown:%s discover:%s ssblacklist:%s}",
+        "[station] appended station=%s user=%s pick=%r - %r yt=%s src=%s cfg={cooldown:%s discover:%s blacklist:%s}",
         station_id,
         user_id,
         song_on_yt.title,
@@ -449,10 +502,8 @@ async def generate_and_append_station_track(db: Session, user_id: str, station_i
         qitem.source,
         artist_cooldown,
         round(discovery * 100.0),
-        len(blacklist)
+        len(blacklist),
     )
-    print(blacklist)
-    print(cooldown_artists)
     return qitem
 
     
@@ -462,7 +513,6 @@ async def select_random_station_track_with_artist(station, artist):
     if not popular_tracks_for_artist:
         raise RuntimeError("no top recordings returned")
     selected_track = random.choice(popular_tracks_for_artist)
-    print(f"Selected track: {selected_track}")
     return selected_track
 
 def _clean_recording_name(it: Dict[str, Any]):
@@ -613,8 +663,9 @@ async def generate_and_append_station_track_old(
                 station.updated_at = datetime.utcnow()
                 db.commit()
 
-        if not mb_artist_id:
-            return None
+    if not mb_artist_id:
+        # Seed artist could not be resolved at all. Surface this as a user-visible error.
+        raise StationSeedArtistNotFound(station.seed_artist or "")
 
         try:
             lb_payload = await lb_radio_for_artist(

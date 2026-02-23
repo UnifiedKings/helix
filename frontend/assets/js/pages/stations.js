@@ -307,13 +307,35 @@ export async function init() {
 async function playStation(id)
 {
   console.log("Playing station " + id)
+  const st = el("stPlayStatus");
+  if (st) st.textContent = "";
   showLoading("Starting station...")
+  // Failsafe: never let the loading overlay hang forever.
+  const failSafe = setTimeout(() => {
+    try { hideLoading(); } catch {}
+    try { if (st && !st.textContent) {
+        st.textContent = "Timed out starting station. Please try again.";
+        try { st.style.color = "#ff8b8b"; } catch {}
+      }
+      try { alert("Timed out starting station. Please try again."); } catch {} } catch {}
+  }, 8000);
   try{
     await backend.stationsPlay(id, true);
     document.dispatchEvent(new CustomEvent("helix-player-refresh", { detail: { forceLoadStream: true } }));
-  }
-  finally {
-    document.addEventListener("helix-player-state", () => hideLoading());
+    // Hide loading immediately; the player state may not update if generation fails or is delayed.
+    hideLoading();
+    clearTimeout(failSafe);
+  } catch (e) {
+    hideLoading();
+    clearTimeout(failSafe);
+    const msg = (e && e.message) ? e.message : String(e || "Failed to start station");
+    if (st) {
+      st.textContent = msg;
+      try { st.style.color = "#ff8b8b"; } catch {}
+    }
+    // Always show a visible pop-up too, since the status line can be missed depending on layout.
+    try { alert(msg); } catch {}
+    throw e;
   }
 }
 // renderStations injected for grid UI

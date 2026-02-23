@@ -8,3 +8,4 @@ httpx>=0.25
 yt-dlp
 ytmusicapi==1.7.4
 mutagen==1.47.0
+pillow

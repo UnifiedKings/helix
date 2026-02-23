@@ -169,30 +169,42 @@ def _schedule_download_prefetch(user_id: str) -> None:
             return
 
 async def _prefetch_next_station_item(user_id: str, station_id: str) -> None:
-    """Ensure there's at least one queued item after the current index for the active station."""
+    """Ensure there are N queued items after the current index for the active station.
+
+    N is controlled by HELIX_PREFETCH_AHEAD (default 1). This only appends if positions
+    are missing; it does not change playback order.
+    """
     try:
         db = SessionLocal()
         try:
             sess = db.get(PlaybackSession, user_id)
             if not sess or not sess.is_playing or sess.active_station_id != station_id:
                 return
-            next_pos = int(sess.current_index or 0) + 1
-            exists = db.execute(
-                select(QueueItem.id).where(
-                    QueueItem.session_user_id == user_id,
-                    QueueItem.position == next_pos,
-                )
-            ).first()
-            if exists:
+
+            ahead = _prefetch_ahead_count()
+            if ahead <= 0:
                 return
+
             settings = get_settings(db)
-            await generate_and_append_station_track(
-                db,
-                user_id,
-                station_id,
-                settings=settings,
-                advance_to_new_item=False,
-            )
+            cur_idx = int(sess.current_index or 0)
+
+            # Ensure positions [cur_idx+1 .. cur_idx+ahead] exist.
+            for pos in range(cur_idx + 1, cur_idx + 1 + ahead):
+                exists = db.execute(
+                    select(QueueItem.id).where(
+                        QueueItem.session_user_id == user_id,
+                        QueueItem.position == pos,
+                    )
+                ).first()
+                if exists:
+                    continue
+                await generate_and_append_station_track(
+                    db,
+                    user_id,
+                    station_id,
+                    settings=settings,
+                    advance_to_new_item=False,
+                )
         finally:
             db.close()
     except Exception as e:
