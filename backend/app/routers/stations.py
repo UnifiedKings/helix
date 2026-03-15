@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+import asyncio
 import os
 from typing import List
 
@@ -10,13 +11,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select
 
 from ..auth import get_current_user
-from ..db import get_db
+from ..db import get_db, SessionLocal
 from ..models import User, Station, PlaybackSession, QueueItem, ListenHistoryItem
 from ..schemas import StationCreateRequest, StationUpdateRequest, StationResponse, StationPlayRequest
 from ..settings_store import get_settings
 from ..stations_engine import generate_and_append_station_track, StationSeedArtistNotFound, StationGenerationError
 from ..station_covers import ensure_station_cover
-
+from .player import state
 
 router = APIRouter(prefix="/api/stations", tags=["stations"])
 
@@ -199,30 +200,34 @@ def update_station(station_id: str, payload: StationUpdateRequest, db: Session =
 
 
 @router.post("/{station_id}/play")
-async def play_station(station_id: str, payload: StationPlayRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    st = db.get(Station, station_id)
-    if not st or st.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Station not found")
+async def play_station(station_id: str, payload: StationPlayRequest, user: User = Depends(get_current_user)):
+    # DB burst: validate station + set session active station / autoplay / reset if requested
+    db = SessionLocal()
+    try:
+        st = db.get(Station, station_id)
+        if not st or st.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Station not found")
 
-    # mark active station + enable autoplay
-    sess = db.get(PlaybackSession, user.id)
-    if not sess:
-        sess = PlaybackSession(user_id=user.id)
-        db.add(sess)
+        sess = db.get(PlaybackSession, user.id)
+        if not sess:
+            sess = PlaybackSession(user_id=user.id)
+            db.add(sess)
+            db.commit()
+            db.refresh(sess)
+
+        sess.autoplay_enabled = True
+        sess.active_station_id = st.id
+
+        settings = get_settings(db)
+
+        if payload and payload.reset:
+            db.query(QueueItem).filter(QueueItem.session_user_id == user.id).delete()
+            sess.current_index = 0
+            sess.is_playing = False
+
         db.commit()
-        db.refresh(sess)
-
-    sess.autoplay_enabled = True
-    sess.active_station_id = st.id
-
-    settings = get_settings(db)
-
-    if payload and payload.reset:
-        db.query(QueueItem).filter(QueueItem.session_user_id == user.id).delete()
-        sess.current_index = 0
-        sess.is_playing = False
-
-    db.commit()
+    finally:
+        db.close()
 
     # Generate the current item immediately. Then prefetch ahead in the background so /play returns fast.
     try:
@@ -231,41 +236,19 @@ async def play_station(station_id: str, payload: StationPlayRequest, db: Session
         ahead = 1
 
     try:
-        first = await generate_and_append_station_track(db, user.id, st.id, settings=settings, advance_to_new_item=True)
+        first = await generate_and_append_station_track(user.id, station_id, settings=settings, advance_to_new_item=True)
         if not first:
             raise StationGenerationError("Unable to generate station right now.", status_code=503)
     except StationSeedArtistNotFound as e:
-        # Surface a user-friendly error to the frontend.
-        raise HTTPException(status_code=400, detail=str(e))
-    except StationGenerationError as e:
-        raise HTTPException(status_code=getattr(e, 'status_code', 503), detail=str(getattr(e, 'detail', str(e))))
+        raise StationGenerationError(str(e), status_code=404) from e
 
-    if ahead > 0:
-        import asyncio
-        from ..db import SessionLocal
+    # Return current player state
+    db = SessionLocal()
+    try:
+        return state(db=db, user=user)
+    finally:
+        db.close()
 
-        async def _prefetch_more():
-            # Use a fresh DB session (the request-bound db will be closed after response).
-            db2 = SessionLocal()
-            try:
-                settings2 = get_settings(db2)
-                for _ in range(ahead):
-                    try:
-                        await generate_and_append_station_track(db2, user.id, st.id, settings=settings2, advance_to_new_item=False)
-                    except Exception:
-                        # Prefetch should never crash the request path.
-                        break
-            finally:
-                try:
-                    db2.close()
-                except Exception:
-                    pass
-
-        asyncio.create_task(_prefetch_more())
-
-    # Reuse player state endpoint shape by importing lazily
-    from .player import state as player_state
-    return player_state(db=db, user=user)
 
 @router.delete("/{station_id}")
 def delete_station(station_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):

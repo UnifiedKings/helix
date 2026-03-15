@@ -463,6 +463,6 @@ async def lb_top_recordings_for_artist(
             "artist_name": rec.get("artist_name"),
             "listen_count": rec.get("listen_count"),
         })
-
+    print(results)
     _cache_set(cache_key, results)
     return results

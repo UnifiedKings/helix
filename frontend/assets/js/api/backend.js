@@ -259,3 +259,30 @@ export async function stationsUpdate(station_id, payload) {
     body: JSON.stringify(payload || {}),
   });
 }
+
+// --- Playlists ---
+
+export async function playlistsList() {
+  return api("/api/playlists", { method: "GET" });
+}
+
+export async function playlistsCreate(name) {
+  return api("/api/playlists", { method: "POST", body: JSON.stringify({ name }) });
+}
+
+export async function playlistsGet(playlist_id) {
+  return api(`/api/playlists/${encodeURIComponent(playlist_id)}`, { method: "GET" });
+}
+
+export async function playlistsAddTrack(playlist_id, track) {
+  return api(`/api/playlists/${encodeURIComponent(playlist_id)}/tracks`, {
+    method: "POST",
+    body: JSON.stringify(track),
+  });
+}
+
+export async function playlistsRemoveTrack(playlist_id, track_id) {
+  return api(`/api/playlists/${encodeURIComponent(playlist_id)}/tracks/${encodeURIComponent(track_id)}`, {
+    method: "DELETE",
+  });
+}

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, List, Set, Tuple
 
 from .integrations.subsonic import SubsonicClient
+from .validators import require_valid_yt_video_id
 
 try:
     import httpx
@@ -113,7 +114,9 @@ class DownloadJob:
     created_at: float = 0.0
 
     def out_prefix(self) -> str:
-        return os.path.join(INBOUND_DIR, self.video_id)
+        # Defensive: ensure video_id cannot be used for path traversal.
+        safe_vid = require_valid_yt_video_id(self.video_id)
+        return os.path.join(INBOUND_DIR, safe_vid)
 
 
 class DownloadManager:
@@ -132,6 +135,9 @@ class DownloadManager:
         self._downloaded_since_finalize: List[str] = []
         self._last_finalize_at: float = time.time()
         self._finalize_lock = asyncio.Lock()
+
+        # video_id -> (failure_count, last_failure_ts) for finalize/import retries
+        self._finalize_fail: Dict[str, Tuple[int, float]] = {}
 
         self._settings_getter = None  # set by app startup
 
@@ -181,6 +187,12 @@ class DownloadManager:
         """
         ensure_dirs()
         if not video_id or not src_path:
+            return src_path
+
+        # Defensive: never allow path traversal into stream cache.
+        try:
+            video_id = require_valid_yt_video_id(video_id)
+        except Exception:
             return src_path
 
         # Prefer streaming an Ogg Opus file for consistent browser playback.
@@ -312,6 +324,8 @@ class DownloadManager:
 
     async def ensure_downloaded(self, job: DownloadJob) -> str:
         """Ensure a given video_id is downloaded. Returns inbound path."""
+        # Defensive: validate at the download boundary.
+        job.video_id = require_valid_yt_video_id(job.video_id)
         if self.is_ready(job.video_id):
             return self.ready_path(job.video_id)
 
@@ -321,6 +335,62 @@ class DownloadManager:
             self._jobs[job.video_id] = job
             await self._q.put((job.priority, job.created_at, job))
 
+    async def ensure_started(
+        self,
+        job: DownloadJob,
+        wait_s: float = 8.0,
+        min_bytes: int | None = None,
+    ) -> str:
+        """Ensure a download has begun and return a streamable *current* path.
+
+        For progressive playback, yt-dlp writes to a growing `<name>.<ext>.part` file
+        while downloading. This function returns that `.part` path as soon as it exists.
+
+        Returns:
+            - ready (final) inbound path if already downloaded
+            - `.part` path if download has started
+            - "" if it could not be started/detected quickly
+        """
+        # Defensive: validate at the download boundary.
+        job.video_id = require_valid_yt_video_id(job.video_id)
+
+        # If already downloaded, return final path.
+        if self.is_ready(job.video_id):
+            return self._ready.get(job.video_id, "")
+
+        # Enqueue if not already enqueued.
+        if job.video_id not in self._jobs:
+            job.created_at = time.time()
+            self._jobs[job.video_id] = job
+            await self._q.put((job.priority, job.created_at, job))
+
+        # Wait briefly for yt-dlp to create the `.part` file.
+        prefix = os.path.basename(job.out_prefix()) + "."
+        deadline = time.time() + max(0.1, float(wait_s))
+        while time.time() < deadline:
+            # If finished while waiting, return final.
+            if self.is_ready(job.video_id):
+                return self._ready.get(job.video_id, "")
+
+            try:
+                for fn in os.listdir(INBOUND_DIR):
+                    if fn.startswith(prefix) and fn.endswith(".part"):
+                        p = os.path.join(INBOUND_DIR, fn)
+                        if min_bytes is not None:
+                            try:
+                                if os.path.getsize(p) < int(min_bytes):
+                                    continue
+                            except Exception:
+                                continue
+                        return p
+            except Exception:
+                pass
+
+            await asyncio.sleep(0.1)
+
+        return ""
+
+
         # wait until ready
         while True:
             p = self._ready.get(job.video_id)
@@ -329,6 +399,8 @@ class DownloadManager:
             await asyncio.sleep(0.25)
 
     async def enqueue_normal(self, job: DownloadJob) -> None:
+        # Defensive: validate at the download boundary.
+        job.video_id = require_valid_yt_video_id(job.video_id)
         if job.video_id in self._jobs or self.is_ready(job.video_id):
             return
         job.created_at = time.time()
@@ -360,9 +432,16 @@ class DownloadManager:
                     job.url,
                 ]
 
-                proc = subprocess.run(cmd, capture_output=True, text=True)
+                proc = await asyncio.create_subprocess_exec(
+                    *cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                out_b, err_b = await proc.communicate()
+                out_s = (out_b or b"").decode("utf-8", "ignore")
+                err_s = (err_b or b"").decode("utf-8", "ignore")
                 if proc.returncode != 0:
-                    raise RuntimeError(proc.stderr.strip() or proc.stdout.strip() or "yt-dlp failed")
+                    raise RuntimeError((err_s.strip() or out_s.strip() or "yt-dlp failed"))
 
                 # Find produced file: <id>.<ext> (ignore any lingering .part files)
                 produced = ""
@@ -506,6 +585,11 @@ class DownloadManager:
         album_art: Dict[Tuple[str, str], str] = {}
 
         for vid in vids:
+            # Backoff if prior finalize/import attempts failed.
+            fc, ft = self._finalize_fail.get(vid, (0, 0.0))
+            if fc and (time.time() - ft) < min(300, 5 * fc):
+                continue
+
             job = self._jobs.get(vid)
             path = self._ready.get(vid)
             if not job or not path or not os.path.exists(path):
@@ -721,6 +805,11 @@ async def finalize_video_ids(self, vids: List[str]) -> None:
         album_art: Dict[Tuple[str, str], str] = {}
 
         for vid in vids:
+            # Backoff if prior finalize/import attempts failed.
+            fc, ft = self._finalize_fail.get(vid, (0, 0.0))
+            if fc and (time.time() - ft) < min(300, 5 * fc):
+                continue
+
             job = self._jobs.get(vid)
             path = self._ready.get(vid)
             if not job or not path or not os.path.exists(path):
@@ -809,19 +898,45 @@ async def finalize_video_ids(self, vids: List[str]) -> None:
                     pass
 
             # Import only this file (not the whole inbound folder).
+            import_ok = False
             try:
                 cmd = ["beet", "-c", BEETS_CONFIG, "import", "-q", "-s", path]
                 r = subprocess.run(cmd, check=False, capture_output=True, text=True)
+                import_ok = (r.returncode == 0)
                 try:
                     log_path = os.path.join(os.path.dirname(BEETS_CONFIG), "import.log")
                     with open(log_path, "a", encoding="utf-8") as f:
                         f.write(r.stdout or "")
                         f.write(r.stderr or "")
+                        if not import_ok:
+                            f.write(f"\n[helix] beets import failed for {vid} rc={r.returncode} path={path}\n")
                 except Exception:
                     pass
+            except FileNotFoundError as e:
+                # Beets is missing in the environment; keep the job so we can retry after fix.
+                try:
+                    log_path = os.path.join(os.path.dirname(BEETS_CONFIG), "import.log")
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(f"\n[helix] beets executable not found for {vid}: {e!r}\n")
+                except Exception:
+                    pass
+                import_ok = False
             except Exception:
-                pass
+                import_ok = False
 
+            if not import_ok:
+                # Record failure and keep the job/ready pointers so finalize can retry later.
+                fc, _ft = self._finalize_fail.get(vid, (0, 0.0))
+                self._finalize_fail[vid] = (fc + 1, time.time())
+                # Move this vid to the end so one bad file doesn't block others.
+                try:
+                    self._downloaded_since_finalize = [v for v in self._downloaded_since_finalize if v != vid] + [vid]
+                except Exception:
+                    pass
+                continue
+
+            # Success: clear any failure state.
+            self._finalize_fail.pop(vid, None)
             # After import, the inbound file is moved; clear stale pointers so future requests can re-enqueue if needed.
             self._ready.pop(vid, None)
             self._jobs.pop(vid, None)

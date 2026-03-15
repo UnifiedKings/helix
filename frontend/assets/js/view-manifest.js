@@ -8,6 +8,7 @@ export const VIEW_MANIFEST = {
   "liked-songs.html": { templateUrl: "assets/views/liked_songs.html", initModule: "./pages/liked-songs.js" },
   "listening-history.html": { templateUrl: "assets/views/listening_history.html", initModule: "./pages/listening-history.js" },
   "my-collection.html": { templateUrl: "assets/views/my_collection.html", initModule: "./pages/my-collection.js" },
+  "playlist.html": { templateUrl: "assets/views/playlist.html", initModule: "./pages/playlist.js" },
   "search.html": { templateUrl: "assets/views/search.html", initModule: "./app.js" },
   "stations.html": { templateUrl: "assets/views/stations.html", initModule: "./pages/stations.js" }
 };

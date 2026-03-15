@@ -11,7 +11,7 @@
 <div class="topbar pandoraTop">
     <div class="navLeft">
       <a class="navLink" href="index.html" data-nav="now">Now Playing</a>
-      <a class="navLink" href="my-collection.html" data-nav="collection">My Collection</a>
+      <a class="navLink" href="my-collection.html" data-nav="collection">Playlists</a>
       <a class="navLink" href="browse.html" data-nav="browse">Browse</a>
       <a class="navLink" href="listening-history.html" data-nav="history">Listening History</a>
       <a class="navLink" href="stations.html" data-nav="stations">Stations</a>
@@ -31,32 +31,9 @@
 
 <div id="helixHeaderSlot"></div>
 
-<main class="shell shellNowPlaying shellNowPlayingV2">
-    <section class="npPanel npNow">
-      <div class="npNowArtWrap">
-        <img id="npNowImg" class="npNowImg" alt="Now playing cover" loading="lazy" />
-      </div>
-      <div class="npNowMeta">
-        <div class="npNowTitle" id="npNowTitle">—</div>
-        <div class="npNowArtist" id="npNowArtist">—</div>
-
-        <!-- Station context (shown only when playing a station) -->
-        <div id="npNowStation" class="npNowStation" style="display:none;">
-          <div class="npNowStationLabel muted">Listening to station</div>
-          <div class="npNowStationName" id="npNowStationName">—</div>
-          <div class="npNowStationSeed muted" id="npNowStationSeed">—</div>
-          <div class="npNowStationMeta muted" id="npNowStationMeta"></div>
-        </div>
-      </div>
-    </section>
-
-    <section class="npPanel npHistory">
-      <div class="npHistHeader">
-        <div class="npHistTitle">Recently Played</div>
-        <div class="muted npHistHint">Thumb up or replay a song from your station session.</div>
-      </div>
-      <div id="npHistoryList" class="npHistList"></div>
-    </section>
+  <!-- Main view slot; SPA router swaps this <main> on navigation -->
+  <main class="shell">
+    <div class="muted" style="padding: 2rem;">Loading…</div>
   </main>
 
 <div class="playerBar" role="region" aria-label="Player">

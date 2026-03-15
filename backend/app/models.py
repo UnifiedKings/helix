@@ -71,6 +71,7 @@ class PlaybackSession(Base):
 
 class QueueItem(Base):
     __tablename__ = "queue_items"
+    __table_args__ = (UniqueConstraint("session_user_id", "position", name="uq_queue_items_session_pos"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     session_user_id: Mapped[str] = mapped_column(String(36), ForeignKey("playback_sessions.user_id", ondelete="CASCADE"), nullable=False, index=True)
 
@@ -261,5 +262,66 @@ class DislikedTrack(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
+    user: Mapped["User"] = relationship("User")
+
+
+# --- Playlists ---
+
+
+class Playlist(Base):
+    __tablename__ = "playlists"
+    __table_args__ = (UniqueConstraint("user_id", "system_key", name="uq_playlist_user_system"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    name: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    # system_key used for special playlists (e.g., 'liked'). NULL for user-created.
+    system_key: Mapped[str | None] = mapped_column(String(32), nullable=True, default=None)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    user: Mapped["User"] = relationship("User")
+    tracks: Mapped[list["PlaylistTrack"]] = relationship(
+        "PlaylistTrack",
+        back_populates="playlist",
+        cascade="all, delete-orphan",
+        order_by="PlaylistTrack.position",
+    )
+
+
+class PlaylistTrack(Base):
+    __tablename__ = "playlist_tracks"
+    __table_args__ = (
+        UniqueConstraint("playlist_id", "key", name="uq_playlist_track_key"),
+    )
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    playlist_id: Mapped[str] = mapped_column(String(36), ForeignKey("playlists.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    position: Mapped[int] = mapped_column(nullable=False, default=0)
+
+    # Stable identity: prefer subsonic song id else yt video id else text.
+    key: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
+
+    title: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    artist: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    album: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    duration_ms: Mapped[int] = mapped_column(nullable=False, default=0)
+    art_url: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    subsonic_song_id: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    yt_video_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    yt_browse_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    mb_recording_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    mb_artist_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    playlist: Mapped["Playlist"] = relationship("Playlist", back_populates="tracks")
     user: Mapped["User"] = relationship("User")
 

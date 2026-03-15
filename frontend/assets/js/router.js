@@ -14,6 +14,7 @@ const PAGE_MODULE_BY_FILE = {
   "listening-history.html": "./pages/listening-history.js",
   "stations.html": "./pages/stations.js",
   "liked-songs.html": "./pages/liked-songs.js"
+  ,"playlist.html": "./pages/playlist.js"
 };
 
 // Top navigation (global search + auth UI) lives outside <main> and persists across PJAX.

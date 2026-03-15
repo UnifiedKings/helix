@@ -3,12 +3,10 @@ import {esc} from "../utils/text.js"
 
 function getActiveStationId(st){
   if (!st) return null;
-  if (st.active_station_id) return st.active_station_id;
-  const a = st.active_station || st.station || null;
-  if (!a) return null;
-  output = a.id || a.station_id || a.uuid || a.guid || null;
-  console.log(output)
-  return output;
+  // Only treat station mode as active when backend sets an active_station_id.
+  // Do NOT fall back to st.active_station/st.station objects, as those can be
+  // stale remnants from a previous station session.
+  return st.active_station_id ? st.active_station_id : null;
 }
 
 function getActiveStationName(st){
@@ -51,6 +49,16 @@ function setImg(id, url) {
   el.setAttribute("src", url);
 }
 
+function fmtDur(msOrSec){
+  const n = (msOrSec == null) ? 0 : Number(msOrSec);
+  if (!isFinite(n) || n <= 0) return "";
+  // some fields are seconds even if named *_ms
+  const totalSec = n > 100000 ? Math.round(n / 1000) : Math.round(n);
+  const m = Math.floor(totalSec / 60);
+  const s = totalSec % 60;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
 /**
  * Gets the key for what is playing
  * @param {*} now_playing 
@@ -86,6 +94,40 @@ async function renderQueue(queue, currentIndex) {
     row.innerHTML = `
       <div class="npQueueTitle">${(q.title || "")}</div>
       <div class="npQueueSub muted">${(q.artist || "")}${q.album ? " — " + q.album : ""}</div>
+    `;
+    row.addEventListener("click", async () => {
+      try {
+        await backend.playerJump(i);
+        document.dispatchEvent(new CustomEvent("helix-player-refresh", { detail: { forceLoadStream: true } }));
+      } catch {}
+    });
+    list.appendChild(row);
+  }
+}
+
+async function renderQueueDetailed(queue, currentIndex){
+  const list = document.getElementById("pqList");
+  if (!list) return;
+  list.innerHTML = "";
+  const items = Array.isArray(queue) ? queue : [];
+
+  // header hint
+  const sub = document.getElementById("pqSub");
+  if (sub) sub.textContent = `${items.length} songs`;
+
+  for (let i = 0; i < items.length; i++){
+    const q = items[i] || {};
+    const row = document.createElement("div");
+    row.className = "pqRow" + (i === currentIndex ? " active" : "");
+    const art = q.art_url || "";
+    row.innerHTML = `
+      <div class="pqIdx">${i+1}</div>
+      <img class="pqThumb" alt="" ${art ? `src="${esc(art)}"` : ""} />
+      <div class="pqText">
+        <div class="pqTrackTitle">${esc(q.title || "—")}</div>
+        <div class="pqTrackSub">${esc(q.artist || "—")}</div>
+      </div>
+      <div class="pqDur">${esc(fmtDur(q.duration_ms || q.duration || 0))}</div>
     `;
     row.addEventListener("click", async () => {
       try {
@@ -303,11 +345,25 @@ async function renderHistory(items) {
 
 function renderStationUI(st) {
   if (!st) return;
-  // Support v1 and v2 ids
-  console.log(st)
-  const stationName = st.active_station.name
-  console.log(stationName)
-  setText("npNowStation", stationName);
+  const container = document.getElementById("npNowStation");
+  if (!container) return;
+
+  const sid = getActiveStationId(st);
+  const stationName = getActiveStationName(st) || "Station";
+
+  container.style.display = sid ? "block" : "none";
+  setText("npNowStationName", stationName);
+  // Seed/meta are optional depending on backend shape
+  if (st.active_station && st.active_station.seed_artist) {
+    setText("npNowStationSeed", st.active_station.seed_artist);
+  } else {
+    setText("npNowStationSeed", "");
+  }
+  if (st.discovery != null) {
+    setText("npNowStationMeta", `Discovery: ${Math.round((st.discovery || 0) * 100)}%`);
+  } else {
+    setText("npNowStationMeta", "");
+  }
 
   const hb = document.getElementById("npStationHistoryBtn");
   if (hb){ hb.disabled = false; hb.classList.remove("disabled"); }
@@ -323,16 +379,28 @@ async function renderNowPlaying(st) {
   const np = st && st.now_playing ? st.now_playing : null;
   if (!np) return;
 
+  const isStation = !!getActiveStationId(st);
+  const stationShell = document.getElementById("npStationShell");
+  const queueShell = document.getElementById("npQueueShell");
+  if (stationShell) stationShell.style.display = isStation ? "" : "none";
+  if (queueShell) queueShell.style.display = isStation ? "none" : "";
+
+  // Always render station UI so it can hide itself when station mode ends.
+  renderStationUI(st);
+
   // v2 now ids
   setText("npNowTitle", np.title);
   setText("npNowArtist", np.artist);
   setImg("npNowImg", np.art_url || "");
 
-  renderStationUI(st);
+  // playlist/queue ids
+  setText("pqNowTitle", np.title);
+  setText("pqNowArtist", np.artist);
+  setImg("pqNowImg", np.art_url || "");
 
-  // queue panel if present
-  if ($("npQueueList")) {
-    await renderQueue(st.queue, st.current_index);
+  if (!isStation) {
+    // render queue list
+    await renderQueueDetailed(st.queue, st.current_index);
   }
 }
 

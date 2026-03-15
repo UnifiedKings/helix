@@ -47,6 +47,10 @@ class PlayerQueueItem(BaseModel):
     artist: str
     album: str = ""
     duration_ms: int = 0
+    # Progressive streaming support (web UI seek clamping).
+    seekable_ms: int = 0
+    available_bytes: int = 0
+    is_final: bool = False
     art_url: str = ""
     source: str = "subsonic"
     subsonic_song_id: str = ""
@@ -80,6 +84,11 @@ class PlayerPlayTrackRequest(BaseModel):
     yt_video_id: Optional[str] = None
     ytmusic_url: Optional[str] = None
 
+
+
+class PlayerPlayPlaylistRequest(BaseModel):
+    # Playlist identifier. Use "liked" for the system Liked Songs playlist.
+    playlist_id: str
 
 class PlayerPlayAlbumRequest(BaseModel):
     # YT Music album identifier (browseId). MusicBrainz is no longer the primary source.
@@ -279,5 +288,85 @@ class DislikeToggleRequest(LikeToggleRequest):
     """Same payload shape as LikeToggleRequest."""
 
 
+# --- Playlists ---
+
+
+class PlaylistCreateRequest(BaseModel):
+    name: str
+
+
+class PlaylistResponse(BaseModel):
+    id: str
+    name: str
+    system_key: str = ""
+    track_count: int = 0
+    created_at: str
+    updated_at: str
+    thumbnail_url: str = ""
+
+
+class PlaylistTrackAddRequest(LikeToggleRequest):
+    """Same payload as LikeToggleRequest; adds a track to a playlist."""
+
+
+class PlaylistTrackResponse(BaseModel):
+    id: str
+    key: str
+    title: str
+    artist: str
+    album: str = ""
+    duration_ms: int = 0
+    art_url: str = ""
+    source: str = ""
+    subsonic_song_id: str = ""
+    yt_video_id: str = ""
+    yt_browse_id: str = ""
+    mb_recording_id: str = ""
+    mb_artist_id: str = ""
+    created_at: str
+
+
+class PlaylistDetailResponse(BaseModel):
+    playlist: PlaylistResponse
+    tracks: list[PlaylistTrackResponse] = []
+
+
 class DislikeResponse(BaseModel):
     disliked: bool
+# --- Subsonic availability / resolve (for UI badges) ---
+
+from typing import List, Dict, Any
+
+class SubsonicResolveSongCandidate(BaseModel):
+    key: str = Field(description="Client-provided stable key for correlation (e.g., video_id).")
+    title: str
+    artist: str
+    album: str = ""
+    duration_seconds: Optional[int] = None
+
+class SubsonicResolveAlbumCandidate(BaseModel):
+    key: str = Field(description="Client-provided stable key for correlation (e.g., browse_id).")
+    title: str
+    artist: str
+    browse_id: str = Field(default="", description="YTMusic browse_id for fetching tracklist when verifying completeness.")
+    year: str = ""
+
+class SubsonicResolveRequest(BaseModel):
+    songs: List[SubsonicResolveSongCandidate] = Field(default_factory=list)
+    albums: List[SubsonicResolveAlbumCandidate] = Field(default_factory=list)
+
+class SubsonicResolveSongResult(BaseModel):
+    available: bool
+    subsonic_song_id: str = ""
+
+class SubsonicResolveAlbumResult(BaseModel):
+    available: bool
+    subsonic_album_id: str = ""
+    complete: bool = False
+    expected_track_count: int = 0
+    matched_track_count: int = 0
+    subsonic_track_count: int = 0
+
+class SubsonicResolveResponse(BaseModel):
+    songs: Dict[str, SubsonicResolveSongResult] = Field(default_factory=dict)
+    albums: Dict[str, SubsonicResolveAlbumResult] = Field(default_factory=dict)

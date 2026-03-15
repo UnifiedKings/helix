@@ -50,6 +50,11 @@ class TTLCache(Generic[T]):
         while len(self._data) > self._max_items:
             self._data.popitem(last=False)
 
+
+    def delete(self, key: str) -> None:
+        """Remove a key from the cache, if present."""
+        self._data.pop(key, None)
+
     def get_or_set(self, key: str, ttl_seconds: int, fn: Callable[[], T]) -> T:
         hit = self.get(key)
         if hit is not None:

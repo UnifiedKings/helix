@@ -10,6 +10,8 @@ from ..auth import get_current_user
 from ..db import get_db
 from ..models import User, DislikedTrack
 from ..schemas import DislikeToggleRequest, DislikeResponse
+from ..validators import is_valid_yt_video_id
+from ..art_sources import yt_thumbnail_url, is_allowed_art_url
 
 
 router = APIRouter(prefix="/api/dislikes", tags=["dislikes"])
@@ -20,7 +22,7 @@ def _stable_key(payload: DislikeToggleRequest) -> str:
     if sid:
         return f"subsonic:{sid}"
     vid = (payload.yt_video_id or "").strip()
-    if vid:
+    if vid and is_valid_yt_video_id(vid):
         return f"yt:{vid}"
     return f"text:{(payload.title or '').strip()}|{(payload.artist or '').strip()}"
 
@@ -52,6 +54,16 @@ def toggle_dislike(payload: DislikeToggleRequest, db: Session = Depends(get_db),
         db.commit()
         return DislikeResponse(disliked=False)
 
+    yt_video_id = (payload.yt_video_id or "").strip() if payload.yt_video_id else ""
+    if yt_video_id and (not is_valid_yt_video_id(yt_video_id)):
+        yt_video_id = ""
+
+    art_url = (payload.art_url or "").strip() if payload.art_url else ""
+    if art_url and (not is_allowed_art_url(art_url)):
+        art_url = ""
+    if yt_video_id and (not art_url):
+        art_url = yt_thumbnail_url(yt_video_id)
+
     x = DislikedTrack(
         user_id=user.id,
         key=key,
@@ -59,10 +71,10 @@ def toggle_dislike(payload: DislikeToggleRequest, db: Session = Depends(get_db),
         artist=(payload.artist or "").strip(),
         album=(payload.album or "").strip() if payload.album else "",
         duration_ms=int(payload.duration_ms or 0),
-        art_url=(payload.art_url or "").strip() if payload.art_url else "",
+        art_url=art_url,
         source=(payload.source or "").strip() if payload.source else "",
         subsonic_song_id=(payload.subsonic_song_id or "").strip() if payload.subsonic_song_id else "",
-        yt_video_id=(payload.yt_video_id or "").strip() if payload.yt_video_id else "",
+        yt_video_id=yt_video_id,
         yt_browse_id=(payload.yt_browse_id or "").strip() if payload.yt_browse_id else "",
         mb_recording_id=(payload.mb_recording_id or "").strip() if payload.mb_recording_id else "",
         mb_artist_id=(payload.mb_artist_id or "").strip() if payload.mb_artist_id else "",

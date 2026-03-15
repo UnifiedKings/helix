@@ -9,6 +9,7 @@ import string
 from typing import Any, Dict, Optional, Tuple, List
 
 import httpx
+import re
 
 
 def _rand_salt(n: int = 12) -> str:
@@ -21,13 +22,56 @@ def _token(password: str, salt: str) -> str:
 
 
 def _norm(s: str) -> str:
-    return " ".join((s or "").strip().lower().split())
+    """Normalize for fuzzy matching.
 
-
+    - lowercase + collapse whitespace
+    - normalize common punctuation variants
+    - strip apostrophes so Lion's == Lions
+    - replace remaining punctuation with spaces
+    - keep only [a-z0-9 ] after normalization
+    """
+    s = (s or "").strip().lower()
+    s = s.replace("’", "'").replace("`", "'").replace("´", "'")
+    s = s.replace("–", "-").replace("—", "-")
+    s = s.replace("'", "")  # lion's -> lions
+    s = re.sub(r"[^0-9a-z\s]+", " ", s)
+    return " ".join(s.split())
 def _contains_bad_variant(title: str) -> bool:
     t = _norm(title)
     bad = [" live", "(live", " session", "radio", "demo", "acoustic", "remix", "mix", "cover", "karaoke"]
     return any(b in t for b in bad)
+
+
+def _album_candidate_score(album: str, artist: str, candidate: Dict[str, Any]) -> float:
+    """Score a Subsonic album candidate by normalized title/artist match quality."""
+    nalb = _norm(album)
+    na = _norm(artist)
+    at_raw = str(candidate.get("title") or candidate.get("name") or "")
+    ar_raw = str(candidate.get("artist") or "")
+    at = _norm(at_raw)
+    ar = _norm(ar_raw)
+
+    title_match = (at == nalb) or (nalb in at) or (at in nalb)
+    if not title_match:
+        return float("-inf")
+
+    score = 0.0
+    score += 100 if at == nalb else 60
+    if ar == na:
+        score += 80
+    elif na and (na in ar or ar in na):
+        score += 40
+    else:
+        score -= 50
+
+    # Prefer candidates with a track count, which are easier to validate downstream.
+    try:
+        if int(candidate.get("songCount") or 0) > 0:
+            score += 5
+    except Exception:
+        pass
+
+    return score
 
 
 class SubsonicClient:
@@ -42,6 +86,18 @@ class SubsonicClient:
 
     async def close(self):
         await self._http.aclose()
+
+    async def search3(self, query: str) -> Dict[str, Any]:
+        """Run Subsonic search3 and return the raw searchResult3 payload."""
+        q = (query or "").strip()
+        if not q:
+            return {}
+        url = f"{self.base_url}/rest/search3.view"
+        params = {"query": q, **self._auth_params()}
+        r = await self._http.get(url, params=params)
+        r.raise_for_status()
+        data = (r.json() or {}).get("subsonic-response", {}) or {}
+        return data.get("searchResult3", {}) or {}
 
     def _auth_params(self) -> Dict[str, str]:
         salt = _rand_salt()
@@ -74,42 +130,98 @@ class SubsonicClient:
         best_score = -1e9
 
         for s in songs:
-            st = _norm(s.get("title") or "")
-            sa = _norm(s.get("artist") or "")
+            st_raw = (s.get("title") or "")
+            sa_raw = (s.get("artist") or "")
+            st = _norm(st_raw)
+            sa = _norm(sa_raw)
+
+            title_match = (st == nt) or (nt in st) or (st in nt)
+            if not title_match:
+                continue
+
             score = 0.0
-            if st == nt:
-                score += 100
-            elif nt in st or st in nt:
-                score += 60
-            else:
-                score += 10
+            score += 100 if st == nt else 60
 
             if sa == na:
                 score += 80
             elif na in sa or sa in na:
                 score += 40
             else:
-                score -= 10
+                score -= 50
 
-            if _contains_bad_variant(s.get("title") or ""):
+            if _contains_bad_variant(st_raw):
                 score -= 25
 
             if duration_ms and s.get("duration"):
-                # subsonic duration is seconds
                 ds = int(s.get("duration")) * 1000
                 diff = abs(ds - int(duration_ms))
                 if diff <= 3000:
-                    score += 20
+                    score += 25
                 elif diff <= 8000:
-                    score += 5
+                    score += 10
+                elif diff <= 15000:
+                    score += 0
                 else:
-                    score -= 15
+                    score -= 25
 
             if score > best_score:
                 best_score = score
                 best = s
 
         return best
+
+
+    async def search_album_candidates(self, album: str, artist: str, limit: int = 10) -> List[Dict[str, Any]]:
+        """Return album candidates sorted by normalized title/artist match strength."""
+        q = f"{album} {artist}".strip()
+        url = f"{self.base_url}/rest/search3.view"
+        params = {"query": q, **self._auth_params()}
+        r = await self._http.get(url, params=params)
+        r.raise_for_status()
+        data = (r.json() or {}).get("subsonic-response", {})
+        res = data.get("searchResult3", {}) or {}
+        albums: List[Dict[str, Any]] = res.get("album") or []
+        if not albums:
+            return []
+
+        scored: List[tuple[float, Dict[str, Any]]] = []
+        seen_ids = set()
+        for a in albums:
+            aid = str(a.get("id") or "").strip()
+            if aid and aid in seen_ids:
+                continue
+            if aid:
+                seen_ids.add(aid)
+
+            score = _album_candidate_score(album, artist, a)
+            if score == float("-inf"):
+                continue
+            scored.append((score, a))
+
+        scored.sort(key=lambda item: item[0], reverse=True)
+        return [a for _, a in scored[: max(1, int(limit))]]
+
+    async def search_album_best(self, album: str, artist: str) -> Optional[Dict[str, Any]]:
+        """Search Subsonic for the best matching album. Returns album dict (Subsonic JSON) or None."""
+        candidates = await self.search_album_candidates(album=album, artist=artist, limit=1)
+        return candidates[0] if candidates else None
+
+
+    async def get_album_songs(self, album_id: str) -> List[Dict[str, Any]]:
+        """Fetch album tracklist via getAlbum.view. Returns a list of song dicts."""
+        if not album_id:
+            return []
+        url = f"{self.base_url}/rest/getAlbum.view"
+        params = {"id": album_id, **self._auth_params()}
+        r = await self._http.get(url, params=params)
+        r.raise_for_status()
+        data = (r.json() or {}).get("subsonic-response", {})
+        album = data.get("album", {}) or {}
+        songs = album.get("song") or []
+        if isinstance(songs, list):
+            return songs
+        return []
+
 
     def stream_url(self, song_id: str) -> str:
         url = f"{self.base_url}/rest/stream.view"
@@ -223,4 +335,3 @@ class SubsonicClient:
             except Exception:
                 continue
         return None
-

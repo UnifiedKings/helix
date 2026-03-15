@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import logging
+import asyncio
 from typing import Any
 from fastapi import Body, FastAPI, Depends, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -28,10 +29,17 @@ from .routers.player import router as player_router
 from .routers.ytmusic import router as ytmusic_router
 from .routers.album import router as album_router
 from .routers.stations import router as stations_router
+from .routers.art import router as art_router
 from .routers.likes import router as likes_router
 from .routers.dislikes import router as dislikes_router
+from .routers.playlists import router as playlists_router
+from .routers.subsonic import router as subsonic_router
+from .routers.subsonic_add import router as subsonic_add_router
 import logging
+import asyncio
 import sys
+from .db import db_watchdog_loop
+
 
 logging.basicConfig(
     level=logging.INFO,
@@ -59,6 +67,12 @@ app.add_middleware(
 def _startup():
     init_db()
 
+    # Start DB watchdog (detect long-held connections)
+    try:
+        asyncio.get_event_loop().create_task(db_watchdog_loop())
+    except Exception:
+        logging.getLogger(__name__).exception("Failed to start db watchdog")
+
     # Start background download/finalize workers (YouTube Music fulfillment).
     from .download_manager import DOWNLOAD_MANAGER
     from .settings_store import get_settings
@@ -78,8 +92,12 @@ app.include_router(album_router)
 app.include_router(player_router)
 app.include_router(ytmusic_router)
 app.include_router(stations_router)
+app.include_router(art_router)
 app.include_router(likes_router)
 app.include_router(dislikes_router)
+app.include_router(playlists_router)
+app.include_router(subsonic_router)
+app.include_router(subsonic_add_router)
 
 def _user_count(db: Session) -> int:
     return db.execute(select(func.count(User.id))).scalar_one()

@@ -1,6 +1,7 @@
 import { startPlayerPolling } from "./player.js";
 import * as backend from "./api/backend.js";
 import { initTopNav } from "./ui/topnav.js";
+import { showLoading, hideLoading } from "./ui/loading.js";
 import { createThrottledFetch } from "./utils/throttle.js";
 import { esc, fmtMs } from "./utils/text.js";
 import { activateImage, coverUrlForRelease, coverUrlForReleaseGroup, clearCover, setCoverEntity } from "./api/coverart.js";
@@ -182,6 +183,11 @@ function buildRow(item) {
       ev.preventDefault();
       ev.stopPropagation();
       try {
+        const label = isSong
+          ? `Playing track...${item.title ? " " + item.title : ""}${item.artist ? " — " + item.artist : ""}`
+          : `Playing album...${item.title ? " " + item.title : ""}${item.artist ? " — " + item.artist : ""}`;
+        try { showLoading(label); } catch {}
+
         if (isSong) {
           await backend.playerPlayTrack({
             // recording_id is optional; for YT Music results it will be null.
@@ -207,6 +213,8 @@ function buildRow(item) {
         }
       } catch (e) {
         console.error(e);
+      } finally {
+        try { hideLoading(); } catch {}
       }
     });
     thumbWrap.appendChild(playBtn);

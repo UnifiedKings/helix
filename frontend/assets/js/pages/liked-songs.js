@@ -2,6 +2,7 @@ import * as backend from "../api/backend.js";
 import * as icons from "../ui/icons.js";
 import { startPlayerPolling } from "../player.js";
 import { requireAuth } from "../auth-guard.js";
+import { showLoading, hideLoading } from "../ui/loading.js";
 
 function el(id) { return document.getElementById(id); }
 
@@ -57,7 +58,9 @@ async function render() {
     row.querySelector('[data-act="play"]').addEventListener("click", async (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
+      let __shown = false;
       try {
+        try { showLoading(`Playing track... ${t.title || "Track"}${t.artist ? " — " + t.artist : ""}`); __shown = true; } catch {}
         await backend.playerPlayTrack({
           title: t.title,
           artist: t.artist,
@@ -66,7 +69,10 @@ async function render() {
           art_url: t.art_url || "",
           yt_video_id: t.yt_video_id || null,
         });
-      } catch {}
+        document.dispatchEvent(new CustomEvent("helix-player-refresh", { detail: { forceLoadStream: true } }));
+      } catch {} finally {
+        if (__shown) { try { hideLoading(); } catch {} }
+      }
     });
 
     row.querySelector('[data-act="unlike"]').addEventListener("click", async (ev) => {

@@ -10,6 +10,7 @@ function setActiveNav() {
     "listening-history.html": "history",
     "stations.html": "stations",
     "liked-songs.html": "liked",
+    "playlist.html": "collection",
     "search.html": null,
     "admin.html": null,
     "login.html": null,

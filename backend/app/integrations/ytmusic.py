@@ -63,9 +63,8 @@ class YTMusicAlbum:
 def _best_thumb(item: Dict[str, Any]) -> str:
     thumbs = item.get("thumbnails") or []
     if isinstance(thumbs, list) and thumbs:
-        # pick largest
-        best = max(thumbs, key=lambda t: int(t.get("width") or 0))
-        return str(best.get("url") or "")
+        best = max(thumbs, key=lambda t: int((t or {}).get("width") or 0))
+        return str((best or {}).get("url") or "")
     return ""
 
 
@@ -87,16 +86,65 @@ def _duration_to_seconds(d: Any) -> Optional[int]:
     return None
 
 
+
+def _looks_like_viewcount_or_duration(s: str) -> bool:
+    """Heuristic guard: some YTMusic entries can have non-artist strings in the
+    'artists' field (e.g., '1,234,567 views', '14M plays'). We treat those as invalid
+    artist names.
+    """
+    t = (s or "").strip().lower()
+    if not t:
+        return True
+    if "view" in t or "play" in t:
+        return True
+    if t in {"songs", "song", "album", "single", "ep", "video", "videos", "listeners", "subscribers"}:
+        return True
+    if re.fullmatch(r"[0-9][0-9,\.\s]*", t):
+        return True
+    if re.fullmatch(r"\d{1,2}:\d{2}(:\d{2})?", t):
+        return True
+    return False
+
+
+def _safe_artist_name(primary: str, fallback: str = "") -> str:
+    a = (primary or "").strip()
+    if _looks_like_viewcount_or_duration(a):
+        return (fallback or "").strip()
+    return a
+
+
+def _section_results(section: Any) -> List[Dict[str, Any]]:
+    if isinstance(section, dict):
+        rows = section.get("results") or section.get("items") or []
+        if isinstance(rows, list):
+            return [r for r in rows if isinstance(r, dict)]
+    if isinstance(section, list):
+        return [r for r in section if isinstance(r, dict)]
+    return []
+
+
+def _artist_name_from_item(it: Dict[str, Any], fallback: str = "") -> str:
+    artists = it.get("artists") or []
+    if isinstance(artists, list) and artists:
+        for a in artists:
+            if isinstance(a, dict):
+                nm = _safe_artist_name(str(a.get("name") or ""), "")
+                if nm:
+                    return nm
+            else:
+                nm = _safe_artist_name(str(a or ""), "")
+                if nm:
+                    return nm
+    return _safe_artist_name(str(it.get("artist") or it.get("name") or ""), fallback)
+
+
 def search_ytmusic(
     query: str,
     *,
     song_limit: int = 15,
     album_limit: int = 15,
 ) -> Dict[str, List[Dict[str, Any]]]:
-    """Search YouTube Music and return ONLY songs and albums.
-
-    We intentionally exclude videos, playlists, community playlists, etc.
-    """
+    """Search YouTube Music and return ONLY songs and albums."""
     q = (query or "").strip()
     if not q:
         return {"songs": [], "albums": []}
@@ -113,10 +161,7 @@ def search_ytmusic(
         vid = str(it.get("videoId") or "")
         if not vid:
             continue
-        artists = it.get("artists") or []
-        artist = ""
-        if isinstance(artists, list) and artists:
-            artist = str(artists[0].get("name") or "")
+        artist = _artist_name_from_item(it, "")
         album = ""
         alb = it.get("album")
         if isinstance(alb, dict):
@@ -142,10 +187,7 @@ def search_ytmusic(
         bid = str(it.get("browseId") or "")
         if not bid:
             continue
-        artists = it.get("artists") or []
-        artist = ""
-        if isinstance(artists, list) and artists:
-            artist = str(artists[0].get("name") or "")
+        artist = _artist_name_from_item(it, "")
         albums.append(
             {
                 "kind": "album",
@@ -161,10 +203,192 @@ def search_ytmusic(
     return {"songs": songs, "albums": albums}
 
 
+def search_artists(query: str, *, artist_limit: int = 15) -> Dict[str, List[Dict[str, Any]]]:
+    q = (query or "").strip()
+    if not q:
+        return {"artists": []}
+    c = _client()
+    raw = c.search(q, filter="artists", limit=int(artist_limit) if artist_limit else 15) or []
+    artists: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for it in raw:
+        if not isinstance(it, dict):
+            continue
+        browse_id = str(it.get("browseId") or "")
+        if not browse_id or browse_id in seen:
+            continue
+        seen.add(browse_id)
+        name = str(it.get("artist") or it.get("name") or "").strip()
+        if not name:
+            continue
+        artists.append(
+            {
+                "kind": "artist",
+                "browse_id": browse_id,
+                "artist_id": browse_id,
+                "name": name,
+                "thumbnail_url": _best_thumb(it),
+                "subscriber_count": str(it.get("subscribers") or "").strip(),
+                "monthly_listeners": str(it.get("monthlyListeners") or it.get("monthly_listeners") or "").strip(),
+                "ytmusic_url": f"https://music.youtube.com/browse/{browse_id}",
+            }
+        )
+    return {"artists": artists}
+
+
+def get_artist_overview(browse_id: str) -> Dict[str, Any]:
+    bid = (browse_id or "").strip()
+    if not bid:
+        return {}
+    c = _client()
+    data = c.get_artist(bid) or {}
+    name = str(data.get("name") or data.get("artist") or "").strip()
+    songs = get_artist_popular_songs(bid, limit=10, _data=data)
+    albums = get_artist_albums(bid, limit=12, _data=data)
+    singles = get_artist_albums(bid, limit=12, category="singles", _data=data)
+    return {
+        "kind": "artist",
+        "browse_id": bid,
+        "artist_id": bid,
+        "name": name,
+        "description": str(data.get("description") or "").strip(),
+        "thumbnail_url": _best_thumb(data),
+        "subscriber_count": str(data.get("subscribers") or "").strip(),
+        "views": str(data.get("views") or "").strip(),
+        "songs_count": len(songs),
+        "albums_count": len(albums),
+        "singles_count": len(singles),
+        "top_tracks_hint": [str((s or {}).get("title") or "") for s in songs[:5] if str((s or {}).get("title") or "")],
+        "top_albums_hint": [str((a or {}).get("title") or "") for a in albums[:5] if str((a or {}).get("title") or "")],
+        "ytmusic_url": f"https://music.youtube.com/browse/{bid}",
+    }
+
+
+def _parse_artist_song_rows(rows: List[Dict[str, Any]], fallback_artist: str) -> List[Dict[str, Any]]:
+    songs: List[Dict[str, Any]] = []
+    seen: set[tuple[str, str]] = set()
+    for it in rows:
+        title = str(it.get("title") or "").strip()
+        if not title:
+            continue
+        video_id = str(it.get("videoId") or "")
+        artist = _artist_name_from_item(it, fallback_artist)
+        album = ""
+        alb = it.get("album")
+        if isinstance(alb, dict):
+            album = str(alb.get("name") or "").strip()
+        elif isinstance(alb, str):
+            album = alb.strip()
+        key = (title.lower(), video_id)
+        if key in seen:
+            continue
+        seen.add(key)
+        songs.append(
+            {
+                "kind": "song",
+                "video_id": video_id,
+                "title": title,
+                "artist": artist,
+                "album": album,
+                "duration_seconds": _duration_to_seconds(it.get("duration") or it.get("duration_seconds")),
+                "thumbnail_url": _best_thumb(it),
+                "youtube_url": f"https://www.youtube.com/watch?v={video_id}" if video_id else "",
+                "ytmusic_url": f"https://music.youtube.com/watch?v={video_id}" if video_id else "",
+            }
+        )
+    return songs
+
+
+def get_artist_popular_songs(browse_id: str, *, limit: int = 10, _data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    bid = (browse_id or "").strip()
+    if not bid:
+        return []
+    data = _data if isinstance(_data, dict) else (_client().get_artist(bid) or {})
+    name = str(data.get("name") or data.get("artist") or "").strip()
+    rows = _section_results(data.get("songs"))
+    songs = _parse_artist_song_rows(rows, name)
+    return songs[: max(0, int(limit))]
+
+
+def _parse_artist_album_rows(rows: List[Dict[str, Any]], fallback_artist: str, category: str) -> List[Dict[str, Any]]:
+    albums: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for it in rows:
+        bid = str(it.get("browseId") or "").strip()
+        title = str(it.get("title") or "").strip()
+        if not title:
+            continue
+        key = bid or title.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        artist = _artist_name_from_item(it, fallback_artist)
+        albums.append(
+            {
+                "kind": "album",
+                "browse_id": bid,
+                "title": title,
+                "artist": artist,
+                "year": str(it.get("year") or "").strip(),
+                "thumbnail_url": _best_thumb(it),
+                "category": category,
+                "ytmusic_url": f"https://music.youtube.com/browse/{bid}" if bid else "",
+            }
+        )
+    return albums
+
+
+def _expand_artist_album_section(bid: str, section: Any) -> List[Dict[str, Any]]:
+    rows = _section_results(section)
+    params = section.get("params") if isinstance(section, dict) else None
+    if not params:
+        return rows
+    c = _client()
+    get_more = getattr(c, "get_artist_albums", None)
+    if not callable(get_more):
+        return rows
+    try:
+        expanded = get_more(bid, params)
+    except TypeError:
+        try:
+            expanded = get_more(params)
+        except Exception:
+            return rows
+    except Exception:
+        return rows
+    more = _section_results(expanded)
+    if more:
+        return more
+    return rows
+
+
+def get_artist_albums(
+    browse_id: str,
+    *,
+    limit: int = 50,
+    category: str = "albums",
+    _data: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    bid = (browse_id or "").strip()
+    if not bid:
+        return []
+    data = _data if isinstance(_data, dict) else (_client().get_artist(bid) or {})
+    name = str(data.get("name") or data.get("artist") or "").strip()
+    section_name = "albums" if category == "albums" else "singles"
+    section = data.get(section_name) or {}
+    rows = _expand_artist_album_section(bid, section)
+    albums = _parse_artist_album_rows(rows, name, "album" if category == "albums" else section_name.rstrip("s"))
+    return albums[: max(0, int(limit))]
+
+
 def get_album_tracks(browse_id: str) -> List[Dict[str, Any]]:
     """Fetch an album tracklist from YouTube Music.
 
-    Returns a list of track dicts with: title, artist, duration_seconds.
+    Album payloads do not always expose the artist under a flat ``artist`` key.
+    Some only provide an ``artists`` array at the album level, and many track rows
+    omit per-track artists entirely. Resolve the album artist defensively and use it
+    as a fallback for every track so `/api/album/{browse_id}` always returns usable
+    artist metadata for the app.
     """
     bid = (browse_id or "").strip()
     if not bid:
@@ -173,6 +397,7 @@ def get_album_tracks(browse_id: str) -> List[Dict[str, Any]]:
     c = _client()
     data = c.get_album(bid) or {}
     tracks_raw = data.get("tracks") or []
+    album_artist = _artist_name_from_item(data, "")
 
     tracks: List[Dict[str, Any]] = []
     for it in tracks_raw:
@@ -181,365 +406,189 @@ def get_album_tracks(browse_id: str) -> List[Dict[str, Any]]:
         title = str(it.get("title") or "").strip()
         if not title:
             continue
-        artists = it.get("artists") or []
-        artist = ""
-        if isinstance(artists, list) and artists:
-            artist = str(artists[0].get("name") or "").strip()
-        dur_s = _duration_to_seconds(it.get("duration"))
-        tracks.append({
-            "title": title,
-            "artist": artist,
-            "duration_seconds": dur_s,
-        })
-
+        artist = _artist_name_from_item(it, album_artist)
+        tracks.append(
+            {
+                "title": title,
+                "artist": artist,
+                "duration_seconds": _duration_to_seconds(it.get("duration") or it.get("length")),
+                "video_id": str(it.get("videoId") or ""),
+            }
+        )
     return tracks
 
 
 def get_album_full(browse_id: str) -> Dict[str, Any]:
-    """Fetch full album metadata + tracklist from YouTube Music.
-
-    Returns a dict suitable for the Pandora-like album view.
-    """
     bid = (browse_id or "").strip()
     if not bid:
         return {}
-
     c = _client()
     data = c.get_album(bid) or {}
-
     title = str(data.get("title") or "").strip()
-    artists_raw = data.get("artists") or []
-    artist = ""
-    if isinstance(artists_raw, list) and artists_raw:
-        artist = str(artists_raw[0].get("name") or "").strip()
+    artist = _artist_name_from_item(data, "")
     year = str(data.get("year") or "").strip()
-    thumb = _best_thumb(data)  # album-level thumbnails
-
-    tracks_raw = data.get("tracks") or []
-    tracks: List[Dict[str, Any]] = []
-    pos = 1
-    for it in tracks_raw:
-        if not isinstance(it, dict):
-            continue
-        t_title = str(it.get("title") or "").strip()
-        if not t_title:
-            continue
-        t_artists = it.get("artists") or []
-        t_artist = ""
-        if isinstance(t_artists, list) and t_artists:
-            t_artist = str(t_artists[0].get("name") or "").strip()
-        dur_s = _duration_to_seconds(it.get("duration"))
-        video_id = str(it.get("videoId") or "")
-
-        tracks.append(
-            {
-                "pos": pos,
-                "title": t_title,
-                "artist": t_artist or artist,
-                "duration_seconds": dur_s,
-                "lengthMs": (dur_s * 1000) if dur_s else 0,
-                "video_id": video_id,
-                "ytmusic_url": f"https://music.youtube.com/watch?v={video_id}" if video_id else "",
-            }
-        )
-        pos += 1
-
+    thumb = _best_thumb(data)
+    tracks = get_album_tracks(bid)
     return {
         "browse_id": bid,
         "title": title,
         "artist": artist,
         "year": year,
-        "trackCount": len(tracks),
         "thumbnail_url": thumb,
-        "ytmusic_url": f"https://music.youtube.com/browse/{bid}",
         "tracks": tracks,
     }
-
-def find_song(
-    title: str,
-    artist: str,
-    *,
-    limit: int = 10,
-) -> Optional[YTMusicSong]:
-    """
-    Search YouTube Music for a track and return the best matching YTMusicSong.
-
-    Strongly prefers exact title + artist matches.
-    Rejects bogus "views" album strings.
-    """
-
-    q_title = (title or "").strip()
-    q_artist = (artist or "").strip()
-
-    if not q_title:
-        return None
-
-    query = f"{q_artist} - {q_title}" if q_artist else q_title
-    c = _client()
-
-    try:
-        results = c.search(query, filter="songs", limit=int(limit) if limit else 10) or []
-    except Exception:
-        return None
-
-    best_score = -1.0
-    best_song: Optional[YTMusicSong] = None
-
-    q_title_l = q_title.lower()
-    q_artist_l = q_artist.lower()
-
-    for it in results:
-        if not isinstance(it, dict):
-            continue
-
-        video_id = str(it.get("videoId") or "")
-        if not video_id:
-            continue
-
-        title_res = str(it.get("title") or "").strip()
-
-        artists_raw = it.get("artists") or []
-        artist_res = ""
-        if isinstance(artists_raw, list) and artists_raw:
-            artist_res = str(artists_raw[0].get("name") or "").strip()
-
-        album = ""
-        album_obj = it.get("album")
-        if isinstance(album_obj, dict):
-            album = str(album_obj.get("name") or "").strip()
-
-        # Guard against accidental "123K views"
-        if album and "views" in album.lower():
-            album = ""
-
-        duration_seconds = _duration_to_seconds(it.get("duration"))
-
-        thumbnails = it.get("thumbnails") or []
-        thumbnail_url = ""
-        if isinstance(thumbnails, list) and thumbnails:
-            thumbnail_url = str(thumbnails[-1].get("url") or "")
-
-        score = 0.0
-
-        # Exact title match
-        if title_res.lower() == q_title_l:
-            score += 2.0
-        elif q_title_l in title_res.lower():
-            score += 1.0
-
-        # Exact artist match
-        if q_artist_l and artist_res.lower() == q_artist_l:
-            score += 2.0
-        elif q_artist_l and q_artist_l in artist_res.lower():
-            score += 1.0
-
-        # Bonus if album exists
-        if album:
-            score += 0.5
-
-        if score > best_score:
-            best_score = score
-            best_song = YTMusicSong(
-                video_id=video_id,
-                title=title_res,
-                artist=artist_res,
-                album=album,
-                duration_seconds=duration_seconds,
-                thumbnail_url=thumbnail_url,
-            )
-
-    return best_song
 
 
 # --- yt-dlp best-match helpers ---
 
+_SANITIZE_RE = re.compile(r"[^a-z0-9]+")
+
+
 def _norm(s: str) -> str:
-    s = (s or "").lower()
-    s = re.sub(r"\s+", " ", s).strip()
-    # strip punctuation (keep hyphens)
-    s = re.sub(r"[^\w\s-]", "", s)
-    s = re.sub(r"\s+", " ", s).strip()
-    return s
+    return _SANITIZE_RE.sub(" ", (s or "").lower()).strip()
 
 
-def _ytmusic_url(video_id: str) -> str:
-    return f"https://music.youtube.com/watch?v={video_id}" if video_id else ""
+def _token_set(s: str) -> set[str]:
+    return {t for t in _norm(s).split() if t}
 
 
-def _youtube_url(video_id: str) -> str:
-    return f"https://www.youtube.com/watch?v={video_id}" if video_id else ""
+def _jaccard(a: str, b: str) -> float:
+    aa, bb = _token_set(a), _token_set(b)
+    if not aa or not bb:
+        return 0.0
+    inter = len(aa & bb)
+    union = len(aa | bb)
+    return inter / union if union else 0.0
 
 
 @dataclass
-class YTResult:
+class MatchResult:
     found: bool
-    confidence: float
+    confidence: float = 0.0
     video_id: str = ""
     title: str = ""
     uploader: str = ""
     duration_seconds: Optional[int] = None
-    album: str = ""
-    artist: str = ""
 
     @property
     def youtube_url(self) -> str:
-        return _youtube_url(self.video_id)
+        return f"https://www.youtube.com/watch?v={self.video_id}" if self.video_id else ""
 
     @property
     def ytmusic_url(self) -> str:
-        return _ytmusic_url(self.video_id)
+        return f"https://music.youtube.com/watch?v={self.video_id}" if self.video_id else ""
 
 
-def _score_track(
-    *,
-    want_title: str,
-    want_artist: str,
-    want_duration_s: Optional[int],
-    cand_title: str,
-    cand_uploader: str,
-    cand_duration_s: Optional[int],
-) -> float:
-    want = _norm(f"{want_artist} {want_title}")
-    have = _norm(f"{cand_uploader} {cand_title}")
-    wt = set(want.split())
-    ht = set(have.split())
-    if not wt or not ht:
-        base = 0.0
-    else:
-        base = len(wt & ht) / max(1, len(wt))
-
-    boost = 0.0
-    up = (cand_uploader or "").lower()
-    if " - topic" in up or "vevo" in up or "official" in up:
-        boost += 0.12
-
-    # Duration closeness helps a lot when we have it.
-    dur = 0.0
-    if want_duration_s and cand_duration_s:
-        diff = abs(int(want_duration_s) - int(cand_duration_s))
-        if diff <= 2:
-            dur += 0.25
-        elif diff <= 10:
-            dur += 0.12
-        elif diff <= 30:
-            dur += 0.04
-        else:
-            dur -= 0.10
-
-    # Penalize common wrong-version indicators.
-    penalty = 0.0
-    t = (cand_title or "").lower()
-    if any(x in t for x in ["live", "concert", "cover", "karaoke", "instrumental", "reaction"]):
-        penalty -= 0.12
-
-    return float(base + boost + dur + penalty)
-
-
-def _search_yt(query: str, *, limit: int = 7) -> List[Dict[str, Any]]:
-    """Fast search using yt-dlp's ytsearch.
-
-    Returns flat entries with id/title/uploader/duration.
-    """
-    ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "extract_flat": True,
-        "noplaylist": True,
-    }
-    term = f"ytsearch{int(limit)}:{query}"
-    with YoutubeDL(ydl_opts) as ydl:
-        info = ydl.extract_info(term, download=False)
-    entries = info.get("entries") if isinstance(info, dict) else None
-    if not entries:
-        return []
-    out: List[Dict[str, Any]] = []
-    for e in entries:
-        if isinstance(e, dict) and e.get("id"):
-            out.append(e)
-    return out
-
-
-def find_track(
-    *,
-    title: str,
-    artist: str,
-    album: Optional[str] = None,
-    duration_seconds: Optional[int] = None,
-    limit: int = 7,
-) -> YTResult:
-    # Query format that tends to behave well.
-    print(f"Searching for {title} by {artist}")
-    q = f"{artist} - {title}"
-    if album:
-        q = f"{q} \"{album}\""
-
-    cands = _search_yt(q, limit=limit)
-    if not cands:
-        return YTResult(found=False, confidence=0.0)
-
-    scored: List[Tuple[float, Dict[str, Any]]] = []
-    for c in cands:
-        s = _score_track(
-            want_title=title,
-            want_artist=artist,
-            want_duration_s=duration_seconds,
-            cand_title=str(c.get("title") or ""),
-            cand_uploader=str(c.get("uploader") or ""),
-            cand_duration_s=c.get("duration") if isinstance(c.get("duration"), (int, float)) else None,
-        )
-        scored.append((s, c))
-    scored.sort(key=lambda x: x[0], reverse=True)
-    best_s, best = scored[0]
-
-    # Decide if it's "found" based on a conservative threshold.
-    found = best_s >= 0.45
-    return YTResult(
-        found=found,
-        confidence=float(best_s),
-        video_id=str(best.get("id") or ""),
-        title=str(best.get("title") or ""),
-        uploader=str(best.get("uploader") or ""),
-        duration_seconds=best.get("duration") if isinstance(best.get("duration"), (int, float)) else None,
+def _ydl() -> YoutubeDL:
+    return YoutubeDL(
+        {
+            "quiet": True,
+            "skip_download": True,
+            "noplaylist": True,
+            "extract_flat": True,
+            "default_search": "ytsearch5",
+            "nocheckcertificate": True,
+        }
     )
 
 
-def find_album(
-    *,
-    album_title: str,
-    artist: str,
-    limit: int = 7,
-) -> YTResult:
-    # Album results on YT Music are often surfaced as videos ("Full Album") or auto-generated uploads.
-    q = f"{artist} {album_title} full album"
-    cands = _search_yt(q, limit=limit)
-    if not cands:
-        return YTResult(found=False, confidence=0.0)
+def _score_track_candidate(info: Dict[str, Any], *, title: str, artist: str, album: Optional[str], duration_seconds: Optional[int]) -> float:
+    cand_title = str(info.get("title") or "")
+    cand_uploader = str(info.get("uploader") or info.get("channel") or "")
+    cand_duration = info.get("duration")
 
-    # Reuse track-ish scoring but with album tokens.
-    scored: List[Tuple[float, Dict[str, Any]]] = []
-    for c in cands:
-        s = _score_track(
-            want_title=album_title,
-            want_artist=artist,
-            want_duration_s=None,
-            cand_title=str(c.get("title") or ""),
-            cand_uploader=str(c.get("uploader") or ""),
-            cand_duration_s=c.get("duration") if isinstance(c.get("duration"), (int, float)) else None,
-        )
-        # Prefer things that explicitly look like album uploads.
-        t = (str(c.get("title") or "")).lower()
-        if "full album" in t or "album" in t:
-            s += 0.08
-        scored.append((s, c))
-    scored.sort(key=lambda x: x[0], reverse=True)
-    best_s, best = scored[0]
-    found = best_s >= 0.40
-    return YTResult(
-        found=found,
-        confidence=float(best_s),
-        video_id=str(best.get("id") or ""),
-        title=str(best.get("title") or ""),
-        uploader=str(best.get("uploader") or ""),
-        duration_seconds=best.get("duration") if isinstance(best.get("duration"), (int, float)) else None,
+    score = 0.0
+    score += 0.60 * _jaccard(title, cand_title)
+    score += 0.30 * _jaccard(artist, cand_uploader)
+
+    if album:
+        desc = str(info.get("description") or "")
+        score += 0.05 * max(_jaccard(album, cand_title), _jaccard(album, desc))
+
+    if duration_seconds and isinstance(cand_duration, (int, float)):
+        diff = abs(int(cand_duration) - int(duration_seconds))
+        if diff <= 2:
+            score += 0.10
+        elif diff <= 5:
+            score += 0.05
+        elif diff > 20:
+            score -= 0.10
+
+    if "official" in _norm(cand_title) or "official" in _norm(cand_uploader):
+        score += 0.03
+    if "topic" in _norm(cand_uploader):
+        score += 0.02
+
+    return max(0.0, min(1.0, score))
+
+
+def _score_album_candidate(info: Dict[str, Any], *, album_title: str, artist: str) -> float:
+    cand_title = str(info.get("title") or "")
+    cand_uploader = str(info.get("uploader") or info.get("channel") or "")
+    score = 0.0
+    score += 0.70 * _jaccard(album_title, cand_title)
+    score += 0.25 * _jaccard(artist, cand_uploader)
+    if "album" in _norm(cand_title):
+        score += 0.05
+    return max(0.0, min(1.0, score))
+
+
+
+def find_song(*, title: str, artist: str, album: Optional[str] = None, duration_seconds: Optional[int] = None) -> MatchResult:
+    """Backward-compatible alias used by stations_engine and older callers."""
+    return find_track(title=title, artist=artist, album=album, duration_seconds=duration_seconds)
+
+def find_track(*, title: str, artist: str, album: Optional[str] = None, duration_seconds: Optional[int] = None) -> MatchResult:
+    query = f"{title} {artist}"
+    ydl = _ydl()
+    data = ydl.extract_info(f"ytsearch5:{query}", download=False)
+    entries = (data or {}).get("entries") or []
+
+    best: Tuple[float, Optional[Dict[str, Any]]] = (0.0, None)
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        score = _score_track_candidate(e, title=title, artist=artist, album=album, duration_seconds=duration_seconds)
+        if score > best[0]:
+            best = (score, e)
+
+    if best[1] is None or best[0] < 0.45:
+        return MatchResult(found=False)
+
+    e = best[1]
+    return MatchResult(
+        found=True,
+        confidence=float(best[0]),
+        video_id=str(e.get("id") or ""),
+        title=str(e.get("title") or ""),
+        uploader=str(e.get("uploader") or e.get("channel") or ""),
+        duration_seconds=int(e.get("duration")) if e.get("duration") is not None else None,
+    )
+
+
+def find_album(*, album_title: str, artist: str) -> MatchResult:
+    query = f"{album_title} {artist} album"
+    ydl = _ydl()
+    data = ydl.extract_info(f"ytsearch5:{query}", download=False)
+    entries = (data or {}).get("entries") or []
+
+    best: Tuple[float, Optional[Dict[str, Any]]] = (0.0, None)
+    for e in entries:
+        if not isinstance(e, dict):
+            continue
+        score = _score_album_candidate(e, album_title=album_title, artist=artist)
+        if score > best[0]:
+            best = (score, e)
+
+    if best[1] is None or best[0] < 0.45:
+        return MatchResult(found=False)
+
+    e = best[1]
+    return MatchResult(
+        found=True,
+        confidence=float(best[0]),
+        video_id=str(e.get("id") or ""),
+        title=str(e.get("title") or ""),
+        uploader=str(e.get("uploader") or e.get("channel") or ""),
+        duration_seconds=int(e.get("duration")) if e.get("duration") is not None else None,
     )

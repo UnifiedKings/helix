@@ -137,6 +137,148 @@
 
 }
 
+/* Playlist/Queue now playing (Pandora-like) */
+.shellPlaylistNow {
+  display: grid;
+  grid-template-columns: 1.3fr 1fr;
+  gap: 24px;
+  padding: 24px;
+  align-items: start;
+}
+
+.pqLeft {
+  min-width: 0;
+}
+
+.pqHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.pqTitle {
+  font-size: 22px;
+  font-weight: 750;
+}
+
+.pqSub {
+  font-size: 12px;
+}
+
+.pqList {
+  border-top: 1px solid #1f2530;
+  padding-top: 10px;
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+}
+
+.pqRow {
+  display: grid;
+  grid-template-columns: 44px 44px 1fr 60px;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 8px;
+  border-bottom: 1px solid rgba(31,37,48,0.6);
+  cursor: pointer;
+}
+
+.pqRow:hover {
+  background: rgba(8, 10, 14, 0.25);
+}
+
+.pqRow.active {
+  background: rgba(40, 90, 200, 0.18);
+}
+
+.pqIdx {
+  color: #aab2c0;
+  font-size: 12px;
+  text-align: right;
+}
+
+.pqThumb {
+  width: 44px;
+  height: 44px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid #1f2530;
+  background: #0b0f14;
+}
+
+.pqText {
+  min-width: 0;
+}
+
+.pqTrackTitle {
+  font-size: 14px;
+  font-weight: 650;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pqTrackSub {
+  font-size: 12px;
+  color: #aab2c0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.pqDur {
+  text-align: right;
+  font-size: 12px;
+  color: #aab2c0;
+}
+
+.pqRight {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.pqArtWrap {
+  width: min(520px, 38vw);
+  aspect-ratio: 1 / 1;
+  border: 1px solid #232833;
+  background: #0b0f14;
+  overflow: hidden;
+}
+
+.pqNowImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.pqMeta {
+  text-align: center;
+}
+
+.pqNowTitle {
+  font-size: 26px;
+  font-weight: 800;
+}
+
+.pqNowArtist {
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+@media (max-width: 980px) {
+  .shellPlaylistNow {
+    grid-template-columns: 1fr;
+  }
+  .pqArtWrap {
+    width: min(520px, 84vw);
+  }
+}
+
 
 .npNow  {
   display: flex;

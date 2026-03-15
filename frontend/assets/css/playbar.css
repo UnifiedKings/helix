@@ -288,3 +288,61 @@
   cursor: pointer;
 
 }
+
+/* --- Volume slider (Chromium + Firefox) ----------------------------------- */
+.pbVolume{display:flex;align-items:center;gap:10px;}
+
+.pbVol{
+  -webkit-appearance:none;
+  appearance:none;
+  width:120px;
+  height:6px;
+  background:rgba(255,255,255,0.14);
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.10);
+  padding:0;
+  margin:0;
+  outline:none;
+}
+
+.pbVol:focus-visible{box-shadow:0 0 0 3px rgba(45,108,223,0.35);}
+
+.pbVol::-webkit-slider-runnable-track{
+  height:6px;
+  background:rgba(255,255,255,0.14);
+  border-radius:999px;
+}
+
+.pbVol::-webkit-slider-thumb{
+  -webkit-appearance:none;
+  appearance:none;
+  width:12px;
+  height:12px;
+  border-radius:50%;
+  background:#ffffff;
+  border:2px solid #2d6cdf;
+  margin-top:-4px;
+}
+
+.pbVol::-webkit-slider-thumb:hover{transform:scale(1.15);}
+
+.pbVol::-moz-range-track{
+  height:6px;
+  background:rgba(255,255,255,0.14);
+  border-radius:999px;
+  border:1px solid rgba(255,255,255,0.10);
+}
+
+.pbVol::-moz-range-progress{
+  height:6px;
+  background:rgba(45,108,223,0.55);
+  border-radius:999px;
+}
+
+.pbVol::-moz-range-thumb{
+  width:12px;
+  height:12px;
+  border-radius:50%;
+  background:#ffffff;
+  border:2px solid #2d6cdf;
+}

@@ -2,6 +2,7 @@ import { startPlayerPolling } from "../player.js";
 import { initTopNav } from "../ui/topnav.js";
 import { getAlbum, playerPlayAlbumYt, playerPlayTrack, playerQueueAppendTrack, playerResume } from "../api/backend.js";
 import { esc, fmtMs } from "../utils/text.js";
+import { showLoading, hideLoading } from "../ui/loading.js";
 
 function qs() {
   return new URLSearchParams(window.location.search);
@@ -99,8 +100,11 @@ function renderTracklist(tracks, albumCtx) {
         art_url: albumCtx.art_url || "",
       };
 
+      let __didShowLoading = false;
       try {
         if (action === "play") {
+          try { showLoading(`Playing track... ${t.title || "Track"}${t.artist ? " — " + t.artist : ""}`); __didShowLoading = true; } catch {}
+
           await playerPlayTrack(trackPayload);
           try { await playerResume(); } catch {}
           document.dispatchEvent(new CustomEvent("helix-player-refresh", { detail: { forceLoadStream: true } }));
@@ -110,6 +114,10 @@ function renderTracklist(tracks, albumCtx) {
         }
       } catch (e) {
         console.error(e);
+      } finally {
+        if (__didShowLoading) {
+          try { hideLoading(); } catch {}
+        }
       }
     });
 
@@ -173,12 +181,15 @@ export async function init() {
     playBtn.addEventListener("click", async (ev) => {
       ev.preventDefault();
       try {
+        try { showLoading(`Playing album... ${data.title || "Album"}${data.artist ? " — " + data.artist : ""}`); } catch {}
         await playerPlayAlbumYt({ browse_id: id, title: data.title || null, artist: data.artist || null, art_url: data.coverSrc || data.thumbnail_url || null });
         // Ensure playback starts immediately.
         try { await playerResume(); } catch {}
         document.dispatchEvent(new CustomEvent("helix-player-refresh", { detail: { forceLoadStream: true } }));
       } catch (e) {
         console.error(e);
+      } finally {
+        try { hideLoading(); } catch {}
       }
     });
   }
