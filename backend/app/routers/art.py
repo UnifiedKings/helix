@@ -5,10 +5,8 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
-from sqlalchemy.orm import Session
-
 from ..auth import get_current_user
-from ..db import get_db
+from ..db import SessionLocal
 from ..settings_store import get_settings
 from ..integrations.subsonic import SubsonicClient
 from ..cache import TTLCache
@@ -21,6 +19,14 @@ _COVER_ART_CACHE: TTLCache[bytes] = TTLCache(max_items=512)
 _COVER_ART_TTL_SECONDS = 60 * 60 * 24
 
 router = APIRouter(prefix="/api/art", tags=["art"])
+
+
+def _load_settings_short() -> Dict[str, Any]:
+    db = SessionLocal()
+    try:
+        return dict(get_settings(db) or {})
+    finally:
+        db.close()
 
 
 def _infer_int(v: Any, default: int) -> int:
@@ -72,7 +78,6 @@ async def subsonic_cover_art(
     cover_id: str,
     size: int = Query(512, ge=32, le=2048),
     user=Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """
     Proxy Subsonic cover art through Helix, so the frontend can use stable internal URLs.
@@ -93,7 +98,7 @@ async def subsonic_cover_art(
             headers={"Cache-Control": "public, max-age=86400"},
         )
 
-    settings = get_settings(db) or {}
+    settings = _load_settings_short()
     client: Optional[SubsonicClient] = None
     try:
         client = await _subsonic_client_from_settings(settings)

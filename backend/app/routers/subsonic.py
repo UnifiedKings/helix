@@ -3,11 +3,9 @@ from __future__ import annotations
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
-
 from ..auth import get_current_user
 from ..cache import TTLCache
-from ..db import get_db
+from ..db import SessionLocal
 from ..integrations.subsonic import SubsonicClient
 from ..models import User
 from ..rate_limit import RATE_LIMITER, make_key
@@ -48,7 +46,6 @@ def _subsonic_client_from_settings(settings: Dict[str, Any]) -> Optional[Subsoni
 async def resolve_subsonic(
     request: Request,
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     Batch resolver for Subsonic availability.
@@ -74,7 +71,7 @@ async def resolve_subsonic(
     songs_in: List[Dict[str, Any]] = payload.get("songs") or []
     albums_in: List[Dict[str, Any]] = payload.get("albums") or []
 
-    settings = get_settings(db)
+    settings = _load_settings_short()
     client = _subsonic_client_from_settings(settings)
     if client is None:
         # Subsonic not configured -> nothing available.

@@ -914,10 +914,25 @@ async def play_playlist(payload: PlayerPlayPlaylistRequest, user: User = Depends
 
     db = SessionLocal()
     try:
-        # Resolve tracks from either the system liked playlist or a user playlist.
+        # Resolve tracks from either a normal playlist or the system liked playlist.
+        # The liked playlist may arrive as either the literal sentinel "liked" or as
+        # the real Playlist UUID returned by /api/playlists. Treat both forms as the
+        # same system playlist so the web UI can play the visible Liked Songs card.
         items: list[dict[str, Any]] = []
 
-        if pid == "liked":
+        playlist: Playlist | None = None
+        is_liked_playlist = pid == "liked"
+
+        if not is_liked_playlist:
+            playlist = (
+                db.execute(select(Playlist).where(Playlist.id == pid, Playlist.user_id == user.id))
+                .scalar_one_or_none()
+            )
+            if not playlist:
+                raise HTTPException(status_code=404, detail="Playlist not found")
+            is_liked_playlist = (playlist.system_key or "") == "liked"
+
+        if is_liked_playlist:
             rows = (
                 db.execute(
                     select(LikedTrack)
@@ -945,17 +960,11 @@ async def play_playlist(payload: PlayerPlayPlaylistRequest, user: User = Depends
                     }
                 )
         else:
-            p = (
-                db.execute(select(Playlist).where(Playlist.id == pid, Playlist.user_id == user.id))
-                .scalar_one_or_none()
-            )
-            if not p:
-                raise HTTPException(status_code=404, detail="Playlist not found")
-
+            assert playlist is not None
             rows = (
                 db.execute(
                     select(PlaylistTrack)
-                    .where(PlaylistTrack.playlist_id == p.id, PlaylistTrack.user_id == user.id)
+                    .where(PlaylistTrack.playlist_id == playlist.id, PlaylistTrack.user_id == user.id)
                     .order_by(PlaylistTrack.position.asc(), PlaylistTrack.created_at.asc())
                 )
                 .scalars()

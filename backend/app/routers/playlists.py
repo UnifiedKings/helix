@@ -10,7 +10,7 @@ from sqlalchemy import select, func, delete
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
-from ..db import get_db
+from ..db import get_db, SessionLocal
 from ..models import User, Playlist, PlaylistTrack, LikedTrack
 from ..api_schemas.playlists import (
     PlaylistCreateRequest,
@@ -26,6 +26,14 @@ from ..validators import is_valid_yt_video_id
 from ..art_sources import yt_thumbnail_url, is_allowed_art_url
 
 router = APIRouter(prefix="/api/playlists", tags=["playlists"])
+
+
+def _load_settings_short() -> Dict[str, Any]:
+    db = SessionLocal()
+    try:
+        return dict(get_settings(db) or {})
+    finally:
+        db.close()
 
 
 def _cover_url(pid: str, ts: float | None = None) -> str:
@@ -246,55 +254,45 @@ def playlist_remove_track(playlist_id: str, track_id: str, db: Session = Depends
 
 
 @router.get("/{playlist_id}/cover")
-async def playlist_cover(playlist_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # Determine playlist + tracks.
-    # NOTE: the liked playlist has a real UUID id in the DB, and clients use that id in cover URLs.
-    # Treat both the literal "liked" sentinel and the UUID playlist row (system_key == "liked")
-    # as the liked playlist.
+async def playlist_cover(playlist_id: str, user: User = Depends(get_current_user)):
+    # DB burst: snapshot playlist/track art information, then release DB before cover generation.
+    db = SessionLocal()
+    try:
+        p: Playlist | None = None
 
-    p: Playlist | None = None
-
-    if playlist_id == "liked":
-        p = _ensure_liked_playlist(db, user.id)
-
-    if p is None:
-        # Load by id first; if it's the system liked playlist, render liked-tracks cover.
-        p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
-        if p and (p.system_key or "") == "liked":
-            playlist_id = "liked"
-
-    if playlist_id == "liked":
-        if p is None:
+        if playlist_id == "liked":
             p = _ensure_liked_playlist(db, user.id)
-        tracks = db.execute(select(LikedTrack).where(LikedTrack.user_id == user.id).order_by(LikedTrack.created_at.desc()).limit(500)).scalars().all()
-        tracks_dicts = [
-            {
-                "subsonic_song_id": t.subsonic_song_id,
-                "art_url": t.art_url,
-            }
-            for t in tracks
-        ]
-        seed = "liked:" + (user.username or user.id)
-    else:
+
         if p is None:
             p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
-        if not p:
-            raise HTTPException(status_code=404, detail="Playlist not found")
-        tracks = db.execute(select(PlaylistTrack).where(PlaylistTrack.playlist_id == p.id, PlaylistTrack.user_id == user.id).order_by(PlaylistTrack.position.asc()).limit(500)).scalars().all()
-        tracks_dicts = [
-            {
-                "subsonic_song_id": t.subsonic_song_id,
-                "art_url": t.art_url,
-            }
-            for t in tracks
-        ]
-        seed = (p.name or p.id)
+            if p and (p.system_key or "") == "liked":
+                playlist_id = "liked"
 
-    settings = get_settings(db)
+        if playlist_id == "liked":
+            if p is None:
+                p = _ensure_liked_playlist(db, user.id)
+            tracks = db.execute(select(LikedTrack).where(LikedTrack.user_id == user.id).order_by(LikedTrack.created_at.desc()).limit(500)).scalars().all()
+            tracks_dicts = [{"subsonic_song_id": t.subsonic_song_id, "art_url": t.art_url} for t in tracks]
+            seed = "liked:" + (user.username or user.id)
+            pid = p.id
+        else:
+            if p is None:
+                p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
+            if not p:
+                raise HTTPException(status_code=404, detail="Playlist not found")
+            tracks = db.execute(select(PlaylistTrack).where(PlaylistTrack.playlist_id == p.id, PlaylistTrack.user_id == user.id).order_by(PlaylistTrack.position.asc()).limit(500)).scalars().all()
+            tracks_dicts = [{"subsonic_song_id": t.subsonic_song_id, "art_url": t.art_url} for t in tracks]
+            seed = (p.name or p.id)
+            pid = p.id
+
+        settings = dict(get_settings(db) or {})
+    finally:
+        db.close()
+
     client = await _subsonic_client_from_settings(settings)
     try:
         img_path = await ensure_playlist_cover(
-            playlist_id=p.id,
+            playlist_id=pid,
             seed=seed,
             subsonic=client,
             tracks=tracks_dicts,
@@ -304,7 +302,7 @@ async def playlist_cover(playlist_id: str, db: Session = Depends(get_db), user: 
     finally:
         await client.close()
 
-    return FileResponse(img_path, media_type="image/jpeg")
+    return FileResponse(img_path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=3600"})
 
 @router.delete("/{playlist_id}", response_model=dict[str, bool])
 def delete_playlist(playlist_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):

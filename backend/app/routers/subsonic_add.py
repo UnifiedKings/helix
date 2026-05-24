@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
-from ..db import get_db
+from ..db import SessionLocal
 from ..models import User
 from ..settings_store import get_settings
 from ..download_manager import DOWNLOAD_MANAGER, DownloadJob
@@ -84,7 +84,6 @@ def _subsonic_client_from_settings(settings: Dict[str, Any]) -> Optional[Subsoni
 async def add_track(
     request: Request,
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     Enqueue a single YTMusic track for download/import, to end up in the Subsonic library.
@@ -128,7 +127,6 @@ async def add_track(
 async def add_album(
     request: Request,
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     Enqueue only the missing tracks from a YTMusic album for download/import.
@@ -152,7 +150,7 @@ async def add_album(
     if not browse_id:
         raise HTTPException(status_code=400, detail="browse_id is required")
 
-    album = ytmusic_integration.get_album_full(browse_id)
+    album = await asyncio.to_thread(ytmusic_integration.get_album_full, browse_id)
     tracks: List[Dict[str, Any]] = album.get("tracks") or []
     if not tracks:
         return {"ok": True, "total": 0, "enqueued": 0, "skipped_existing": 0}
@@ -161,7 +159,7 @@ async def add_album(
     album_artist = (body.get("artist") or album.get("artist") or "").strip()
     art_url = (body.get("art_url") or album.get("thumbnail_url") or album.get("thumbnail") or "").strip()
 
-    settings = get_settings(db)
+    settings = _load_settings_short()
     client = _subsonic_client_from_settings(settings)
 
     existing_title_keys: Set[str] = set()

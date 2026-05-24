@@ -115,22 +115,27 @@ def create_station(payload: StationCreateRequest, db: Session = Depends(get_db),
 
 
 @router.get("/{station_id}/cover")
-async def station_cover(station_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    st = db.get(Station, station_id)
-    if not st or st.user_id != user.id:
-        raise HTTPException(status_code=404, detail="Station not found")
+async def station_cover(station_id: str, user: User = Depends(get_current_user)):
+    # DB burst: validate and snapshot seed fields, then release DB before Subsonic cover generation.
+    db = SessionLocal()
+    try:
+        st = db.get(Station, station_id)
+        if not st or st.user_id != user.id:
+            raise HTTPException(status_code=404, detail="Station not found")
+        settings = dict(get_settings(db) or {})
+        seed_artist = st.seed_artist or st.seed_title or st.name or "Station"
+        sid = st.id
+    finally:
+        db.close()
 
-    settings = get_settings(db)
-    # Best effort: generate/cached cover. If subsonic is not configured, fall back to a simple
-    # generated cover (still cached).
     try:
         from ..stations_engine import _subsonic_client_from_settings
 
         sub = await _subsonic_client_from_settings(settings)
         try:
             img_path = await ensure_station_cover(
-                station_id=st.id,
-                seed_artist=st.seed_artist or st.seed_title or st.name or "Station",
+                station_id=sid,
+                seed_artist=seed_artist,
                 subsonic=sub,
                 size=640,
                 tiles=4,
@@ -141,9 +146,6 @@ async def station_cover(station_id: str, db: Session = Depends(get_db), user: Us
             except Exception:
                 pass
     except Exception:
-        # If we cannot build via Subsonic (misconfigured), still create a deterministic cover
-        # using gradient tiles only by calling ensure_station_cover with an empty client.
-        # We do this by creating a tiny fake client interface.
         class _Fake:
             async def search_albums_by_artist(self, artist: str, limit: int = 50):
                 return []
@@ -152,16 +154,14 @@ async def station_cover(station_id: str, db: Session = Depends(get_db), user: Us
                 return None
 
         img_path = await ensure_station_cover(
-            station_id=st.id,
-            seed_artist=st.seed_artist or st.seed_title or st.name or "Station",
+            station_id=sid,
+            seed_artist=seed_artist,
             subsonic=_Fake(),
             size=640,
             tiles=4,
         )
 
-    # Allow browsers to cache for a while; the backend will rebuild on its own schedule.
     return FileResponse(img_path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=3600"})
-
 
 @router.patch("/{station_id}", response_model=StationResponse)
 def update_station(station_id: str, payload: StationUpdateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):

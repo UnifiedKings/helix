@@ -6,10 +6,8 @@ from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 from fastapi import APIRouter, Depends, Query, HTTPException, Request
-from sqlalchemy.orm import Session
-
 from ..auth import get_current_user
-from ..db import get_db
+from ..db import SessionLocal
 from ..models import User
 from ..settings_store import get_settings
 from ..cache import TTLCache
@@ -29,6 +27,14 @@ from ..rate_limit import RATE_LIMITER, make_key
 
 
 router = APIRouter(prefix="/api/ytmusic", tags=["ytmusic"])
+
+
+def _load_settings_short() -> Dict[str, Any]:
+    db = SessionLocal()
+    try:
+        return dict(get_settings(db) or {})
+    finally:
+        db.close()
 
 # Small cache to avoid repeated external calls when the user clicks around.
 _CACHE: TTLCache[Dict[str, Any]] = TTLCache(max_items=4096)
@@ -476,7 +482,6 @@ async def ytmusic_search(
     song_limit: int = Query(15, ge=1, le=50),
     album_limit: int = Query(15, ge=0, le=50),
     user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
 ):
     """Unified search: strong Subsonic matches first, then YouTube Music."""
     qq = (q or "").strip()
@@ -487,7 +492,7 @@ async def ytmusic_search(
     if not RATE_LIMITER.allow(make_key(scope="ytmusic:search", user_id=user.id, ip=ip), limit=30, window_s=30):
         raise HTTPException(status_code=429, detail="Too many requests")
 
-    settings = get_settings(db) or {}
+    settings = _load_settings_short()
     subsonic_enabled = bool((settings.get("subsonic_base_url") or "").strip() and (settings.get("subsonic_username") or "").strip() and (settings.get("subsonic_password") or "").strip())
     cache_key = f"search_blended|{qq}|{song_limit}|{album_limit}|sub={1 if subsonic_enabled else 0}"
     hit = _CACHE.get(cache_key)

@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import FileResponse
 
 from .db import SessionLocal, db_watchdog_loop, init_db
 from .routers.admin import router as admin_router
@@ -101,5 +102,22 @@ app.include_router(subsonic_add_router)
 
 # --- Serve frontend (single-container mode) ---
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+
+
+class SinglePageAppStaticFiles(StaticFiles):
+    """Serve built frontend assets and fall back to index.html for React routes."""
+
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except Exception as exc:
+            status_code = getattr(exc, "status_code", None)
+            if status_code == 404 and not path.startswith("api/"):
+                index_file = Path(self.directory) / "index.html"
+                if index_file.exists():
+                    return FileResponse(index_file)
+            raise
+
+
 if STATIC_DIR.exists():
-    app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+    app.mount("/", SinglePageAppStaticFiles(directory=str(STATIC_DIR), html=True), name="static")
