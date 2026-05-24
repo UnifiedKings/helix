@@ -9,7 +9,8 @@ from sqlalchemy import select
 from ..auth import get_current_user
 from ..db import get_db
 from ..models import User, DislikedTrack
-from ..schemas import DislikeToggleRequest, DislikeResponse
+from ..api_schemas.likes import DislikeToggleRequest
+from ..api_schemas.playlists import DislikeResponse
 from ..validators import is_valid_yt_video_id
 from ..art_sources import yt_thumbnail_url, is_allowed_art_url
 

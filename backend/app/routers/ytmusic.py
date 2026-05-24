@@ -426,7 +426,7 @@ async def _enrich_similar_artist_rows(rows: list[Dict[str, Any]], limit: int) ->
     return await asyncio.gather(*tasks)
 
 
-@router.get("/find")
+@router.get("/find", response_model=Dict[str, Any])
 def ytmusic_find(
     request: Request,
     kind: str = Query(..., description="'song' or 'album'"),
@@ -469,7 +469,7 @@ def ytmusic_find(
     return payload
 
 
-@router.get("/search")
+@router.get("/search", response_model=Dict[str, Any])
 async def ytmusic_search(
     request: Request,
     q: str = Query(..., description="Search query"),
@@ -524,7 +524,7 @@ async def ytmusic_search(
     return payload
 
 
-@router.get("/search/artists")
+@router.get("/search/artists", response_model=Dict[str, Any])
 def ytmusic_search_artists(
     request: Request,
     q: str = Query(..., description="Search query"),
@@ -549,7 +549,7 @@ def ytmusic_search_artists(
     return payload
 
 
-@router.get("/artists/{browse_id}")
+@router.get("/artists/{browse_id}", response_model=Dict[str, Any])
 async def ytmusic_artist_detail(
     request: Request,
     browse_id: str,
@@ -565,7 +565,7 @@ async def ytmusic_artist_detail(
     return payload
 
 
-@router.get("/artists/{browse_id}/popular")
+@router.get("/artists/{browse_id}/popular", response_model=Dict[str, Any])
 async def ytmusic_artist_popular(
     request: Request,
     browse_id: str,
@@ -596,7 +596,7 @@ async def ytmusic_artist_popular(
     return payload
 
 
-@router.get("/artists/{browse_id}/albums")
+@router.get("/artists/{browse_id}/albums", response_model=Dict[str, Any])
 async def ytmusic_artist_albums(
     request: Request,
     browse_id: str,
@@ -629,7 +629,7 @@ async def ytmusic_artist_albums(
     return payload
 
 
-@router.get("/artists/{browse_id}/similar")
+@router.get("/artists/{browse_id}/similar", response_model=Dict[str, Any])
 async def ytmusic_artist_similar(
     request: Request,
     browse_id: str,
@@ -679,7 +679,7 @@ async def ytmusic_artist_similar(
     return payload
 
 
-@router.get("/artists/{browse_id}/station-seeds")
+@router.get("/artists/{browse_id}/station-seeds", response_model=Dict[str, Any])
 async def ytmusic_artist_station_seeds(
     request: Request,
     browse_id: str,

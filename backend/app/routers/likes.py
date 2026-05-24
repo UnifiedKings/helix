@@ -10,7 +10,7 @@ from sqlalchemy import select
 from ..auth import get_current_user
 from ..db import get_db
 from ..models import User, LikedTrack, Playlist, QueueItem, ListenHistoryItem
-from ..schemas import LikeToggleRequest, LikeResponse, LikedTracksResponse, LikedTrackResponse
+from ..api_schemas.likes import LikeToggleRequest, LikeResponse, LikedTracksResponse, LikedTrackResponse
 from ..playlist_covers import invalidate_playlist_cover
 from ..validators import is_valid_yt_video_id
 from ..art_sources import yt_thumbnail_url, is_allowed_art_url

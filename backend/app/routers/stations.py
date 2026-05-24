@@ -13,11 +13,12 @@ from sqlalchemy import select
 from ..auth import get_current_user
 from ..db import get_db, SessionLocal
 from ..models import User, Station, PlaybackSession, QueueItem, ListenHistoryItem
-from ..schemas import StationCreateRequest, StationUpdateRequest, StationResponse, StationPlayRequest
+from ..api_schemas.player import PlayerStateResponse
+from ..api_schemas.stations import StationCreateRequest, StationUpdateRequest, StationResponse, StationPlayRequest
 from ..settings_store import get_settings
 from ..stations_engine import generate_and_append_station_track, StationSeedArtistNotFound, StationGenerationError
 from ..station_covers import ensure_station_cover
-from .player import state
+from ..player.engine import state
 
 router = APIRouter(prefix="/api/stations", tags=["stations"])
 
@@ -199,7 +200,7 @@ def update_station(station_id: str, payload: StationUpdateRequest, db: Session =
     return _to_station(st)
 
 
-@router.post("/{station_id}/play")
+@router.post("/{station_id}/play", response_model=PlayerStateResponse)
 async def play_station(station_id: str, payload: StationPlayRequest, user: User = Depends(get_current_user)):
     # DB burst: validate station + set session active station / autoplay / reset if requested
     db = SessionLocal()
@@ -250,7 +251,7 @@ async def play_station(station_id: str, payload: StationPlayRequest, user: User 
         db.close()
 
 
-@router.delete("/{station_id}")
+@router.delete("/{station_id}", response_model=dict[str, bool])
 def delete_station(station_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     st = db.get(Station, station_id)
     if not st or st.user_id != user.id:

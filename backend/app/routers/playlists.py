@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..auth import get_current_user
 from ..db import get_db
 from ..models import User, Playlist, PlaylistTrack, LikedTrack
-from ..schemas import (
+from ..api_schemas.playlists import (
     PlaylistCreateRequest,
     PlaylistResponse,
     PlaylistDetailResponse,
@@ -306,7 +306,7 @@ async def playlist_cover(playlist_id: str, db: Session = Depends(get_db), user: 
 
     return FileResponse(img_path, media_type="image/jpeg")
 
-@router.delete("/{playlist_id}")
+@router.delete("/{playlist_id}", response_model=dict[str, bool])
 def delete_playlist(playlist_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     # Never allow deleting the system liked playlist via this endpoint.
     if playlist_id == "liked":

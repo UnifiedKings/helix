@@ -9,7 +9,7 @@ import logging
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select, delete
@@ -18,7 +18,7 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from ..auth import get_current_user
 from ..db import get_db, SessionLocal
 from ..models import User, PlaybackSession, QueueItem, ListenHistoryItem, Station, Playlist, PlaylistTrack, LikedTrack
-from ..schemas import PlayerPlayAlbumRequest, PlayerPlayPlaylistRequest, PlayerPlayTrackRequest, PlayerJumpRequest, PlayerQueueItem, PlayerStateResponse, PlayerQueueAppendTrackRequest, PlayerQueueAppendAlbumRequest, PlayerRemoveQueueItemResponse, PlayerHistoryItem, PlayerHistoryResponse, PlayerActionRequest, PlayerReplayRequest, AutoplaySetRequest
+from ..api_schemas.player import PlayerPlayAlbumRequest, PlayerPlayPlaylistRequest, PlayerPlayTrackRequest, PlayerJumpRequest, PlayerQueueItem, PlayerStateResponse, PlayerQueueAppendTrackRequest, PlayerQueueAppendAlbumRequest, PlayerRemoveQueueItemResponse, PlayerHistoryItem, PlayerHistoryResponse, PlayerActionRequest, PlayerReplayRequest, AutoplaySetRequest
 from ..settings_store import get_settings
 from ..integrations.subsonic import SubsonicClient
 from ..integrations.ytmusic import get_album_full, find_track
@@ -26,7 +26,6 @@ from ..download_manager import DOWNLOAD_MANAGER, DownloadJob
 from ..stations_engine import generate_and_append_station_track
 
 
-router = APIRouter(prefix="/api/player", tags=["player"])
 
 # Module logger
 LOG = logging.getLogger("helix.player")
@@ -644,7 +643,6 @@ def _rep_release(releases: List[Dict[str, Any]], preferred_country: str = "US") 
     return best
 
 
-@router.get("/state", response_model=PlayerStateResponse)
 def state(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     sess = _get_or_create_session(db, user.id)
     items = db.execute(select(QueueItem).where(QueueItem.session_user_id == user.id).order_by(QueueItem.position.asc())).scalars().all()
@@ -685,7 +683,6 @@ def state(db: Session = Depends(get_db), user: User = Depends(get_current_user))
     )
 
 
-@router.post("/autoplay", response_model=PlayerStateResponse)
 def set_autoplay(payload: AutoplaySetRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     sess = _get_or_create_session(db, user.id)
     sess.autoplay_enabled = bool(payload.enabled)
@@ -707,7 +704,6 @@ def _clear_queue(db: Session, user_id: str, *, settings: Dict[str, Any], log_cur
     db.commit()
 
 
-@router.post("/play/track", response_model=PlayerStateResponse)
 async def play_track(payload: PlayerPlayTrackRequest, user: User = Depends(get_current_user)):
     settings = _load_settings_short()
 
@@ -776,7 +772,6 @@ async def play_track(payload: PlayerPlayTrackRequest, user: User = Depends(get_c
         db.close()
 
 
-@router.post("/play/album", response_model=PlayerStateResponse)
 async def play_album(payload: PlayerPlayAlbumRequest, user: User = Depends(get_current_user)):
     """Play an album using the *same semantics as clicking a single track*.
 
@@ -903,7 +898,6 @@ async def play_album(payload: PlayerPlayAlbumRequest, user: User = Depends(get_c
 
 
 
-@router.post("/play/playlist", response_model=PlayerStateResponse)
 async def play_playlist(payload: PlayerPlayPlaylistRequest, user: User = Depends(get_current_user)):
     """Play a playlist as a single atomic operation (server-side expansion).
 
@@ -1035,7 +1029,6 @@ async def play_playlist(payload: PlayerPlayPlaylistRequest, user: User = Depends
         db.close()
 
 
-@router.post("/queue/append/track", response_model=PlayerStateResponse)
 async def queue_append_track(payload: PlayerQueueAppendTrackRequest, user: User = Depends(get_current_user)):
     settings = _load_settings_short()
 
@@ -1087,7 +1080,6 @@ async def queue_append_track(payload: PlayerQueueAppendTrackRequest, user: User 
         db.close()
 
 
-@router.post("/queue/append/album", response_model=PlayerStateResponse)
 async def queue_append_album(payload: PlayerQueueAppendAlbumRequest, user: User = Depends(get_current_user)):
     settings = _load_settings_short()
     browse_id = _clean(payload.browse_id)
@@ -1142,7 +1134,6 @@ async def queue_append_album(payload: PlayerQueueAppendAlbumRequest, user: User 
         db.close()
 
 
-@router.delete("/queue/item/{queue_item_id}", response_model=PlayerRemoveQueueItemResponse)
 def queue_remove_item(queue_item_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     settings = get_settings(db)
     sess = _get_or_create_session(db, user.id)
@@ -1175,7 +1166,6 @@ def queue_remove_item(queue_item_id: str, db: Session = Depends(get_db), user: U
     return PlayerRemoveQueueItemResponse(ok=True)
 
 
-@router.get("/history", response_model=PlayerHistoryResponse)
 def history(station_id: str | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     settings = get_settings(db)
     lim = _history_limit(settings)
@@ -1190,7 +1180,6 @@ def history(station_id: str | None = None, db: Session = Depends(get_db), user: 
     return PlayerHistoryResponse(limit=lim, items=[_to_history(h) for h in items])
 
 
-@router.post("/history/limit", response_model=PlayerHistoryResponse)
 def history_set_limit(payload: Dict[str, Any], db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     # Admin UI can call settings patch too; this is a convenience for the frontend.
     try:
@@ -1204,7 +1193,6 @@ def history_set_limit(payload: Dict[str, Any], db: Session = Depends(get_db), us
     return history(db=db, user=user)
 
 
-@router.post("/ended", response_model=PlayerStateResponse)
 async def ended(payload: Optional[PlayerActionRequest] = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     settings = get_settings(db)
     sess = _get_or_create_session(db, user.id)
@@ -1240,7 +1228,6 @@ async def ended(payload: Optional[PlayerActionRequest] = None, db: Session = Dep
     return state(db=db, user=user)
 
 
-@router.post("/jump", response_model=PlayerStateResponse)
 def jump_to(payload: PlayerJumpRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     settings = get_settings(db)
     sess = _get_or_create_session(db, user.id)
@@ -1259,7 +1246,6 @@ def jump_to(payload: PlayerJumpRequest, db: Session = Depends(get_db), user: Use
     return state(db=db, user=user)
 
 
-@router.post("/replay", response_model=PlayerStateResponse)
 async def replay_from_history(payload: PlayerReplayRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """Replay a song from listen history.
 
@@ -1318,7 +1304,6 @@ async def replay_from_history(payload: PlayerReplayRequest, db: Session = Depend
     db.commit()
     return state(db=db, user=user)
 
-@router.post("/next", response_model=PlayerStateResponse)
 async def next_track(payload: Optional[PlayerActionRequest] = None, user: User = Depends(get_current_user)):
     # DB burst: advance index, snapshot autoplay inputs
     db = SessionLocal()
@@ -1370,7 +1355,6 @@ async def next_track(payload: Optional[PlayerActionRequest] = None, user: User =
         db.close()
 
 
-@router.post("/prev", response_model=PlayerStateResponse)
 def prev_track(payload: Optional[PlayerActionRequest] = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     settings = get_settings(db)
     sess = _get_or_create_session(db, user.id)
@@ -1391,7 +1375,6 @@ def prev_track(payload: Optional[PlayerActionRequest] = None, db: Session = Depe
     return state(db=db, user=user)
 
 
-@router.post("/pause", response_model=PlayerStateResponse)
 def pause(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     sess = _get_or_create_session(db, user.id)
     sess.is_playing = False
@@ -1399,7 +1382,6 @@ def pause(db: Session = Depends(get_db), user: User = Depends(get_current_user))
     return state(db=db, user=user)
 
 
-@router.post("/resume", response_model=PlayerStateResponse)
 def resume(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     sess = _get_or_create_session(db, user.id)
     items = db.execute(select(QueueItem).where(QueueItem.session_user_id == user.id).order_by(QueueItem.position.asc())).scalars().all()
@@ -1412,7 +1394,6 @@ def resume(db: Session = Depends(get_db), user: User = Depends(get_current_user)
     return state(db=db, user=user)
 
 
-@router.get("/stream/{queue_item_id}")
 async def stream_item(
     queue_item_id: str,
     request: Request,
@@ -1447,6 +1428,20 @@ async def stream_item(
     # start inbound download and stream progressively.
     await _ensure_playable_for_stream(db, cur, settings=settings, allow_subsonic_wait=False, progressive_inbound=True)
 
+    inbound_exists = bool((cur.inbound_path or "").strip()) and os.path.exists(cur.inbound_path)
+    LOG.warning(
+        "[stream-debug] id=%s source=%s playable=%s yt=%s sub=%s inbound_path=%r exists=%s status=%s error=%s",
+        cur.id,
+        cur.source,
+        cur.is_playable,
+        cur.yt_video_id,
+        cur.subsonic_song_id,
+        cur.inbound_path,
+        inbound_exists,
+        cur.download_status,
+        cur.error,
+    )
+
     if cur.source != "subsonic":
         # If the file is still downloading (often endswith .part) use progressive streaming.
         if (cur.inbound_path or "").endswith('.part') or (cur.download_status == 'DOWNLOADING'):
@@ -1455,22 +1450,6 @@ async def stream_item(
 
     return await _stream_subsonic_with_range(request, cur, settings=settings)
 
-
-@router.get("/stream/current")
-async def stream_current(
-    request: Request,
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    """Back-compat convenience: stream the currently selected item."""
-    sess = _get_or_create_session(db, user.id)
-    qi = db.execute(
-        select(QueueItem)
-        .where(QueueItem.session_user_id == user.id, QueueItem.position == sess.current_index)
-    ).scalar_one_or_none()
-    if not qi:
-        raise HTTPException(status_code=404, detail="Nothing playing.")
-    return await stream_item(qi.id, request=request, db=db, user=user)
 
 
 
@@ -1878,7 +1857,6 @@ async def _stream_subsonic_with_range(request: Request, cur: QueueItem, *, setti
         await client.close()
 
 
-@router.post("/request-fulfillment/{queue_item_id}")
 async def request_fulfillment(queue_item_id: str, user: User = Depends(get_current_user)):
     """Explicitly request background fulfillment for a queue item.
 

@@ -80,7 +80,7 @@ def _subsonic_client_from_settings(settings: Dict[str, Any]) -> Optional[Subsoni
     )
 
 
-@router.post("/track")
+@router.post("/track", response_model=Dict[str, Any])
 async def add_track(
     request: Request,
     user: User = Depends(get_current_user),
@@ -124,7 +124,7 @@ async def add_track(
     return {"ok": True, "video_id": vid}
 
 
-@router.post("/album")
+@router.post("/album", response_model=Dict[str, Any])
 async def add_album(
     request: Request,
     user: User = Depends(get_current_user),

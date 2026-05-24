@@ -604,7 +604,7 @@ async def generate_and_append_station_track(user_id: str, station_id: str, *, se
         try:
             print(random_artist_mbid)
             selected_track = await asyncio.wait_for(
-                select_random_track_with_artist(random_artist_mbid, 10),
+                select_random_track_with_artist(random_artist_mbid, popular_track_pool_size),
                 timeout=float(os.getenv("HELIX_LB_TOP_TRACK_TIMEOUT_S", "10")),
             )
         except Exception as e:

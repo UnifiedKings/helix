@@ -1,57 +1,44 @@
 from __future__ import annotations
 
-import os
-import logging
 import asyncio
-from typing import Any
-from fastapi import Body, FastAPI, Depends, HTTPException, Response
-from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy.orm import Session
-from sqlalchemy import select, func
+import logging
+import os
+import sys
 from pathlib import Path
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from .db import init_db, get_db, SessionLocal
-from .models import User, SessionToken
-from .schemas import (
-    SetupRequest,
-    LoginRequest,
-    MeResponse,
-    AdminCreateUserRequest,
-    AdminUserResponse,
-    AdminUpdateUserRequest,
-)
-from .security import hash_password, verify_password, new_session_token
-from .auth import SESSION_COOKIE, get_current_user, require_admin
-from .settings_store import get_settings, patch_settings
-from .routers.search import router as search_router
-from .routers.player import router as player_router
-from .routers.ytmusic import router as ytmusic_router
+from .db import SessionLocal, db_watchdog_loop, init_db
+from .routers.admin import router as admin_router
 from .routers.album import router as album_router
-from .routers.stations import router as stations_router
 from .routers.art import router as art_router
-from .routers.likes import router as likes_router
+from .routers.auth import router as auth_router
 from .routers.dislikes import router as dislikes_router
+from .routers.likes import router as likes_router
+from .routers.playback import router as playback_router
+from .routers.queue import router as queue_router
+from .routers.playback_history import router as playback_history_router
+from .routers.streaming import router as streaming_router
+from .routers.fulfillment import router as fulfillment_router
 from .routers.playlists import router as playlists_router
+from .routers.search import router as search_router
+from .routers.settings import router as settings_router
+from .routers.stations import router as stations_router
 from .routers.subsonic import router as subsonic_router
 from .routers.subsonic_add import router as subsonic_add_router
-import logging
-import asyncio
-import sys
-from .db import db_watchdog_loop
-
+from .routers.system import router as system_router
+from .routers.ytmusic import router as ytmusic_router
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, os.getenv("HELIX_LOG_LEVEL", "INFO").upper(), logging.INFO),
     stream=sys.stdout,
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    force=True,  # key: overrides existing logging config
+    force=True,
 )
 
-
-logging.basicConfig(level=getattr(logging, os.getenv("HELIX_LOG_LEVEL","INFO").upper(), logging.INFO))
-
-app = FastAPI(title="Helix Backend (WIP)", version="0.1.0")
+app = FastAPI(title="Helix Backend", version="0.1.0")
 
 FRONTEND_ORIGIN = os.getenv("MR_FRONTEND_ORIGIN", "http://localhost:8080")
 
@@ -63,17 +50,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.on_event("startup")
 def _startup():
     init_db()
 
-    # Start DB watchdog (detect long-held connections)
+    # Detect long-held SQLite connections while the app is running.
     try:
         asyncio.get_event_loop().create_task(db_watchdog_loop())
     except Exception:
         logging.getLogger(__name__).exception("Failed to start db watchdog")
 
     # Start background download/finalize workers (YouTube Music fulfillment).
+    # The manager still owns the front-of-queue-only download enforcement.
     from .download_manager import DOWNLOAD_MANAGER
     from .settings_store import get_settings
 
@@ -87,9 +76,19 @@ def _startup():
     DOWNLOAD_MANAGER.set_settings_getter(_settings_getter)
     DOWNLOAD_MANAGER.start()
 
+
+# API routers are grouped by OpenAPI domain for easier docs navigation.
+app.include_router(system_router)
+app.include_router(auth_router)
+app.include_router(settings_router)
+app.include_router(admin_router)
 app.include_router(search_router)
 app.include_router(album_router)
-app.include_router(player_router)
+app.include_router(playback_router)
+app.include_router(queue_router)
+app.include_router(playback_history_router)
+app.include_router(streaming_router)
+app.include_router(fulfillment_router)
 app.include_router(ytmusic_router)
 app.include_router(stations_router)
 app.include_router(art_router)
@@ -99,139 +98,6 @@ app.include_router(playlists_router)
 app.include_router(subsonic_router)
 app.include_router(subsonic_add_router)
 
-def _user_count(db: Session) -> int:
-    return db.execute(select(func.count(User.id))).scalar_one()
-
-@app.get("/health")
-def health():
-    return {"ok": True}
-
-@app.post("/setup", response_model=MeResponse)
-def setup(payload: SetupRequest, response: Response, db: Session = Depends(get_db)):
-    # Only works when no users exist
-    if _user_count(db) > 0:
-        raise HTTPException(status_code=403, detail="Setup is disabled")
-
-    existing = db.execute(select(User).where(User.username == payload.username)).scalar_one_or_none()
-    if existing:
-        raise HTTPException(status_code=400, detail="Username already exists")
-
-    user = User(username=payload.username, password_hash=hash_password(payload.password), role="admin", is_active=True)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    token = new_session_token()
-    sess = SessionToken(token=token, user_id=user.id)
-    db.add(sess)
-    db.commit()
-
-    response.set_cookie(
-        key=SESSION_COOKIE,
-        value=token,
-        httponly=True,
-        samesite="lax",
-        secure=False,  # set True behind HTTPS
-        path="/",
-        max_age=60 * 60 * 24 * 30,  # 30 days
-    )
-    return MeResponse(id=user.id, username=user.username, role=user.role)
-
-@app.get("/setup/enabled")
-def setup_enabled(db: Session = Depends(get_db)):
-    return {"enabled": _user_count(db) == 0}
-
-@app.post("/auth/login", response_model=MeResponse)
-def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
-    user = db.execute(select(User).where(User.username == payload.username)).scalar_one_or_none()
-    if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    if not verify_password(payload.password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-
-    token = new_session_token()
-    sess = SessionToken(token=token, user_id=user.id)
-    db.add(sess)
-    db.commit()
-
-    response.set_cookie(
-        key=SESSION_COOKIE,
-        value=token,
-        httponly=True,
-        samesite="lax",
-        secure=False,
-        path="/",
-        max_age=60 * 60 * 24 * 30,
-    )
-    return MeResponse(id=user.id, username=user.username, role=user.role)
-
-@app.post("/auth/logout")
-def logout(response: Response, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Best-effort: clear cookie (session cleanup could be added later)
-    response.delete_cookie(key=SESSION_COOKIE, path="/")
-    return {"ok": True}
-
-@app.get("/auth/me", response_model=MeResponse)
-def me(user: User = Depends(get_current_user)):
-    return MeResponse(id=user.id, username=user.username, role=user.role)
-
-
-@app.get("/settings")
-def get_public_settings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Read-only global settings for the authenticated UI."""
-    return get_settings(db)
-
-# ---------------- Admin ----------------
-
-@app.post("/admin/users", response_model=AdminUserResponse)
-def admin_create_user(payload: AdminCreateUserRequest, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    if payload.role not in ("admin", "user"):
-        raise HTTPException(status_code=400, detail="Invalid role")
-
-    existing = db.execute(select(User).where(User.username == payload.username)).scalar_one_or_none()
-    if existing:
-        raise HTTPException(status_code=400, detail="Username already exists")
-
-    user = User(username=payload.username, password_hash=hash_password(payload.password), role=payload.role, is_active=True)
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-    return AdminUserResponse(id=user.id, username=user.username, role=user.role, is_active=user.is_active)
-
-@app.get("/admin/users", response_model=list[AdminUserResponse])
-def admin_list_users(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    users = db.execute(select(User).order_by(User.created_at.desc())).scalars().all()
-    return [AdminUserResponse(id=u.id, username=u.username, role=u.role, is_active=u.is_active) for u in users]
-
-@app.patch("/admin/users/{user_id}", response_model=AdminUserResponse)
-def admin_update_user(user_id: str, payload: AdminUpdateUserRequest, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    u = db.query(User).filter(User.id == user_id).first()
-    if not u:
-        raise HTTPException(status_code=404, detail="User not found")
-
-    if payload.is_active is not None:
-        u.is_active = payload.is_active
-    if payload.role is not None:
-        if payload.role not in ("admin", "user"):
-            raise HTTPException(status_code=400, detail="role must be 'admin' or 'user'")
-        u.role = payload.role
-
-    db.commit()
-    db.refresh(u)
-    return AdminUserResponse(id=u.id, username=u.username, role=u.role, is_active=u.is_active)
-
-@app.get("/admin/settings")
-def admin_get_settings(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
-    return get_settings(db)
-
-@app.patch("/admin/settings")
-def admin_patch_settings(
-    payload: dict[str, Any] = Body(...),
-    admin: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-):
-    return patch_settings(db, payload)
 
 # --- Serve frontend (single-container mode) ---
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"

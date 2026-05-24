@@ -1,0 +1,38 @@
+from __future__ import annotations
+
+from typing import Optional
+from pydantic import BaseModel, Field
+
+
+class SetupRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=8, max_length=256)
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class MeResponse(BaseModel):
+    id: str
+    username: str
+    role: str
+
+
+class AdminCreateUserRequest(BaseModel):
+    username: str = Field(min_length=3, max_length=64)
+    password: str = Field(min_length=8, max_length=256)
+    role: str = Field(default="user")  # "admin" | "user"
+
+
+class AdminUserResponse(BaseModel):
+    id: str
+    username: str
+    role: str
+    is_active: bool
+
+
+class AdminUpdateUserRequest(BaseModel):
+    is_active: Optional[bool] = None
+    role: Optional[str] = None

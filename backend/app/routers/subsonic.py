@@ -44,7 +44,7 @@ def _subsonic_client_from_settings(settings: Dict[str, Any]) -> Optional[Subsoni
     )
 
 
-@router.post("/resolve")
+@router.post("/resolve", response_model=dict[str, Any])
 async def resolve_subsonic(
     request: Request,
     user: User = Depends(get_current_user),
