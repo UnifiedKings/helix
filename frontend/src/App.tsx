@@ -1,7 +1,11 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
 import { AuthProvider, RedirectIfAuthed, RequireAuth } from './auth'
 import { Layout } from './components/Layout'
+import { AlbumDetailPage } from './pages/AlbumDetailPage'
+import { ArtistDetailPage } from './pages/ArtistDetailPage'
+import { HistoryPage } from './pages/HistoryPage'
 import { LoginPage } from './pages/LoginPage'
+import { PlaylistEditPage } from './pages/PlaylistEditPage'
 import { PlaylistsPage } from './pages/PlaylistsPage'
 import { SearchPage } from './pages/SearchPage'
 import { SettingsPage } from './pages/SettingsPage'
@@ -19,6 +23,10 @@ export function App() {
             <Route index element={<SearchPage />} />
             <Route path="stations" element={<StationsPage />} />
             <Route path="playlists" element={<PlaylistsPage />} />
+            <Route path="playlists/:playlistId" element={<PlaylistEditPage />} />
+            <Route path="artists/:browseId" element={<ArtistDetailPage />} />
+            <Route path="albums/:browseId" element={<AlbumDetailPage />} />
+            <Route path="history" element={<HistoryPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
         </Routes>

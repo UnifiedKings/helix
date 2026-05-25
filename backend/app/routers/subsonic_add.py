@@ -94,7 +94,6 @@ async def add_track(
         raise HTTPException(status_code=429, detail="Too many requests")
 
     body = await request.json()
-    print(body)
     vid = (body.get("yt_video_id") or body.get("video_id") or "").strip()
     title = (body.get("title") or "").strip()
     artist = (body.get("artist") or "").strip()
@@ -113,6 +112,7 @@ async def add_track(
         art_url=art_url,
         track_no=0,
         duration_ms=0,
+        persist_to_subsonic=True,
         priority=30,  # behind "play now", ahead of deep background
     )
     await DOWNLOAD_MANAGER.enqueue_normal(job)
@@ -255,6 +255,7 @@ async def add_album(
             art_url=(t.get("art_url") or art_url or "").strip(),
             track_no=int(t.get("track_no") or t.get("pos") or 0),
             duration_ms=duration_ms,
+            persist_to_subsonic=True,
             priority=40,
         )
         await DOWNLOAD_MANAGER.enqueue_normal(job)

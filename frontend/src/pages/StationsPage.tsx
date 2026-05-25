@@ -1,15 +1,33 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Station } from '../api/types'
 import { Artwork } from '../components/Artwork'
 import type { usePlayer } from '../hooks/usePlayer'
 
+function IconPlay() {
+  return <span aria-hidden="true">▶</span>
+}
+
+function StationStat({ icon, value, label }: { icon: string; value: string | number; label: string }) {
+  return (
+    <div className="station-stat-card">
+      <span className="station-stat-icon" aria-hidden="true">{icon}</span>
+      <strong>{value}</strong>
+      <span>{label}</span>
+    </div>
+  )
+}
+
+function seedLabel(station: Station) {
+  const seed = station.seed_artist || station.seed_title || 'Unknown seed'
+  if (!station.seed_type) return seed
+  return `${station.seed_type === 'artist' ? 'Seed artist' : 'Seed'} • ${seed}`
+}
+
 export function StationsPage() {
   const player = useOutletContext<ReturnType<typeof usePlayer>>()
   const [stations, setStations] = useState<Station[]>([])
-  const [name, setName] = useState('')
-  const [seedArtist, setSeedArtist] = useState('')
   const [error, setError] = useState('')
 
   async function load() {
@@ -22,38 +40,64 @@ export function StationsPage() {
 
   useEffect(() => { void load() }, [])
 
-  async function create(event: FormEvent) {
-    event.preventDefault()
-    if (!name.trim() || !seedArtist.trim()) return
-    await api.createStation({ name, seed_type: 'artist', seed_artist: seedArtist, seed_title: seedArtist })
-    setName('')
-    setSeedArtist('')
-    await load()
-  }
+  const recentlyUpdatedCount = useMemo(() => {
+    return stations.filter((station) => station.updated_at || station.created_at).length || stations.length
+  }, [stations])
 
   return (
-    <div className="page-stack">
-      <div>
-        <h1>Stations</h1>
-        <p className="muted">Simple station management for the current backend. This page is intentionally ready for the future station overhaul.</p>
-      </div>
+    <div className="page-stack station-page-redesign">
+      <section className="stations-hero">
+        <div className="stations-hero-copy">
+          <h1>Stations</h1>
+          <p>Personalized radio stations powered by your favorite artists. Explore, play, and shape the sounds Helix finds for you.</p>
+        </div>
+        <div className="station-stats">
+          <StationStat icon="▥" value={stations.length} label="Stations" />
+          <StationStat icon="▶" value={recentlyUpdatedCount} label="Ready to play" />
+          <StationStat icon="♡" value="—" label="Liked songs" />
+        </div>
+      </section>
+
       {error ? <div className="error-banner">{error}</div> : null}
 
-      <form className="inline-form" onSubmit={create}>
-        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Station name" />
-        <input value={seedArtist} onChange={(event) => setSeedArtist(event.target.value)} placeholder="Seed artist" />
-        <button className="primary">Create</button>
-      </form>
+      <section className="station-toolbar" aria-label="Station view controls">
+        <div>
+          <strong>Your stations</strong>
+          <span className="muted">Station creation is hidden for now while the station overhaul is planned.</span>
+        </div>
+        <div className="station-toolbar-actions">
+          <label>
+            <span>Sort by</span>
+            <select aria-label="Sort stations" defaultValue="recent">
+              <option value="recent">Recently Played</option>
+              <option value="name">A–Z</option>
+              <option value="created">Created</option>
+            </select>
+          </label>
+          <button className="view-toggle active" type="button" aria-label="Grid view">▦</button>
+          <button className="view-toggle" type="button" aria-label="List view" disabled title="Placeholder">☰</button>
+        </div>
+      </section>
 
-      <div className="grid-cards">
+      <div className="station-grid-redesign">
         {stations.map((station) => (
-          <article className="tile-card" key={station.id}>
-            <Artwork src={station.cover_url || `/api/stations/${station.id}/cover`} alt={station.name} size="lg" />
-            <h3>{station.name}</h3>
-            <p className="muted">{station.seed_type}: {station.seed_artist || station.seed_title || 'Unknown seed'}</p>
-            <div className="card-actions">
-              <button className="primary" onClick={() => player.run(() => api.playStation(station.id), 'play')}>Play</button>
-              <button className="danger" onClick={async () => { await api.deleteStation(station.id); await load() }}>Delete</button>
+          <article className="station-card-redesign" key={station.id}>
+            <div className="station-art-wrap">
+              <Artwork src={station.cover_url || `/api/stations/${station.id}/cover`} alt={station.name} size="lg" />
+              <button className="station-floating-play" type="button" onClick={() => player.run(() => api.playStation(station.id), 'play')} aria-label={`Play ${station.name}`}>
+                <IconPlay />
+              </button>
+            </div>
+            <div className="station-card-body">
+              <h3>{station.name}</h3>
+              <p className="muted">{seedLabel(station)}</p>
+              <div className="station-card-actions">
+                <button className="primary station-play-button" onClick={() => player.run(() => api.playStation(station.id), 'play')}>
+                  <IconPlay /> Play
+                </button>
+                <button className="ghost station-edit-placeholder" type="button" title="Station editor placeholder">✎ Edit</button>
+                <button className="icon-button station-more-placeholder" type="button" title="More station actions placeholder" aria-label="More station actions">⋯</button>
+              </div>
             </div>
           </article>
         ))}

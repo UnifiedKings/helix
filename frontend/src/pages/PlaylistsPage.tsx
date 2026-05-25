@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from 'react'
-import { useOutletContext } from 'react-router-dom'
+import { Link, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Playlist } from '../api/types'
 import { Artwork } from '../components/Artwork'
@@ -45,10 +45,13 @@ export function PlaylistsPage() {
       <div className="grid-cards">
         {playlists.map((playlist) => (
           <article className="tile-card" key={playlist.id}>
-            <Artwork src={playlist.cover_url} alt={`${playlist.name} cover`} size="lg" />
+            <Link to={`/playlists/${encodeURIComponent(playlist.id)}`} aria-label={`Edit ${playlist.name}`}>
+              <Artwork src={playlist.cover_url} alt={`${playlist.name} cover`} size="lg" />
+            </Link>
             <h3>{playlist.name}</h3>
             <p className="muted">{playlist.track_count ?? 0} tracks</p>
             <div className="card-actions">
+              <Link className="button-link" to={`/playlists/${encodeURIComponent(playlist.id)}`}>Edit</Link>
               <button className="primary" onClick={() => player.run(() => api.playPlaylist(playlist.id), 'play')}>Play</button>
               {!playlist.system_key ? <button className="danger" onClick={async () => { await api.deletePlaylist(playlist.id); await load() }}>Delete</button> : null}
             </div>

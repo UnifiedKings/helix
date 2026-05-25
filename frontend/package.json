@@ -18,12 +18,12 @@
     "react-router-dom": "latest"
   },
   "devDependencies": {
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
     "eslint": "latest",
     "@eslint/js": "latest",
     "typescript-eslint": "latest",
     "eslint-plugin-react-hooks": "latest",
-    "eslint-plugin-react-refresh": "latest"
+    "eslint-plugin-react-refresh": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest"
   }
 }

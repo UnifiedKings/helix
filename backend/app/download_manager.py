@@ -6,6 +6,7 @@ import re
 import subprocess
 import time
 import shutil
+import logging
 from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Dict, Optional, List, Set, Tuple
@@ -24,6 +25,10 @@ MUSIC_LIBRARY_ROOT = os.getenv("HELIX_MUSIC_LIBRARY_ROOT", "/data/music")
 STREAM_CACHE_DIR = os.getenv("HELIX_STREAM_CACHE_DIR", "/data/helix/stream_cache")
 STREAM_CACHE_TTL_MIN = int(os.getenv("HELIX_STREAM_CACHE_TTL_MIN", "30"))
 STREAM_CACHE_MAX_MB = int(os.getenv("HELIX_STREAM_CACHE_MAX_MB", "1024"))
+INBOUND_YT_TTL_MIN = int(os.getenv("HELIX_INBOUND_YT_TTL_MIN", "60"))
+INBOUND_YT_CLEANUP_INTERVAL_S = int(os.getenv("HELIX_INBOUND_YT_CLEANUP_INTERVAL_S", "3600"))
+
+LOG = logging.getLogger(__name__)
 
 
 _FS_BAD = re.compile(r"[\\/:*?\"<>|\x00-\x1f]")
@@ -110,6 +115,7 @@ class DownloadJob:
     art_url: str = ""
     track_no: int = 0
     duration_ms: int = 0
+    persist_to_subsonic: bool = False
     priority: int = 10  # lower = higher priority
     created_at: float = 0.0
 
@@ -153,8 +159,8 @@ class DownloadManager:
             self._finalize_task = asyncio.create_task(self._finalize_worker(), name="helix-finalize-worker")
         if self._cleanup_task is None:
             self._cleanup_task = asyncio.create_task(
-                self._stream_cache_cleanup_worker(),
-                name="helix-stream-cache-cleanup",
+                self._playback_file_cleanup_worker(),
+                name="helix-playback-file-cleanup",
             )
 
     def set_settings_getter(self, fn) -> None:
@@ -177,6 +183,30 @@ class DownloadManager:
 
     def ready_path(self, video_id: str) -> str:
         return self._ready.get(video_id, "")
+
+    def _mark_for_subsonic_import(self, job: DownloadJob) -> None:
+        """Mark a downloaded job for explicit Subsonic import.
+
+        Normal playback downloads are temporary and should not be imported.
+        This is called only for user-commanded add-to-Subsonic work.
+        """
+        job.persist_to_subsonic = True
+        self._jobs[job.video_id] = job
+        if job.video_id not in self._downloaded_since_finalize:
+            self._downloaded_since_finalize.append(job.video_id)
+
+    def _video_id_from_inbound_name(self, filename: str) -> str:
+        """Return a safe video id prefix from an inbound yt-dlp filename."""
+        if not filename or filename.startswith("."):
+            return ""
+        base = filename
+        if base.endswith(".part"):
+            base = base[:-5]
+        video_id = base.split(".", 1)[0]
+        try:
+            return require_valid_yt_video_id(video_id)
+        except Exception:
+            return ""
 
     def ensure_stream_cache(self, video_id: str, src_path: str) -> str:
         """Create/return a stable stream path for ASAP playback.
@@ -254,19 +284,22 @@ class DownloadManager:
         except Exception:
             pass
 
-    async def _stream_cache_cleanup_worker(self) -> None:
-        """Periodically delete old stream-cache files.
+    async def _playback_file_cleanup_worker(self) -> None:
+        """Periodically delete old playback cache and temporary YT files.
 
-        This directory is purely a playback cache. We keep it bounded by:
-        - TTL (default 30 minutes)
-        - Optional max size (default 1024 MB)
+        Stream cache is bounded by TTL and max size. The inbound YT folder is
+        also swept every hour by default, deleting temporary playback downloads
+        older than one hour. User-commanded Subsonic imports are excluded while
+        pending so explicit library adds are not lost before finalization.
 
-        We also avoid deleting files for video_ids that are currently marked as
+        We avoid deleting files for video_ids that are currently marked as
         actively streaming.
         """
         ensure_dirs()
         ttl_s = max(1, STREAM_CACHE_TTL_MIN) * 60
         max_bytes = max(1, STREAM_CACHE_MAX_MB) * 1024 * 1024
+        inbound_ttl_s = max(1, INBOUND_YT_TTL_MIN) * 60
+        cleanup_interval_s = max(60, INBOUND_YT_CLEANUP_INTERVAL_S)
 
         while True:
             try:
@@ -313,14 +346,49 @@ class DownloadManager:
                         except Exception:
                             pass
 
-                if removed:
+                inbound_removed = 0
+                for p in Path(INBOUND_DIR).glob("*"):
+                    if not p.is_file():
+                        continue
+                    video_id = self._video_id_from_inbound_name(p.name)
+                    if not video_id:
+                        continue
+                    if video_id in self._active_streams:
+                        continue
+                    job = self._jobs.get(video_id)
+                    if job is not None and getattr(job, "persist_to_subsonic", False):
+                        # Explicit library imports should be handled by finalize, not TTL cleanup.
+                        continue
+                    try:
+                        st = p.stat()
+                    except Exception:
+                        continue
+                    if now - st.st_mtime <= inbound_ttl_s:
+                        continue
+                    try:
+                        p.unlink()
+                        inbound_removed += 1
+                    except Exception:
+                        continue
+
+                # Clear stale in-memory pointers whose files were removed externally or by TTL.
+                for video_id, path in list(self._ready.items()):
+                    if path and not os.path.exists(path):
+                        self._ready.pop(video_id, None)
+                        job = self._jobs.get(video_id)
+                        if job is None or not getattr(job, "persist_to_subsonic", False):
+                            self._jobs.pop(video_id, None)
+                            self._downloaded_since_finalize = [v for v in self._downloaded_since_finalize if v != video_id]
+
+                if removed or inbound_removed:
                     self._stream_cache_log(
-                        f"cleanup removed={removed} ttl_min={STREAM_CACHE_TTL_MIN} max_mb={STREAM_CACHE_MAX_MB}"
+                        f"cleanup stream_removed={removed} inbound_removed={inbound_removed} "
+                        f"stream_ttl_min={STREAM_CACHE_TTL_MIN} inbound_ttl_min={INBOUND_YT_TTL_MIN} max_mb={STREAM_CACHE_MAX_MB}"
                     )
             except Exception as e:
                 self._stream_cache_log(f"cleanup error: {e!r}")
 
-            await asyncio.sleep(300)
+            await asyncio.sleep(cleanup_interval_s)
 
     async def ensure_downloaded(self, job: DownloadJob) -> str:
         """Ensure a given video_id is downloaded. Returns inbound path."""
@@ -334,6 +402,12 @@ class DownloadManager:
             job.created_at = time.time()
             self._jobs[job.video_id] = job
             await self._q.put((job.priority, job.created_at, job))
+
+        while True:
+            p = self._ready.get(job.video_id)
+            if p and os.path.exists(p):
+                return p
+            await asyncio.sleep(0.25)
 
     async def ensure_started(
         self,
@@ -398,11 +472,79 @@ class DownloadManager:
                 return p
             await asyncio.sleep(0.25)
 
+    def _merge_explicit_import_metadata(self, existing: DownloadJob, requested: DownloadJob) -> None:
+        """Upgrade a temporary playback job using user-commanded import metadata.
+
+        A track may already be queued or downloaded for playback when the user later
+        clicks Add to Subsonic. In that case we must not only flip the persistence
+        flag; we also need the richer title/artist/album/art/browse metadata from
+        the explicit request so finalization can tag and move the audio correctly.
+        """
+        for field_name in ("title", "artist", "album", "album_artist", "browse_id", "art_url"):
+            value = getattr(requested, field_name, "")
+            if value:
+                setattr(existing, field_name, value)
+        if requested.track_no:
+            existing.track_no = requested.track_no
+        if requested.duration_ms:
+            existing.duration_ms = requested.duration_ms
+        existing.priority = min(existing.priority, requested.priority)
+        existing.persist_to_subsonic = True
+
+    def _fallback_library_move(self, job: DownloadJob, path: str) -> str:
+        """Move a finalized inbound file into the music library if Beets did not.
+
+        Beets is still the first-choice importer, but the manual Add to Subsonic
+        path must not leave a correctly tagged file stranded in /inbound_yt. If
+        `beet import` fails or returns without moving the file, this deterministic
+        fallback uses the same foldering rules as our Beets config:
+
+            $albumartist/$album/$track $title
+        """
+        if not path or not os.path.exists(path):
+            return ""
+
+        album_artist = _safe_name((getattr(job, "album_artist", "") or job.artist), "Unknown Artist")
+        album = _safe_name(job.album, "Unknown Album")
+        title = _safe_name(job.title, "Unknown Title")
+        track_prefix = f"{int(job.track_no):02d} " if getattr(job, "track_no", 0) else ""
+        ext = os.path.splitext(path)[1] or ".opus"
+
+        album_dir = os.path.join(MUSIC_LIBRARY_ROOT, album_artist, album)
+        os.makedirs(album_dir, exist_ok=True)
+
+        candidate = os.path.join(album_dir, f"{track_prefix}{title}{ext}")
+        if os.path.exists(candidate):
+            stem = os.path.splitext(os.path.basename(candidate))[0]
+            for i in range(2, 1000):
+                next_candidate = os.path.join(album_dir, f"{stem} ({i}){ext}")
+                if not os.path.exists(next_candidate):
+                    candidate = next_candidate
+                    break
+
+        shutil.move(path, candidate)
+        return candidate
+
     async def enqueue_normal(self, job: DownloadJob) -> None:
         # Defensive: validate at the download boundary.
         job.video_id = require_valid_yt_video_id(job.video_id)
-        if job.video_id in self._jobs or self.is_ready(job.video_id):
+
+        existing = self._jobs.get(job.video_id)
+        if existing is not None:
+            if getattr(job, "persist_to_subsonic", False):
+                # A user explicitly requested this track be added after it had already
+                # been queued/downloaded for temporary playback. Upgrade the existing
+                # job instead of dropping the import request or losing metadata.
+                self._merge_explicit_import_metadata(existing, job)
+                if self.is_ready(job.video_id):
+                    self._mark_for_subsonic_import(existing)
             return
+
+        if self.is_ready(job.video_id):
+            if getattr(job, "persist_to_subsonic", False):
+                self._mark_for_subsonic_import(job)
+            return
+
         job.created_at = time.time()
         self._jobs[job.video_id] = job
         await self._q.put((job.priority, job.created_at, job))
@@ -418,7 +560,7 @@ class DownloadManager:
 
                 # Download best audio without converting during the ASAP path.
                 # We prefer Opus streams, but keep container as provided by YouTube (often .webm).
-                # Conversion/remux to .opus (Ogg Opus) happens during finalize_batch.
+                # Conversion/remux to .opus (Ogg Opus) happens only for explicit Subsonic imports.
                 outtmpl = job.out_prefix() + ".%(ext)s"
                 cmd = [
                     "yt-dlp",
@@ -463,7 +605,8 @@ class DownloadManager:
                     raise RuntimeError("yt-dlp finished but output file not found")
 
                 self._ready[job.video_id] = produced
-                self._downloaded_since_finalize.append(job.video_id)
+                if getattr(job, "persist_to_subsonic", False):
+                    self._mark_for_subsonic_import(job)
             except Exception as e:
                 # Keep job record (for debugging) but don't block worker.
                 self._ready.pop(job.video_id, None)
@@ -472,9 +615,9 @@ class DownloadManager:
                 self._q.task_done()
 
     async def _finalize_worker(self):
-        """Finalize/import downloads one-at-a-time (FIFO).
+        """Finalize/import only user-commanded Subsonic additions one-at-a-time (FIFO).
 
-        This enables safe prefetching of upcoming tracks without bulk-import behavior.
+        Normal playback downloads are temporary and are cleaned from INBOUND_DIR by TTL.
         """
         while True:
             try:
@@ -684,21 +827,52 @@ class DownloadManager:
                 self._ready.pop(vid, None)
                 self._jobs.pop(vid, None)
                 continue
+            job = self._jobs.get(vid)
+            beets_moved = False
             try:
                 cmd = ["beet", "-c", BEETS_CONFIG, "import", "-q", "-s", path]
                 r = subprocess.run(cmd, check=False, capture_output=True, text=True)
+                beets_moved = r.returncode == 0 and not os.path.exists(path)
                 try:
                     log_path = os.path.join(os.path.dirname(BEETS_CONFIG), "import.log")
                     with open(log_path, "a", encoding="utf-8") as f:
                         f.write(r.stdout or "")
                         f.write(r.stderr or "")
+                        if r.returncode != 0:
+                            f.write(f"\n[helix] beets import failed for {vid} rc={r.returncode} path={path}\n")
+                        elif os.path.exists(path):
+                            f.write(f"\n[helix] beets import completed but did not move {vid}; using Helix fallback move path={path}\n")
                 except Exception:
                     pass
-            except Exception:
-                pass
+            except Exception as e:
+                try:
+                    log_path = os.path.join(os.path.dirname(BEETS_CONFIG), "import.log")
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(f"\n[helix] beets import exception for {vid}: {e!r} path={path}\n")
+                except Exception:
+                    pass
 
-            # After import, the inbound file is moved; clear stale pointers so future requests
-            # can re-resolve from Subsonic (or re-download if needed).
+            if not beets_moved and job is not None and os.path.exists(path):
+                try:
+                    moved_to = self._fallback_library_move(job, path)
+                    try:
+                        log_path = os.path.join(os.path.dirname(BEETS_CONFIG), "import.log")
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(f"\n[helix] fallback moved {vid} to {moved_to}\n")
+                    except Exception:
+                        pass
+                except Exception as e:
+                    self._finalize_fail[vid] = (self._finalize_fail.get(vid, (0, 0.0))[0] + 1, time.time())
+                    try:
+                        log_path = os.path.join(os.path.dirname(BEETS_CONFIG), "import.log")
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(f"\n[helix] fallback move failed for {vid}: {e!r} path={path}\n")
+                    except Exception:
+                        pass
+                    continue
+
+            # After import/fallback move, the inbound file should be gone; clear stale pointers
+            # so future requests can re-resolve from Subsonic (or re-download if needed).
             self._ready.pop(vid, None)
             self._jobs.pop(vid, None)
 

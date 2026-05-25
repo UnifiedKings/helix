@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from starlette.responses import FileResponse
@@ -10,13 +11,14 @@ from sqlalchemy import select, func, delete
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
-from ..db import get_db, SessionLocal
+from ..db import get_db
 from ..models import User, Playlist, PlaylistTrack, LikedTrack
 from ..api_schemas.playlists import (
     PlaylistCreateRequest,
     PlaylistResponse,
     PlaylistDetailResponse,
     PlaylistTrackAddRequest,
+    PlaylistReorderRequest,
     PlaylistTrackResponse,
 )
 from ..settings_store import get_settings
@@ -28,13 +30,36 @@ from ..art_sources import yt_thumbnail_url, is_allowed_art_url
 router = APIRouter(prefix="/api/playlists", tags=["playlists"])
 
 
-def _load_settings_short() -> Dict[str, Any]:
-    db = SessionLocal()
-    try:
-        return dict(get_settings(db) or {})
-    finally:
-        db.close()
 
+
+def _subsonic_art_url(subsonic_song_id: str, size: int = 512) -> str:
+    sid = (subsonic_song_id or "").strip()
+    if not sid:
+        return ""
+    return f"/api/art/subsonic/{quote(sid, safe='')}?size={int(size)}"
+
+
+def _is_allowed_internal_art_url(url: str) -> bool:
+    u = (url or "").strip()
+    return u.startswith("/api/art/subsonic/") or u.startswith("/api/art/ytmusic/")
+
+
+def _safe_track_art_url(art_url: str, subsonic_song_id: str = "", yt_video_id: str = "") -> str:
+    art = (art_url or "").strip()
+    if art:
+        if _is_allowed_internal_art_url(art) or is_allowed_art_url(art):
+            return art
+        art = ""
+
+    sid = (subsonic_song_id or "").strip()
+    if sid:
+        return _subsonic_art_url(sid)
+
+    vid = (yt_video_id or "").strip()
+    if vid and is_valid_yt_video_id(vid):
+        return yt_thumbnail_url(vid)
+
+    return ""
 
 def _cover_url(pid: str, ts: float | None = None) -> str:
     q = ''
@@ -80,12 +105,17 @@ def _to_track_response(t: Any) -> PlaylistTrackResponse:
     # Works for PlaylistTrack and LikedTrack
     return PlaylistTrackResponse(
         id=getattr(t, "id"),
+        position=int(getattr(t, "position", 0) or 0),
         key=getattr(t, "key", "") or "",
         title=getattr(t, "title", "") or "",
         artist=getattr(t, "artist", "") or "",
         album=getattr(t, "album", "") or "",
         duration_ms=int(getattr(t, "duration_ms", 0) or 0),
-        art_url=getattr(t, "art_url", "") or "",
+        art_url=_safe_track_art_url(
+            getattr(t, "art_url", "") or "",
+            getattr(t, "subsonic_song_id", "") or "",
+            getattr(t, "yt_video_id", "") or "",
+        ),
         source=getattr(t, "source", "") or "",
         subsonic_song_id=getattr(t, "subsonic_song_id", "") or "",
         yt_video_id=getattr(t, "yt_video_id", "") or "",
@@ -189,12 +219,11 @@ def playlist_add_track(playlist_id: str, payload: PlaylistTrackAddRequest, db: S
     if yt_video_id and (not is_valid_yt_video_id(yt_video_id)):
         yt_video_id = ""
 
-    art_url = (payload.art_url or "").strip() if payload.art_url else ""
-    # Do not accept arbitrary art_url from clients.
-    if art_url and (not is_allowed_art_url(art_url)):
-        art_url = ""
-    if yt_video_id and (not art_url):
-        art_url = yt_thumbnail_url(yt_video_id)
+    art_url = _safe_track_art_url(
+        (payload.art_url or "").strip() if payload.art_url else "",
+        (payload.subsonic_song_id or "").strip() if payload.subsonic_song_id else "",
+        yt_video_id,
+    )
 
     t = PlaylistTrack(
         playlist_id=p.id,
@@ -253,46 +282,96 @@ def playlist_remove_track(playlist_id: str, track_id: str, db: Session = Depends
     return playlist_detail(p.id, db=db, user=user)
 
 
+@router.patch("/{playlist_id}/tracks/reorder", response_model=PlaylistDetailResponse)
+def playlist_reorder_tracks(playlist_id: str, payload: PlaylistReorderRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    if playlist_id == "liked":
+        raise HTTPException(status_code=400, detail="Liked playlist order cannot be edited")
+
+    p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
+    if not p:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    if p.system_key:
+        raise HTTPException(status_code=400, detail="System playlist order cannot be edited")
+
+    requested_ids: List[str] = []
+    seen: set[str] = set()
+    for track_id in payload.track_ids or []:
+        tid = (track_id or "").strip()
+        if tid and tid not in seen:
+            requested_ids.append(tid)
+            seen.add(tid)
+
+    rows = db.execute(
+        select(PlaylistTrack)
+        .where(PlaylistTrack.playlist_id == p.id, PlaylistTrack.user_id == user.id)
+        .order_by(PlaylistTrack.position.asc(), PlaylistTrack.created_at.asc())
+    ).scalars().all()
+
+    row_ids = [r.id for r in rows]
+    if set(requested_ids) != set(row_ids) or len(requested_ids) != len(row_ids):
+        raise HTTPException(status_code=400, detail="Reorder payload must include every playlist track exactly once")
+
+    by_id = {r.id: r for r in rows}
+    for position, track_id in enumerate(requested_ids):
+        by_id[track_id].position = position
+
+    p.updated_at = datetime.utcnow()
+    db.commit()
+    invalidate_playlist_cover(p.id)
+
+    return playlist_detail(p.id, db=db, user=user)
+
+
 @router.get("/{playlist_id}/cover")
-async def playlist_cover(playlist_id: str, user: User = Depends(get_current_user)):
-    # DB burst: snapshot playlist/track art information, then release DB before cover generation.
-    db = SessionLocal()
-    try:
-        p: Playlist | None = None
+async def playlist_cover(playlist_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    # Determine playlist + tracks.
+    # NOTE: the liked playlist has a real UUID id in the DB, and clients use that id in cover URLs.
+    # Treat both the literal "liked" sentinel and the UUID playlist row (system_key == "liked")
+    # as the liked playlist.
 
-        if playlist_id == "liked":
+    p: Playlist | None = None
+
+    if playlist_id == "liked":
+        p = _ensure_liked_playlist(db, user.id)
+
+    if p is None:
+        # Load by id first; if it's the system liked playlist, render liked-tracks cover.
+        p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
+        if p and (p.system_key or "") == "liked":
+            playlist_id = "liked"
+
+    if playlist_id == "liked":
+        if p is None:
             p = _ensure_liked_playlist(db, user.id)
-
+        tracks = db.execute(select(LikedTrack).where(LikedTrack.user_id == user.id).order_by(LikedTrack.created_at.desc()).limit(500)).scalars().all()
+        tracks_dicts = [
+            {
+                "subsonic_song_id": t.subsonic_song_id,
+                "art_url": t.art_url,
+            }
+            for t in tracks
+        ]
+        seed = "liked:" + (user.username or user.id)
+    else:
         if p is None:
             p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
-            if p and (p.system_key or "") == "liked":
-                playlist_id = "liked"
+        if not p:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+        tracks = db.execute(select(PlaylistTrack).where(PlaylistTrack.playlist_id == p.id, PlaylistTrack.user_id == user.id).order_by(PlaylistTrack.position.asc()).limit(500)).scalars().all()
+        tracks_dicts = [
+            {
+                "subsonic_song_id": t.subsonic_song_id,
+                "art_url": t.art_url,
+            }
+            for t in tracks
+        ]
+        seed = (p.name or p.id)
 
-        if playlist_id == "liked":
-            if p is None:
-                p = _ensure_liked_playlist(db, user.id)
-            tracks = db.execute(select(LikedTrack).where(LikedTrack.user_id == user.id).order_by(LikedTrack.created_at.desc()).limit(500)).scalars().all()
-            tracks_dicts = [{"subsonic_song_id": t.subsonic_song_id, "art_url": t.art_url} for t in tracks]
-            seed = "liked:" + (user.username or user.id)
-            pid = p.id
-        else:
-            if p is None:
-                p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
-            if not p:
-                raise HTTPException(status_code=404, detail="Playlist not found")
-            tracks = db.execute(select(PlaylistTrack).where(PlaylistTrack.playlist_id == p.id, PlaylistTrack.user_id == user.id).order_by(PlaylistTrack.position.asc()).limit(500)).scalars().all()
-            tracks_dicts = [{"subsonic_song_id": t.subsonic_song_id, "art_url": t.art_url} for t in tracks]
-            seed = (p.name or p.id)
-            pid = p.id
-
-        settings = dict(get_settings(db) or {})
-    finally:
-        db.close()
-
+    settings = get_settings(db)
     client = await _subsonic_client_from_settings(settings)
     try:
         img_path = await ensure_playlist_cover(
-            playlist_id=pid,
+            playlist_id=p.id,
             seed=seed,
             subsonic=client,
             tracks=tracks_dicts,
@@ -302,7 +381,7 @@ async def playlist_cover(playlist_id: str, user: User = Depends(get_current_user
     finally:
         await client.close()
 
-    return FileResponse(img_path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=3600"})
+    return FileResponse(img_path, media_type="image/jpeg")
 
 @router.delete("/{playlist_id}", response_model=dict[str, bool])
 def delete_playlist(playlist_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):

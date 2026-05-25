@@ -8,9 +8,18 @@ type Props = {
   run: (action: () => Promise<PlayerState>, audioMode?: 'play' | 'pause' | 'none') => Promise<PlayerState>
 }
 
+function formatDuration(ms?: number) {
+  if (!ms || ms <= 0) return ''
+  const totalSeconds = Math.round(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+  return `${minutes}:${seconds.toString().padStart(2, '0')}`
+}
+
 function QueueRow({ item, active, onJump, onRemove }: { item: QueueItem; active: boolean; onJump: () => void; onRemove: () => void }) {
   return (
-    <div className={`queue-row ${active ? 'active' : ''}`}>
+    <div className={`queue-row queue-row-redesign ${active ? 'active' : ''}`}>
+      <span className="queue-drag-placeholder" aria-hidden="true">⁝⁝</span>
       <button className="queue-main" onClick={onJump}>
         <Artwork src={item.art_url} alt={item.title} size="sm" />
         <span>
@@ -18,29 +27,38 @@ function QueueRow({ item, active, onJump, onRemove }: { item: QueueItem; active:
           <span className="muted">{item.artist}</span>
         </span>
       </button>
-      <button className="ghost danger" onClick={onRemove}>Remove</button>
+      <span className="queue-duration">{formatDuration(item.duration_ms)}</span>
+      <button className="queue-remove-icon" onClick={onRemove} aria-label={`Remove ${item.title} from queue`}>×</button>
     </div>
   )
 }
 
 export function QueuePanel({ player, refresh, run }: Props) {
   const queue = player?.queue ?? []
+  const totalMs = queue.reduce((sum, item) => sum + (item.duration_ms ?? 0), 0)
+  const totalMinutes = Math.round(totalMs / 60000)
   return (
-    <aside className="queue-panel">
-      <h2>Queue</h2>
+    <aside className="queue-panel queue-panel-redesign">
+      <div className="queue-header">
+        <h2>Queue</h2>
+        <button className="ghost queue-clear-placeholder" type="button" disabled title="Clear queue placeholder">Clear</button>
+      </div>
       {queue.length === 0 ? <p className="muted">The queue is empty.</p> : null}
-      {queue.map((item, index) => (
-        <QueueRow
-          key={item.id}
-          item={item}
-          active={index === player?.current_index}
-          onJump={() => run(() => api.jump(index), 'play')}
-          onRemove={async () => {
-            await api.removeQueueItem(item.id)
-            await refresh()
-          }}
-        />
-      ))}
+      <div className="queue-list-redesign">
+        {queue.map((item, index) => (
+          <QueueRow
+            key={item.id}
+            item={item}
+            active={index === player?.current_index}
+            onJump={() => run(() => api.jump(index), 'play')}
+            onRemove={async () => {
+              await api.removeQueueItem(item.id)
+              await refresh()
+            }}
+          />
+        ))}
+      </div>
+      {queue.length ? <div className="queue-summary"><span>{queue.length} songs</span><span>{totalMinutes} min</span></div> : null}
     </aside>
   )
 }

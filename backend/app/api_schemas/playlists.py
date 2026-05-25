@@ -23,8 +23,13 @@ class PlaylistTrackAddRequest(LikeToggleRequest):
     """Same payload as LikeToggleRequest; adds a track to a playlist."""
 
 
+class PlaylistReorderRequest(BaseModel):
+    track_ids: list[str]
+
+
 class PlaylistTrackResponse(BaseModel):
     id: str
+    position: int = 0
     key: str
     title: str
     artist: str

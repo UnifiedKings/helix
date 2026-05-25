@@ -6,9 +6,9 @@ export type AudioRunMode = 'play' | 'pause' | 'none'
 
 export function usePlayer() {
   const [player, setPlayer] = useState<PlayerState | null>(null)
-  const [audioIntent, setAudioIntent] = useState<AudioIntent>({ id: 0, action: 'pause' })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [audioIntent, setAudioIntent] = useState<AudioIntent>({ id: 0, action: 'pause' })
 
   const refresh = useCallback(async () => {
     try {
@@ -19,10 +19,6 @@ export function usePlayer() {
     } finally {
       setLoading(false)
     }
-  }, [])
-
-  const requestAudio = useCallback((action: 'play' | 'pause') => {
-    setAudioIntent((current) => ({ id: current.id + 1, action }))
   }, [])
 
   const run = useCallback(async (action: () => Promise<PlayerState>, audioMode: AudioRunMode = 'none') => {
@@ -46,5 +42,5 @@ export function usePlayer() {
     return () => window.clearInterval(interval)
   }, [refresh])
 
-  return { player, audioIntent, loading, error, refresh, run, requestAudio, setPlayer, setError }
+  return { player, loading, error, refresh, run, setPlayer, setError, audioIntent }
 }

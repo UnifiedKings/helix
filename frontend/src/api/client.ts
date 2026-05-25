@@ -1,4 +1,4 @@
-import type { PlayerState, Playlist, PlaylistDetail, SearchAlbum, SearchMode, SearchResponse, SearchSong, Station, User } from './types'
+import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, DislikeState, LikeState, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, User } from './types'
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(path, {
@@ -42,8 +42,30 @@ function normalizeAlbum(album: SearchAlbum): SearchAlbum {
 
 function normalizeSearchResponse(payload: SearchResponse): SearchResponse {
   return {
+    mode: payload.mode,
     songs: (payload.songs ?? []).map(normalizeSong),
     albums: (payload.albums ?? []).map(normalizeAlbum),
+  }
+}
+
+function normalizeArtist(artist: SearchArtist): SearchArtist {
+  return { ...artist, art_url: artist.art_url || artist.thumbnail_url || '' }
+}
+
+function normalizeAlbumDetail(album: AlbumDetail): AlbumDetail {
+  const artUrl = album.art_url || album.thumbnail_url || ''
+  return {
+    ...album,
+    art_url: artUrl,
+    tracks: (album.tracks ?? []).map((track) => normalizeSong({
+      ...track,
+      album: track.album || album.title,
+      artist: track.artist || album.artist,
+      art_url: track.art_url || artUrl,
+      thumbnail_url: track.thumbnail_url || artUrl,
+      yt_video_id: track.yt_video_id || track.video_id || track.videoId || '',
+      source: track.source || 'ytmusic',
+    })),
   }
 }
 
@@ -54,14 +76,32 @@ function normalizePlaylist(playlist: Playlist): Playlist {
   }
 }
 
+function normalizeQueueItem<T extends QueueItem>(item: T): T {
+  return {
+    ...item,
+    art_url: bestArtworkUrl(item) || item.art_url || '',
+  }
+}
+
+function normalizePlaylistDetail(detail: PlaylistDetail): PlaylistDetail {
+  return {
+    ...detail,
+    playlist: normalizePlaylist(detail.playlist),
+    tracks: (detail.tracks ?? []).map(normalizeQueueItem),
+  }
+}
+
 function songToPayload(song: SearchSong) {
   const ytVideoId = song.yt_video_id || song.video_id || song.videoId || ''
+  const subsonicSongId = song.subsonic_song_id || ''
   return {
     title: song.title,
     artist: song.artist,
     album: song.album ?? '',
     duration_ms: song.duration_ms ?? (song.duration_seconds ? song.duration_seconds * 1000 : 0),
     art_url: bestArtworkUrl(song),
+    source: song.source ?? (subsonicSongId ? 'subsonic' : ytVideoId ? 'ytmusic' : ''),
+    subsonic_song_id: subsonicSongId,
     yt_video_id: ytVideoId,
     ytmusic_url: song.ytmusic_url || (ytVideoId ? `https://music.youtube.com/watch?v=${ytVideoId}` : ''),
   }
@@ -74,6 +114,29 @@ function albumToPayload(album: SearchAlbum) {
     artist: album.artist ?? '',
     art_url: bestArtworkUrl(album),
   }
+}
+
+function queueItemToRatingPayload(item: QueueItem) {
+  return {
+    title: item.title,
+    artist: item.artist,
+    album: item.album ?? '',
+    duration_ms: item.duration_ms ?? 0,
+    art_url: item.art_url ?? '',
+    source: item.source ?? '',
+    subsonic_song_id: item.subsonic_song_id ?? '',
+    yt_video_id: item.yt_video_id ?? '',
+    yt_browse_id: item.yt_browse_id ?? '',
+    mb_recording_id: item.mb_recording_id ?? '',
+    mb_artist_id: item.mb_artist_id ?? '',
+  }
+}
+
+function identityQuery(item: QueueItem) {
+  const params = new URLSearchParams()
+  if (item.subsonic_song_id) params.set('subsonic_song_id', item.subsonic_song_id)
+  if (item.yt_video_id) params.set('yt_video_id', item.yt_video_id)
+  return params.toString()
 }
 
 export const api = {
@@ -98,11 +161,45 @@ export const api = {
   jump: (index: number) => request<PlayerState>('/api/playback/jump', { method: 'POST', body: JSON.stringify({ index }) }),
   setAutoplay: (enabled: boolean) => request<PlayerState>('/api/playback/autoplay', { method: 'POST', body: JSON.stringify({ enabled }) }),
 
+  isLiked: (item: QueueItem) => request<LikeState>(`/api/likes/is-liked?${identityQuery(item)}`),
+  toggleLike: (item: QueueItem) => request<LikeState>('/api/likes/toggle', { method: 'POST', body: JSON.stringify(queueItemToRatingPayload(item)) }),
+  isDisliked: (item: QueueItem) => request<DislikeState>(`/api/dislikes/is-disliked?${identityQuery(item)}`),
+  toggleDislike: (item: QueueItem) => request<DislikeState>('/api/dislikes/toggle', { method: 'POST', body: JSON.stringify(queueItemToRatingPayload(item)) }),
+
   queueSong: (song: SearchSong) => request<PlayerState>('/api/queue/track', { method: 'POST', body: JSON.stringify(songToPayload(song)) }),
   queueAlbum: (album: SearchAlbum) => request<PlayerState>('/api/queue/album', { method: 'POST', body: JSON.stringify(albumToPayload(album)) }),
   removeQueueItem: (id: string) => request<{ ok: boolean }>(`/api/queue/items/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   search: async (q: string, mode: SearchMode = 'hybrid') => normalizeSearchResponse(await request<SearchResponse>(`/api/search/${mode}?q=${encodeURIComponent(q)}&song_limit=20&album_limit=20`)),
+  searchArtists: async (q: string) => {
+    const payload = await request<{ artists: SearchArtist[] }>(`/api/ytmusic/search/artists?q=${encodeURIComponent(q)}&artist_limit=12`)
+    return { artists: (payload.artists ?? []).map(normalizeArtist) }
+  },
+
+  addSongToSubsonic: (song: SearchSong | QueueItem) => request<{ ok: boolean; video_id?: string }>('/api/subsonic/add/track', { method: 'POST', body: JSON.stringify(songToPayload(song as SearchSong)) }),
+  addAlbumToSubsonic: (album: SearchAlbum | AlbumDetail) => request<{ ok: boolean; total?: number; enqueued?: number; skipped_existing?: number }>('/api/subsonic/add/album', { method: 'POST', body: JSON.stringify(albumToPayload(album as SearchAlbum)) }),
+
+  artist: async (browseId: string) => normalizeArtist(await request<ArtistDetail>(`/api/ytmusic/artists/${encodeURIComponent(browseId)}`)) as ArtistDetail,
+  artistPopular: async (browseId: string) => {
+    const payload = await request<ArtistPopularResponse>(`/api/ytmusic/artists/${encodeURIComponent(browseId)}/popular?limit=20`)
+    return { ...payload, tracks: (payload.tracks ?? []).map((track) => normalizeSong({ ...track, source: track.source || 'ytmusic' })) }
+  },
+  artistAlbums: async (browseId: string) => {
+    const payload = await request<ArtistAlbumsResponse>(`/api/ytmusic/artists/${encodeURIComponent(browseId)}/albums?limit=50`)
+    return {
+      ...payload,
+      albums: (payload.albums ?? []).map((album) => normalizeAlbum({ ...album, source: album.source || 'ytmusic' })),
+      singles: (payload.singles ?? []).map((album) => normalizeAlbum({ ...album, source: album.source || 'ytmusic' })),
+    }
+  },
+  album: async (browseId: string) => normalizeAlbumDetail(await request<AlbumDetail>(`/api/album/${encodeURIComponent(browseId)}`)),
+
+  history: () => request<PlaybackHistoryResponse>('/api/history'),
+  replayHistory: (historyId: string) => request<PlayerState>('/api/playback/replay', { method: 'POST', body: JSON.stringify({ history_id: historyId }) }),
+  setHistoryLimit: (limit: number) => request<PlaybackHistoryResponse>('/api/history/limit', { method: 'POST', body: JSON.stringify({ limit }) }),
+
+  adminSettings: () => request<Record<string, unknown>>('/admin/settings'),
+  updateAdminSettings: (payload: Record<string, unknown>) => request<Record<string, unknown>>('/admin/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
 
   stations: () => request<Station[]>('/api/stations'),
   createStation: (payload: Partial<Station>) => request<Station>('/api/stations', { method: 'POST', body: JSON.stringify(payload) }),
@@ -111,9 +208,9 @@ export const api = {
 
   playlists: async () => (await request<Playlist[]>('/api/playlists')).map(normalizePlaylist),
   createPlaylist: (name: string) => request<Playlist>('/api/playlists', { method: 'POST', body: JSON.stringify({ name }) }),
-  playlist: async (id: string) => {
-    const detail = await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(id)}`)
-    return { ...detail, playlist: normalizePlaylist(detail.playlist) }
-  },
+  playlist: async (id: string) => normalizePlaylistDetail(await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(id)}`)),
+  addSongToPlaylist: async (playlistId: string, song: SearchSong) => normalizePlaylistDetail(await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks`, { method: 'POST', body: JSON.stringify(songToPayload(song)) })),
+  removePlaylistTrack: async (playlistId: string, trackId: string) => normalizePlaylistDetail(await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/${encodeURIComponent(trackId)}`, { method: 'DELETE' })),
+  reorderPlaylistTracks: async (playlistId: string, trackIds: string[]) => normalizePlaylistDetail(await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/reorder`, { method: 'PATCH', body: JSON.stringify({ track_ids: trackIds }) })),
   deletePlaylist: (id: string) => request<{ ok: boolean }>(`/api/playlists/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 }
