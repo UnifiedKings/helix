@@ -8,6 +8,7 @@ import random
 import time
 import asyncio
 import urllib.request
+from urllib.parse import urlparse, unquote
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -101,6 +102,26 @@ def _fetch_url_bytes(url: str, timeout: float = 10.0) -> bytes:
         return b""
 
 
+def _internal_subsonic_cover_id(url: str) -> str:
+    """Extract the cover id from Helix's internal Subsonic art URL.
+
+    Playlist tracks often store art as /api/art/subsonic/<id>?size=512. The
+    cover generator runs server-side and should not HTTP-fetch Helix's own
+    authenticated endpoint, so parse the id and use the Subsonic client directly.
+    """
+    raw = str(url or "").strip()
+    if not raw.startswith("/api/art/subsonic/"):
+        return ""
+    try:
+        parsed = urlparse(raw)
+        prefix = "/api/art/subsonic/"
+        if not parsed.path.startswith(prefix):
+            return ""
+        return unquote(parsed.path[len(prefix):]).strip()
+    except Exception:
+        return ""
+
+
 @dataclass
 class CoverMeta:
     built_at: float
@@ -149,7 +170,7 @@ async def ensure_playlist_cover(
     *,
     playlist_id: str,
     seed: str,
-    subsonic: SubsonicClient,
+    subsonic: Optional[SubsonicClient],
     # list of track dicts containing at least subsonic_song_id and/or art_url
     tracks: List[Dict[str, Any]],
     size: int = 768,
@@ -184,13 +205,24 @@ async def ensure_playlist_cover(
 
     for t in sampled_tracks:
         au = str(t.get("art_url") or "").strip()
+
+        # Internal Helix art URLs need special handling. They are authenticated
+        # app routes, not public URLs the cover builder should fetch over HTTP.
+        internal_cid = _internal_subsonic_cover_id(au)
+        if internal_cid and internal_cid not in seen:
+            seen.add(internal_cid)
+            cover_ids.append(internal_cid)
+            if len(cover_ids) >= grid:
+                break
+            continue
+
         # Only use known-safe remote art sources.
         if au and is_allowed_art_url(au) and au not in seen:
             seen.add(au)
             art_urls.append(au)
 
         sid = str(t.get("subsonic_song_id") or "").strip()
-        if not sid:
+        if not sid or subsonic is None:
             continue
         try:
             song = await subsonic.get_song(sid)
@@ -209,6 +241,8 @@ async def ensure_playlist_cover(
     tile_images: List[Image.Image] = []
 
     for cid in cover_ids:
+        if subsonic is None:
+            break
         b = await subsonic.fetch_cover_art_bytes(cid, size=tile_size)
         if not b:
             continue

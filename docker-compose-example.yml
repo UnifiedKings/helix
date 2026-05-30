@@ -27,7 +27,7 @@ services:
     environment:
       # Optional ListenBrainz token. Some station/discovery features may work
       # better with this configured.
-      LISTENBRAINZ_TOKEN: ""
+      LISTENBRAINZ_TOKEN: 01a635a1-0602-4459-919a-045a53a07c27
 
       # Optional Subsonic/Navidrome connection.
       # You can also configure these inside the Helix settings UI.

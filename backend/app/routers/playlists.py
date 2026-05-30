@@ -143,28 +143,12 @@ def _to_track_response(t: Any) -> PlaylistTrackResponse:
     )
 
 
-def _liked_playlist_detail(db: Session, user: User) -> PlaylistDetailResponse:
-    liked = _ensure_liked_playlist(db, user.id)
-    rows = (
-        db.execute(
-            select(LikedTrack)
-            .where(LikedTrack.user_id == user.id)
-            .order_by(LikedTrack.created_at.desc())
-            .limit(5000)
-        )
-        .scalars()
-        .all()
-    )
-    pr = _to_playlist_response(liked, len(rows))
-    return PlaylistDetailResponse(playlist=pr, tracks=[_to_track_response(r) for r in rows])
-
-
-async def _subsonic_client_from_settings(settings: Dict[str, Any]) -> SubsonicClient:
+async def _subsonic_client_from_settings(settings: Dict[str, Any]) -> Optional[SubsonicClient]:
     base_url = (settings.get("subsonic_base_url") or "").rstrip("/")
     username = settings.get("subsonic_username") or ""
     password = settings.get("subsonic_password") or ""
     if not base_url or not username or not password:
-        raise HTTPException(status_code=400, detail="Subsonic settings are not configured")
+        return None
     timeout_s = int(settings.get("subsonic_timeout_s", 20) or 20)
     return SubsonicClient(base_url=base_url, username=username, password=password, timeout_s=timeout_s)
 
@@ -211,16 +195,16 @@ def create_playlist(payload: PlaylistCreateRequest, db: Session = Depends(get_db
 
 @router.get("/{playlist_id}", response_model=PlaylistDetailResponse)
 def playlist_detail(playlist_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # Special: liked playlist. The frontend may address it as either the literal
-    # "liked" sentinel or the real UUID returned by /api/playlists.
+    # Special: liked playlist
     if playlist_id == "liked":
-        return _liked_playlist_detail(db, user)
+        liked = _ensure_liked_playlist(db, user.id)
+        rows = db.execute(select(LikedTrack).where(LikedTrack.user_id == user.id).order_by(LikedTrack.created_at.desc()).limit(5000)).scalars().all()
+        pr = _to_playlist_response(liked, len(rows))
+        return PlaylistDetailResponse(playlist=pr, tracks=[_to_track_response(r) for r in rows])
 
     p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Playlist not found")
-    if (p.system_key or "") == "liked":
-        return _liked_playlist_detail(db, user)
 
     rows = db.execute(select(PlaylistTrack).where(PlaylistTrack.playlist_id == p.id, PlaylistTrack.user_id == user.id).order_by(PlaylistTrack.position.asc(), PlaylistTrack.created_at.asc())).scalars().all()
     pr = _to_playlist_response(p, len(rows))
@@ -229,20 +213,16 @@ def playlist_detail(playlist_id: str, db: Session = Depends(get_db), user: User 
 
 @router.post("/{playlist_id}/tracks", response_model=PlaylistDetailResponse)
 def playlist_add_track(playlist_id: str, payload: PlaylistTrackAddRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # Liked playlist: delegate to like toggle semantics (force liked). The web UI
-    # may call this using the real liked playlist UUID, not only the "liked" sentinel.
+    # Liked playlist: delegate to like toggle semantics (force liked)
     if playlist_id == "liked":
+        # For now, just store in liked_tracks table.
         from .likes import toggle_like  # local import to avoid circular
         toggle_like(payload, db=db, user=user)
-        return _liked_playlist_detail(db, user)
+        return playlist_detail("liked", db=db, user=user)
 
     p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Playlist not found")
-    if (p.system_key or "") == "liked":
-        from .likes import toggle_like  # local import to avoid circular
-        toggle_like(payload, db=db, user=user)
-        return _liked_playlist_detail(db, user)
     if p.system_key:
         raise HTTPException(status_code=400, detail="Cannot add tracks to system playlist")
 
@@ -296,20 +276,14 @@ def playlist_remove_track(playlist_id: str, track_id: str, db: Session = Depends
         if row:
             db.delete(row)
             db.commit()
+        # ensure cover refreshes immediately
         liked = _ensure_liked_playlist(db, user.id)
         invalidate_playlist_cover(liked.id)
-        return _liked_playlist_detail(db, user)
+        return playlist_detail("liked", db=db, user=user)
 
     p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Playlist not found")
-    if (p.system_key or "") == "liked":
-        row = db.execute(select(LikedTrack).where(LikedTrack.user_id == user.id, LikedTrack.id == track_id)).scalar_one_or_none()
-        if row:
-            db.delete(row)
-            db.commit()
-        invalidate_playlist_cover(p.id)
-        return _liked_playlist_detail(db, user)
 
     row = db.execute(select(PlaylistTrack).where(PlaylistTrack.id == track_id, PlaylistTrack.playlist_id == p.id, PlaylistTrack.user_id == user.id)).scalar_one_or_none()
     if row:
@@ -392,6 +366,7 @@ async def playlist_cover(playlist_id: str, db: Session = Depends(get_db), user: 
         tracks_dicts = [
             {
                 "subsonic_song_id": t.subsonic_song_id,
+                "yt_video_id": getattr(t, "yt_video_id", "") or "",
                 "art_url": t.art_url,
             }
             for t in tracks
@@ -406,6 +381,7 @@ async def playlist_cover(playlist_id: str, db: Session = Depends(get_db), user: 
         tracks_dicts = [
             {
                 "subsonic_song_id": t.subsonic_song_id,
+                "yt_video_id": getattr(t, "yt_video_id", "") or "",
                 "art_url": t.art_url,
             }
             for t in tracks
@@ -424,7 +400,8 @@ async def playlist_cover(playlist_id: str, db: Session = Depends(get_db), user: 
             tiles=9,
         )
     finally:
-        await client.close()
+        if client is not None:
+            await client.close()
 
     return FileResponse(img_path, media_type="image/jpeg")
 

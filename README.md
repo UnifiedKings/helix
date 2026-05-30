@@ -134,16 +134,6 @@ http://localhost:10011
 
 On first launch, Helix will ask you to create an admin account.
 
-## Build from source
-
-If you want to build the image locally instead of using a prebuilt image:
-
-```bash
-git clone https://github.com/YOUR_USERNAME/helix.git
-cd helix
-docker compose up --build
-```
-
 ## Subsonic / Navidrome
 
 Helix is built around the Subsonic API. Navidrome is the main target, but other Subsonic-compatible servers may work.

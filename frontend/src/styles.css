@@ -4802,14 +4802,259 @@ nav a.active {
 }
 
 
-/* Logo transparency fix: the asset is transparent; keep CSS from painting a tile behind it. */
-.sidebar-brand img {
-  background: transparent !important;
-  mix-blend-mode: normal;
-  object-fit: contain;
-  display: block;
+/* Playlist editor hero polish */
+.playlist-editor-page .playlist-editor-hero {
+  position: relative;
+  min-height: 172px;
+  overflow: hidden;
+  align-items: center;
+  padding: 1.35rem 1.45rem;
+  border-radius: 28px;
+  border: 1px solid rgba(124, 92, 255, 0.20);
+  background:
+    radial-gradient(circle at 8% 50%, rgba(124, 92, 255, 0.28), transparent 34%),
+    radial-gradient(circle at 94% 14%, rgba(35, 190, 177, 0.10), transparent 34%),
+    linear-gradient(135deg, rgba(31, 28, 75, 0.96), rgba(7, 18, 27, 0.92));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
 }
 
-.sidebar-brand {
-  background: transparent;
+.playlist-editor-page .playlist-editor-hero::before {
+  content: "";
+  position: absolute;
+  inset: -40% 35% -55% -8%;
+  background:
+    radial-gradient(circle, rgba(255,255,255,0.09) 0 1px, transparent 1.5px);
+  background-size: 22px 22px;
+  opacity: 0.16;
+  transform: rotate(-7deg);
+  pointer-events: none;
+}
+
+.playlist-editor-page .playlist-editor-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(255,255,255,0.055), transparent 26%, transparent 72%, rgba(53, 217, 149, 0.035));
+  pointer-events: none;
+}
+
+.playlist-editor-page .back-link,
+.playlist-editor-page .playlist-editor-heading,
+.playlist-editor-page .playlist-editor-actions {
+  position: relative;
+  z-index: 1;
+}
+
+.playlist-editor-page .back-link {
+  top: 1rem;
+  left: 1.35rem;
+  transform: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgba(214, 224, 255, 0.82);
+  font-size: 0.86rem;
+  letter-spacing: 0.01em;
+}
+
+.playlist-editor-page .back-link:hover {
+  color: white;
+}
+
+.playlist-editor-heading {
+  gap: 1.15rem;
+  padding-top: 0.95rem;
+}
+
+.playlist-editor-heading .artwork-md {
+  width: 86px;
+  min-width: 86px;
+  height: 86px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow:
+    0 18px 36px rgba(0,0,0,0.28),
+    0 0 0 5px rgba(255,255,255,0.035);
+}
+
+.playlist-editor-heading .eyebrow {
+  color: rgba(181, 196, 224, 0.88);
+  letter-spacing: 0.16em;
+  margin-bottom: 0.2rem;
+}
+
+.playlist-editor-heading h1 {
+  margin: 0 0 0.25rem;
+  font-size: clamp(2.45rem, 4.8vw, 4.15rem);
+  line-height: 0.88;
+  letter-spacing: -0.075em;
+  text-shadow: 0 10px 28px rgba(0,0,0,0.22);
+}
+
+.playlist-editor-heading p {
+  margin: 0;
+  color: rgba(207, 218, 239, 0.88);
+  font-size: 0.98rem;
+}
+
+.playlist-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.7rem;
+  padding-left: 1rem;
+}
+
+.playlist-editor-actions button {
+  min-height: 46px;
+  border-radius: 16px;
+  padding-inline: 1.05rem;
+}
+
+.playlist-editor-actions .primary {
+  box-shadow: 0 16px 34px rgba(124, 92, 255, 0.28);
+}
+
+@media (max-width: 860px) {
+  .playlist-editor-page .playlist-editor-hero {
+    min-height: 0;
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 1.15rem;
+  }
+
+  .playlist-editor-page .back-link {
+    position: relative;
+    top: auto;
+    left: auto;
+    margin-bottom: 0.4rem;
+  }
+
+  .playlist-editor-heading {
+    padding-top: 0;
+    align-items: flex-start;
+  }
+
+  .playlist-editor-actions {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .playlist-editor-heading {
+    flex-direction: column;
+  }
+
+  .playlist-editor-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .playlist-editor-actions button {
+    width: 100%;
+  }
+}
+
+
+/* Playlist editor hero alignment fix: make the header feel intentional instead of scattered. */
+.playlist-editor-page .playlist-editor-hero {
+  min-height: 184px;
+  display: grid;
+  grid-template-columns: minmax(92px, 140px) minmax(0, 1fr) auto;
+  grid-template-areas: "back title actions";
+  column-gap: clamp(1.15rem, 2vw, 2rem);
+  align-items: center;
+  padding: 1.25rem 1.65rem;
+}
+
+.playlist-editor-page .back-link {
+  grid-area: back;
+  position: static;
+  transform: none;
+  align-self: center;
+  justify-self: start;
+  margin: 0;
+  padding: 0.45rem 0;
+  white-space: nowrap;
+}
+
+.playlist-editor-page .playlist-editor-heading {
+  grid-area: title;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 1.2rem;
+  min-width: 0;
+  padding-top: 0;
+}
+
+.playlist-editor-page .playlist-editor-heading > div:last-child {
+  min-width: 0;
+}
+
+.playlist-editor-heading .artwork-md {
+  width: 92px;
+  min-width: 92px;
+  height: 92px;
+  justify-self: center;
+}
+
+.playlist-editor-heading .eyebrow {
+  margin-bottom: 0.28rem;
+}
+
+.playlist-editor-heading h1 {
+  max-width: 760px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-editor-heading p {
+  font-size: 1rem;
+}
+
+.playlist-editor-page .playlist-editor-actions {
+  grid-area: actions;
+  justify-self: end;
+  align-self: center;
+  padding-left: 0;
+  min-width: max-content;
+}
+
+.playlist-editor-page .playlist-editor-hero::before {
+  inset: -55% 20% -65% 2%;
+  opacity: 0.10;
+}
+
+@media (max-width: 920px) {
+  .playlist-editor-page .playlist-editor-hero {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "back"
+      "title"
+      "actions";
+    row-gap: 0.95rem;
+    align-items: start;
+  }
+
+  .playlist-editor-page .playlist-editor-actions {
+    justify-self: start;
+  }
+
+  .playlist-editor-heading h1 {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 560px) {
+  .playlist-editor-page .playlist-editor-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .playlist-editor-heading .artwork-md {
+    justify-self: start;
+  }
 }
