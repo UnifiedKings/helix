@@ -7,36 +7,53 @@ services:
     restart: unless-stopped
 
     volumes:
-      # Helix persisted data: db, logs, stream cache, etc.
+      # Helix persisted data: database, logs, stream cache, station covers, etc.
       - ./data:/data
-
-      # Static frontend served by backend
-      - ./frontend:/app/static
 
       # Inbound YouTube/YTMusic download staging
       - ./inbound_yt:/inbound_yt
 
-      # Music library root used by Navidrome/Subsonic/beets (not required)
+      # Optional: music library root used by Navidrome/Subsonic/beets.
+      # Change this to your real music path, or remove it if you are not using
+      # Helix fulfillment/import features.
       - /path/to/music:/data/music
 
-      # Beets config
+      # Beets config used by Helix fulfillment/import.
       - ./beets_config:/data/helix/beets
 
-      # Folder for adding customs stations (disabled by default)
+      # Optional custom station providers. Disabled by default.
       - ./custom_stations:/data/plugins/stations
 
+      # Optional: only use this if your backend expects a bind-mounted frontend.
+      # If your Dockerfile builds/copies the frontend into the image, remove this.
+      # - ./frontend:/app/static
+
     environment:
-      LISTENBRAINZ_TOKEN: insert-listenbrainz-token-here
+      # Optional ListenBrainz token. Some station/discovery features may work
+      # better with this configured.
+      LISTENBRAINZ_TOKEN: ""
+
+      # Optional Subsonic/Navidrome connection.
+      # You can also configure these inside the Helix settings UI if supported.
+      SUBSONIC_BASE_URL: ""
+      SUBSONIC_USERNAME: ""
+      SUBSONIC_PASSWORD: ""
 
       # Station / queue prefetch
-      HELIX_PREFETCH_AHEAD: 3
+      HELIX_PREFETCH_AHEAD: "3"
 
       # Max tracks added when someone pastes a YT playlist/album link into a lobby
-      HELIX_LOBBY_YT_LINK_MAX_ITEMS: 100
+      HELIX_LOBBY_YT_LINK_MAX_ITEMS: "100"
+
+      # Public-safe defaults
+      HELIX_ENABLE_API_DOCS: "false"
+      HELIX_ALLOW_NON_ADMIN_IMPORT: "false"
+
+      # Custom station providers are trusted Python code.
+      # Only enable this if you trust every .py file in ./custom_stations.
+      HELIX_ENABLE_CUSTOM_STATION_TYPES: "false"
+      HELIX_CUSTOM_STATION_TYPES_DIR: "/data/plugins/stations"
 
       # Optional DB watchdog tuning
-      HELIX_DB_WATCHDOG_WARN_S: 2
-      HELIX_DB_WATCHDOG_ERROR_S: 10
-      # Set this to true to enable custom stations. Note this effectively allows plugins to run code
-      # on your machine. Make sure you trust the code you are using for this.
-      HELIX_ENABLE_CUSTOM_STATION_TYPES: false
+      HELIX_DB_WATCHDOG_WARN_S: "2"
+      HELIX_DB_WATCHDOG_ERROR_S: "10"
