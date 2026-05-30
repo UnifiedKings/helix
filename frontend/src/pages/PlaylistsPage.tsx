@@ -10,6 +10,7 @@ export function PlaylistsPage() {
   const [playlists, setPlaylists] = useState<Playlist[]>([])
   const [name, setName] = useState('')
   const [error, setError] = useState('')
+  const [creating, setCreating] = useState(false)
 
   async function load() {
     try {
@@ -23,10 +24,33 @@ export function PlaylistsPage() {
 
   async function create(event: FormEvent) {
     event.preventDefault()
-    if (!name.trim()) return
-    await api.createPlaylist(name.trim())
-    setName('')
-    await load()
+    const trimmedName = name.trim()
+    if (!trimmedName || creating) return
+
+    setCreating(true)
+    setError('')
+    try {
+      await api.createPlaylist(trimmedName)
+      setName('')
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create playlist')
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  async function deletePlaylist(playlist: Playlist) {
+    const confirmed = window.confirm(`Delete playlist "${playlist.name}"? This cannot be undone.`)
+    if (!confirmed) return
+
+    setError('')
+    try {
+      await api.deletePlaylist(playlist.id)
+      await load()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete playlist')
+    }
   }
 
   return (
@@ -39,7 +63,7 @@ export function PlaylistsPage() {
 
       <form className="inline-form" onSubmit={create}>
         <input value={name} onChange={(event) => setName(event.target.value)} placeholder="New playlist name" />
-        <button className="primary">Create</button>
+        <button type="submit" className="primary" disabled={creating || !name.trim()}>{creating ? 'Creating…' : 'Create'}</button>
       </form>
 
       <div className="grid-cards">
@@ -50,10 +74,34 @@ export function PlaylistsPage() {
             </Link>
             <h3>{playlist.name}</h3>
             <p className="muted">{playlist.track_count ?? 0} tracks</p>
-            <div className="card-actions">
-              <Link className="button-link" to={`/playlists/${encodeURIComponent(playlist.id)}`}>Edit</Link>
-              <button className="primary" onClick={() => player.run(() => api.playPlaylist(playlist.id), 'play')}>Play</button>
-              {!playlist.system_key ? <button className="danger" onClick={async () => { await api.deletePlaylist(playlist.id); await load() }}>Delete</button> : null}
+            <div className="card-actions playlist-card-actions">
+              <button
+                className="playlist-card-action playlist-card-action-primary"
+                aria-label={`Play ${playlist.name}`}
+                title="Play"
+                data-tooltip="Play"
+                onClick={() => player.run(() => api.playPlaylist(playlist.id), 'play')}
+              >
+                ▶
+              </button>
+              <button
+                className="playlist-card-action"
+                aria-label={`Shuffle ${playlist.name}`}
+                title="Shuffle"
+                data-tooltip="Shuffle"
+                onClick={() => player.run(() => api.playPlaylist(playlist.id, true), 'play')}
+              >
+                ⤨
+              </button>
+              <details className="album-card-menu playlist-card-menu">
+                <summary className="playlist-card-action playlist-more-button" aria-label={`More options for ${playlist.name}`} title="More options" data-tooltip="More options">⋯</summary>
+                <div className="album-card-menu-popover playlist-card-menu-popover">
+                  <Link className="menu-link" to={`/playlists/${encodeURIComponent(playlist.id)}`}>Edit playlist</Link>
+                  {!playlist.system_key ? (
+                    <button type="button" className="menu-danger" onClick={() => void deletePlaylist(playlist)}>Delete playlist</button>
+                  ) : null}
+                </div>
+              </details>
             </div>
           </article>
         ))}

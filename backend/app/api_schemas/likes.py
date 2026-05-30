@@ -39,6 +39,8 @@ class LikedTrackResponse(BaseModel):
     source: str = ""
     subsonic_song_id: str = ""
     yt_video_id: str = ""
+    stale_subsonic: bool = False
+    ytmusic_recovered_at: str = ""
     created_at: str
 
 

@@ -7,7 +7,7 @@ from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from starlette.responses import FileResponse
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func, delete, update
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user
@@ -89,6 +89,23 @@ def _ensure_liked_playlist(db: Session, user_id: str) -> Playlist:
     return p
 
 
+def _normalize_user_playlist_system_keys(db: Session, user_id: str) -> None:
+    """Convert legacy user-created playlist system_key values to NULL.
+
+    Earlier React playlist work created normal playlists with system_key="" even
+    though the model treats NULL as the user-created playlist value. Because the
+    table has a unique constraint on (user_id, system_key), a second normal
+    playlist for the same user can fail with an IntegrityError and surface as a
+    500. Keeping user-created playlists as NULL allows multiple normal playlists
+    while reserving non-empty system_key values for singleton system playlists.
+    """
+    db.execute(
+        update(Playlist)
+        .where(Playlist.user_id == user_id, Playlist.system_key == "")
+        .values(system_key=None)
+    )
+
+
 def _to_playlist_response(p: Playlist, track_count: int) -> PlaylistResponse:
     return PlaylistResponse(
         id=p.id,
@@ -124,6 +141,22 @@ def _to_track_response(t: Any) -> PlaylistTrackResponse:
         mb_artist_id=getattr(t, "mb_artist_id", "") or "",
         created_at=getattr(t, "created_at").isoformat() + "Z",
     )
+
+
+def _liked_playlist_detail(db: Session, user: User) -> PlaylistDetailResponse:
+    liked = _ensure_liked_playlist(db, user.id)
+    rows = (
+        db.execute(
+            select(LikedTrack)
+            .where(LikedTrack.user_id == user.id)
+            .order_by(LikedTrack.created_at.desc())
+            .limit(5000)
+        )
+        .scalars()
+        .all()
+    )
+    pr = _to_playlist_response(liked, len(rows))
+    return PlaylistDetailResponse(playlist=pr, tracks=[_to_track_response(r) for r in rows])
 
 
 async def _subsonic_client_from_settings(settings: Dict[str, Any]) -> SubsonicClient:
@@ -167,7 +200,9 @@ def create_playlist(payload: PlaylistCreateRequest, db: Session = Depends(get_db
     if not name:
         raise HTTPException(status_code=400, detail="name is required")
 
-    p = Playlist(user_id=user.id, name=name, system_key="")
+    _normalize_user_playlist_system_keys(db, user.id)
+
+    p = Playlist(user_id=user.id, name=name, system_key=None)
     db.add(p)
     db.commit()
     db.refresh(p)
@@ -176,16 +211,16 @@ def create_playlist(payload: PlaylistCreateRequest, db: Session = Depends(get_db
 
 @router.get("/{playlist_id}", response_model=PlaylistDetailResponse)
 def playlist_detail(playlist_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # Special: liked playlist
+    # Special: liked playlist. The frontend may address it as either the literal
+    # "liked" sentinel or the real UUID returned by /api/playlists.
     if playlist_id == "liked":
-        liked = _ensure_liked_playlist(db, user.id)
-        rows = db.execute(select(LikedTrack).where(LikedTrack.user_id == user.id).order_by(LikedTrack.created_at.desc()).limit(5000)).scalars().all()
-        pr = _to_playlist_response(liked, len(rows))
-        return PlaylistDetailResponse(playlist=pr, tracks=[_to_track_response(r) for r in rows])
+        return _liked_playlist_detail(db, user)
 
     p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Playlist not found")
+    if (p.system_key or "") == "liked":
+        return _liked_playlist_detail(db, user)
 
     rows = db.execute(select(PlaylistTrack).where(PlaylistTrack.playlist_id == p.id, PlaylistTrack.user_id == user.id).order_by(PlaylistTrack.position.asc(), PlaylistTrack.created_at.asc())).scalars().all()
     pr = _to_playlist_response(p, len(rows))
@@ -194,16 +229,20 @@ def playlist_detail(playlist_id: str, db: Session = Depends(get_db), user: User 
 
 @router.post("/{playlist_id}/tracks", response_model=PlaylistDetailResponse)
 def playlist_add_track(playlist_id: str, payload: PlaylistTrackAddRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # Liked playlist: delegate to like toggle semantics (force liked)
+    # Liked playlist: delegate to like toggle semantics (force liked). The web UI
+    # may call this using the real liked playlist UUID, not only the "liked" sentinel.
     if playlist_id == "liked":
-        # For now, just store in liked_tracks table.
         from .likes import toggle_like  # local import to avoid circular
         toggle_like(payload, db=db, user=user)
-        return playlist_detail("liked", db=db, user=user)
+        return _liked_playlist_detail(db, user)
 
     p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Playlist not found")
+    if (p.system_key or "") == "liked":
+        from .likes import toggle_like  # local import to avoid circular
+        toggle_like(payload, db=db, user=user)
+        return _liked_playlist_detail(db, user)
     if p.system_key:
         raise HTTPException(status_code=400, detail="Cannot add tracks to system playlist")
 
@@ -257,14 +296,20 @@ def playlist_remove_track(playlist_id: str, track_id: str, db: Session = Depends
         if row:
             db.delete(row)
             db.commit()
-        # ensure cover refreshes immediately
         liked = _ensure_liked_playlist(db, user.id)
         invalidate_playlist_cover(liked.id)
-        return playlist_detail("liked", db=db, user=user)
+        return _liked_playlist_detail(db, user)
 
     p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
     if not p:
         raise HTTPException(status_code=404, detail="Playlist not found")
+    if (p.system_key or "") == "liked":
+        row = db.execute(select(LikedTrack).where(LikedTrack.user_id == user.id, LikedTrack.id == track_id)).scalar_one_or_none()
+        if row:
+            db.delete(row)
+            db.commit()
+        invalidate_playlist_cover(p.id)
+        return _liked_playlist_detail(db, user)
 
     row = db.execute(select(PlaylistTrack).where(PlaylistTrack.id == track_id, PlaylistTrack.playlist_id == p.id, PlaylistTrack.user_id == user.id)).scalar_one_or_none()
     if row:

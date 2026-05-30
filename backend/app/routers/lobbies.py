@@ -1,0 +1,1051 @@
+from __future__ import annotations
+
+import json
+import os
+import re
+import secrets
+import time
+import urllib.parse
+
+import httpx
+from datetime import datetime
+from types import SimpleNamespace
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from sqlalchemy import select, delete
+from sqlalchemy.orm import Session
+from yt_dlp import YoutubeDL
+
+from ..auth import SESSION_COOKIE, get_current_user
+from ..db import get_db, SessionLocal
+from ..models import SessionToken, User
+from ..lobby_models import SharedLobby, SharedLobbyMember, SharedLobbyQueueItem
+from ..api_schemas.lobbies import (
+    LobbyCreateRequest,
+    LobbyJoinRequest,
+    LobbyJoinResponse,
+    LobbyListResponse,
+    LobbyMemberResponse,
+    LobbyMemberUpdateRequest,
+    LobbyOkResponse,
+    LobbyPermissions,
+    LobbyQueueAddRequest,
+    LobbyQueueItemResponse,
+    LobbySeekRequest,
+    LobbyStateResponse,
+    LobbyUpdateRequest,
+ )
+from ..settings_store import get_settings
+from ..integrations.ytmusic import find_track
+from ..player.engine import (
+    _ensure_playable_for_stream,
+    _stream_inbound_progressive,
+    _stream_inbound_with_range,
+    _stream_subsonic_with_range,
+)
+
+router = APIRouter(prefix="/api/lobbies", tags=["shared lobbies"])
+
+LOBBY_TOKEN_HEADER = "x-helix-lobby-token"
+LOBBY_TOKEN_COOKIE = "helix_lobby_token"
+
+
+def _now() -> datetime:
+    return datetime.utcnow()
+
+
+def _iso(dt: datetime) -> str:
+    return dt.isoformat() + "Z"
+
+
+def _server_time_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def _load_permissions(raw: str | None, *, host: bool = False) -> LobbyPermissions:
+    if host:
+        return LobbyPermissions(
+            can_add_to_queue=True,
+            can_remove_own_queue_items=True,
+            can_remove_any_queue_item=True,
+            can_control_playback=True,
+            can_skip=True,
+            can_seek=True,
+        )
+    try:
+        data = json.loads(raw or "{}")
+        if not isinstance(data, dict):
+            data = {}
+    except Exception:
+        data = {}
+    return LobbyPermissions(**data)
+
+
+def _dump_permissions(perms: LobbyPermissions) -> str:
+    return perms.model_dump_json()
+
+
+def _clean_text(value: str | None, max_len: int = 240) -> str:
+    return (value or "").strip()[:max_len]
+
+
+def _guess_image_content_type(data: bytes, fallback: str = "") -> str:
+    if data.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if data.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if data.startswith(b"GIF87a") or data.startswith(b"GIF89a"):
+        return "image/gif"
+    if data.startswith(b"RIFF") and data[8:12] == b"WEBP":
+        return "image/webp"
+    fallback = (fallback or "").split(";", 1)[0].strip().lower()
+    return fallback if fallback.startswith("image/") else "application/octet-stream"
+
+
+def _lobby_art_url(lobby_id: str, item: SharedLobbyQueueItem | None) -> str:
+    if not item:
+        return ""
+    if item.art_url or item.yt_video_id or item.subsonic_song_id:
+        return f"/api/lobbies/{urllib.parse.quote(lobby_id, safe='')}/art/{urllib.parse.quote(item.id, safe='')}"
+    return ""
+
+
+def _new_invite_code() -> str:
+    return secrets.token_urlsafe(18)
+
+
+def _new_guest_token() -> str:
+    return secrets.token_urlsafe(48)
+
+
+def _extract_youtube_video_id(value: str | None) -> str:
+    raw = (value or "").strip()
+    if not raw:
+        return ""
+    if re.fullmatch(r"[A-Za-z0-9_-]{11}", raw):
+        return raw
+    try:
+        parsed = urllib.parse.urlparse(raw)
+    except Exception:
+        return ""
+    host = (parsed.netloc or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if host in {"youtube.com", "music.youtube.com", "m.youtube.com"}:
+        qs = urllib.parse.parse_qs(parsed.query or "")
+        vid = (qs.get("v") or [""])[0]
+        if re.fullmatch(r"[A-Za-z0-9_-]{11}", vid):
+            return vid
+        parts = [p for p in (parsed.path or "").split("/") if p]
+        if len(parts) >= 2 and parts[0] in {"shorts", "embed", "live"} and re.fullmatch(r"[A-Za-z0-9_-]{11}", parts[1]):
+            return parts[1]
+    if host == "youtu.be":
+        vid = (parsed.path or "").strip("/").split("/")[0]
+        if re.fullmatch(r"[A-Za-z0-9_-]{11}", vid):
+            return vid
+    return ""
+
+
+def _youtube_collection_hint(value: str | None) -> bool:
+    raw = (value or "").strip()
+    if not raw:
+        return False
+    try:
+        parsed = urllib.parse.urlparse(raw)
+    except Exception:
+        return False
+    host = (parsed.netloc or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if host not in {"youtube.com", "music.youtube.com", "m.youtube.com", "youtu.be"}:
+        return False
+    qs = urllib.parse.parse_qs(parsed.query or "")
+    parts = [p for p in (parsed.path or "").split("/") if p]
+    if qs.get("list"):
+        return True
+    if parts and parts[0] in {"playlist", "browse"}:
+        return True
+    return False
+
+
+def _safe_int_ms_from_seconds(value: Any) -> int:
+    try:
+        duration = float(value or 0)
+    except Exception:
+        return 0
+    return int(duration * 1000) if duration > 0 else 0
+
+
+def _metadata_from_youtube_info(info: dict[str, Any], *, fallback_video_id: str = "", collection_title: str = "", collection_artist: str = "") -> dict[str, Any]:
+    if not isinstance(info, dict):
+        return {}
+    video_id = str(info.get("id") or info.get("url") or fallback_video_id or "").strip()
+    # Flat playlist extraction sometimes returns url as the video id.
+    if video_id and not re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id):
+        extracted = _extract_youtube_video_id(video_id)
+        video_id = extracted or video_id
+    title = str(info.get("track") or info.get("title") or "").strip()
+    artist = str(info.get("artist") or info.get("creator") or info.get("uploader") or info.get("channel") or collection_artist or "").strip()
+    album = str(info.get("album") or collection_title or "").strip()
+    thumb = str(info.get("thumbnail") or "").strip()
+    if not thumb:
+        thumbs = info.get("thumbnails") or []
+        if isinstance(thumbs, list) and thumbs:
+            best = next((t for t in reversed(thumbs) if isinstance(t, dict) and t.get("url")), None)
+            if best:
+                thumb = str(best.get("url") or "").strip()
+    return {
+        "title": title,
+        "artist": artist,
+        "album": album,
+        "duration_ms": _safe_int_ms_from_seconds(info.get("duration")),
+        "art_url": thumb,
+        "yt_video_id": video_id if re.fullmatch(r"[A-Za-z0-9_-]{11}", video_id or "") else str(fallback_video_id or "").strip(),
+    }
+
+
+def _youtube_entries_from_url(url: str, video_id: str = "") -> list[dict[str, Any]]:
+    target = (url or "").strip()
+    if not target and video_id:
+        target = f"https://music.youtube.com/watch?v={video_id}"
+    if not target:
+        return []
+
+    is_collection = _youtube_collection_hint(target)
+    max_items = max(1, min(500, int(os.getenv("HELIX_LOBBY_YT_LINK_MAX_ITEMS", "100") or "100")))
+    opts = {
+        "quiet": True,
+        "no_warnings": True,
+        "skip_download": True,
+        # For playlist/album URLs, keep extraction light enough for a lobby request.
+        # For single tracks, use full metadata as before.
+        "noplaylist": not is_collection,
+        "extract_flat": "in_playlist" if is_collection else False,
+        "playlistend": max_items if is_collection else None,
+    }
+    opts = {k: v for k, v in opts.items() if v is not None}
+    with YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(target, download=False) or {}
+
+    if not isinstance(info, dict):
+        return []
+
+    if is_collection and isinstance(info.get("entries"), list):
+        collection_title = str(info.get("album") or info.get("title") or "").strip()
+        collection_artist = str(info.get("artist") or info.get("creator") or info.get("uploader") or info.get("channel") or "").strip()
+        entries = [entry for entry in (info.get("entries") or []) if isinstance(entry, dict)]
+        out: list[dict[str, Any]] = []
+        for entry in entries[:max_items]:
+            meta = _metadata_from_youtube_info(entry, collection_title=collection_title, collection_artist=collection_artist)
+            if meta.get("yt_video_id") or meta.get("title"):
+                out.append(meta)
+        return out
+
+    if "entries" in info:
+        entries = [entry for entry in (info.get("entries") or []) if isinstance(entry, dict)]
+        if entries:
+            return [_metadata_from_youtube_info(entries[0], fallback_video_id=video_id)]
+
+    return [_metadata_from_youtube_info(info, fallback_video_id=video_id)]
+
+
+def _metadata_from_youtube_url(url: str, video_id: str = "") -> dict[str, Any]:
+    entries = _youtube_entries_from_url(url, video_id)
+    return entries[0] if entries else {}
+
+def _optional_account_user(db: Session, request: Request) -> User | None:
+    token = request.cookies.get(SESSION_COOKIE)
+    if not token:
+        return None
+    session = db.execute(select(SessionToken).where(SessionToken.token == token)).scalar_one_or_none()
+    if not session:
+        return None
+    user = db.get(User, session.user_id)
+    if not user or not user.is_active:
+        return None
+    session.last_seen_at = _now()
+    db.add(session)
+    return user
+
+
+def _lobby_token(request: Request) -> str:
+    return (request.headers.get(LOBBY_TOKEN_HEADER) or request.cookies.get(LOBBY_TOKEN_COOKIE) or "").strip()
+
+
+def _get_lobby(db: Session, lobby_id: str) -> SharedLobby:
+    lobby = db.get(SharedLobby, lobby_id)
+    if not lobby:
+        raise HTTPException(status_code=404, detail="Lobby not found")
+    return lobby
+
+
+def _actor_for_lobby(db: Session, request: Request, lobby: SharedLobby) -> tuple[User | None, SharedLobbyMember]:
+    user = _optional_account_user(db, request)
+    if user and user.id == lobby.host_user_id:
+        member = db.execute(
+            select(SharedLobbyMember).where(
+                SharedLobbyMember.lobby_id == lobby.id,
+                SharedLobbyMember.user_id == user.id,
+                SharedLobbyMember.role == "host",
+            )
+        ).scalar_one_or_none()
+        if not member:
+            member = SharedLobbyMember(
+                lobby_id=lobby.id,
+                user_id=user.id,
+                nickname=user.username,
+                role="host",
+                token=None,
+                permissions_json=_dump_permissions(_load_permissions(None, host=True)),
+                is_active=True,
+            )
+            db.add(member)
+            db.flush()
+        member.last_seen_at = _now()
+        member.is_active = True
+        db.add(member)
+        return user, member
+
+    token = _lobby_token(request)
+    if token:
+        member = db.execute(
+            select(SharedLobbyMember).where(
+                SharedLobbyMember.lobby_id == lobby.id,
+                SharedLobbyMember.token == token,
+                SharedLobbyMember.role == "guest",
+            )
+        ).scalar_one_or_none()
+        if member and member.is_active:
+            member.last_seen_at = _now()
+            db.add(member)
+            return None, member
+
+    raise HTTPException(status_code=401, detail="Lobby authentication required")
+
+
+def _require_host(lobby: SharedLobby, user: User) -> None:
+    if lobby.host_user_id != user.id:
+        raise HTTPException(status_code=403, detail="Lobby host only")
+
+
+def _member_permissions(member: SharedLobbyMember) -> LobbyPermissions:
+    return _load_permissions(member.permissions_json, host=(member.role == "host"))
+
+
+def _effective_position_ms(lobby: SharedLobby, now: datetime | None = None) -> int:
+    pos = max(0, int(lobby.position_ms or 0))
+    if not lobby.is_playing:
+        return pos
+    now = now or _now()
+    anchor = lobby.position_updated_at or now
+    elapsed = max(0, int((now - anchor).total_seconds() * 1000))
+    return pos + elapsed
+
+
+def _queue_rows(db: Session, lobby_id: str) -> list[SharedLobbyQueueItem]:
+    return db.execute(
+        select(SharedLobbyQueueItem)
+        .where(SharedLobbyQueueItem.lobby_id == lobby_id)
+        .order_by(SharedLobbyQueueItem.position.asc(), SharedLobbyQueueItem.created_at.asc())
+    ).scalars().all()
+
+
+def _renumber_queue(db: Session, lobby_id: str) -> list[SharedLobbyQueueItem]:
+    rows = _queue_rows(db, lobby_id)
+
+    # SQLite checks UNIQUE(lobby_id, position) row-by-row during UPDATE. If we
+    # directly change 4->3 while another row still has position 3, renumbering can
+    # fail even though the final positions would be unique. Move rows into a
+    # temporary negative range first, flush, then assign final compact positions.
+    for index, item in enumerate(rows):
+        item.position = -100000 - index
+        db.add(item)
+    db.flush()
+
+    for index, item in enumerate(rows):
+        item.position = index
+        db.add(item)
+    db.flush()
+    return rows
+
+def _to_queue_item_response(item: SharedLobbyQueueItem, member_names: dict[str, str] | None = None) -> LobbyQueueItemResponse:
+    member_names = member_names or {}
+    added_by_id = item.added_by_member_id or ""
+    return LobbyQueueItemResponse(
+        id=item.id,
+        position=int(item.position or 0),
+        title=item.title or "",
+        artist=item.artist or "",
+        album=item.album or "",
+        duration_ms=int(item.duration_ms or 0),
+        art_url=_lobby_art_url(item.lobby_id, item),
+        source=item.source or "",
+        subsonic_song_id=item.subsonic_song_id or "",
+        yt_video_id=item.yt_video_id or "",
+        yt_browse_id=item.yt_browse_id or "",
+        mb_recording_id=item.mb_recording_id or "",
+        mb_artist_id=item.mb_artist_id or "",
+        added_by_member_id=added_by_id,
+        added_by_nickname=member_names.get(added_by_id, ""),
+        created_at=_iso(item.created_at),
+    )
+
+
+def _to_member_response(member: SharedLobbyMember) -> LobbyMemberResponse:
+    return LobbyMemberResponse(
+        id=member.id,
+        nickname=member.nickname or "Guest",
+        role=member.role or "guest",
+        is_active=bool(member.is_active),
+        permissions=_member_permissions(member),
+        joined_at=_iso(member.joined_at),
+        last_seen_at=_iso(member.last_seen_at),
+    )
+
+
+def _to_lobby_state(db: Session, lobby: SharedLobby, actor: SharedLobbyMember | None = None, *, include_invite: bool = False) -> LobbyStateResponse:
+    now = _now()
+    members = db.execute(
+        select(SharedLobbyMember)
+        .where(SharedLobbyMember.lobby_id == lobby.id)
+        .order_by(SharedLobbyMember.joined_at.asc())
+    ).scalars().all()
+    member_names = {m.id: (m.nickname or "Guest") for m in members}
+    queue = _queue_rows(db, lobby.id)
+    now_playing = queue[lobby.current_index] if 0 <= int(lobby.current_index or 0) < len(queue) else None
+    actor_perms = _member_permissions(actor) if actor else LobbyPermissions()
+    return LobbyStateResponse(
+        id=lobby.id,
+        name=lobby.name or "Shared Lobby",
+        host_user_id=lobby.host_user_id,
+        invite_code=lobby.invite_code if include_invite else None,
+        is_open=bool(lobby.is_open),
+        guest_permissions=_load_permissions(lobby.permissions_json),
+        self_member_id=actor.id if actor else "",
+        self_role=(actor.role if actor else "guest"),
+        self_permissions=actor_perms,
+        is_playing=bool(lobby.is_playing),
+        current_index=int(lobby.current_index or 0),
+        position_ms=int(lobby.position_ms or 0),
+        effective_position_ms=_effective_position_ms(lobby, now),
+        server_time_ms=_server_time_ms(),
+        position_updated_at=_iso(lobby.position_updated_at),
+        now_playing=_to_queue_item_response(now_playing, member_names) if now_playing else None,
+        queue=[_to_queue_item_response(item, member_names) for item in queue],
+        members=[_to_member_response(m) for m in members],
+        created_at=_iso(lobby.created_at),
+        updated_at=_iso(lobby.updated_at),
+    )
+
+
+def _touch_lobby(lobby: SharedLobby) -> None:
+    lobby.updated_at = _now()
+
+
+@router.post("", response_model=LobbyStateResponse)
+def create_lobby(payload: LobbyCreateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    name = _clean_text(payload.name, 180) or "Shared Lobby"
+    # Avoid rare invite collisions.
+    for _ in range(8):
+        invite = _new_invite_code()
+        if not db.execute(select(SharedLobby).where(SharedLobby.invite_code == invite)).scalar_one_or_none():
+            break
+    else:
+        raise HTTPException(status_code=500, detail="Could not generate lobby invite")
+
+    lobby = SharedLobby(
+        host_user_id=user.id,
+        name=name,
+        invite_code=invite,
+        permissions_json=_dump_permissions(payload.guest_permissions),
+        is_open=True,
+        is_playing=False,
+        position_ms=0,
+        position_updated_at=_now(),
+    )
+    db.add(lobby)
+    db.flush()
+    host_member = SharedLobbyMember(
+        lobby_id=lobby.id,
+        user_id=user.id,
+        nickname=user.username,
+        role="host",
+        permissions_json=_dump_permissions(_load_permissions(None, host=True)),
+        is_active=True,
+    )
+    db.add(host_member)
+    db.commit()
+    db.refresh(lobby)
+    return _to_lobby_state(db, lobby, host_member, include_invite=True)
+
+
+@router.get("", response_model=LobbyListResponse)
+def list_host_lobbies(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    rows = db.execute(
+        select(SharedLobby)
+        .where(SharedLobby.host_user_id == user.id)
+        .order_by(SharedLobby.updated_at.desc())
+    ).scalars().all()
+    states: list[LobbyStateResponse] = []
+    for lobby in rows:
+        member = db.execute(
+            select(SharedLobbyMember).where(
+                SharedLobbyMember.lobby_id == lobby.id,
+                SharedLobbyMember.user_id == user.id,
+                SharedLobbyMember.role == "host",
+            )
+        ).scalar_one_or_none()
+        states.append(_to_lobby_state(db, lobby, member, include_invite=True))
+    return LobbyListResponse(lobbies=states)
+
+
+@router.post("/join", response_model=LobbyJoinResponse)
+def join_lobby(payload: LobbyJoinRequest, response: Response, db: Session = Depends(get_db)):
+    invite = _clean_text(payload.invite_code, 128)
+    nickname = _clean_text(payload.nickname, 80)
+    if not invite:
+        raise HTTPException(status_code=400, detail="invite_code is required")
+    if not nickname:
+        raise HTTPException(status_code=400, detail="nickname is required")
+
+    lobby = db.execute(select(SharedLobby).where(SharedLobby.invite_code == invite)).scalar_one_or_none()
+    if not lobby or not lobby.is_open:
+        raise HTTPException(status_code=404, detail="Lobby not found or closed")
+
+    member = SharedLobbyMember(
+        lobby_id=lobby.id,
+        nickname=nickname,
+        role="guest",
+        token=_new_guest_token(),
+        permissions_json=lobby.permissions_json,
+        is_active=True,
+    )
+    db.add(member)
+    db.commit()
+    db.refresh(member)
+    response.set_cookie(LOBBY_TOKEN_COOKIE, member.token or "", httponly=False, samesite="lax", secure=False)
+    return LobbyJoinResponse(
+        guest_token=member.token or "",
+        member=_to_member_response(member),
+        lobby=_to_lobby_state(db, lobby, member, include_invite=False),
+    )
+
+
+@router.get("/{lobby_id}/state", response_model=LobbyStateResponse)
+def lobby_state(lobby_id: str, request: Request, db: Session = Depends(get_db)):
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    db.commit()
+    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+
+@router.get("/{lobby_id}/art/{item_id}")
+async def lobby_item_art(lobby_id: str, item_id: str, request: Request):
+    """Serve lobby artwork through a lobby-scoped endpoint.
+
+    Guests do not have normal Helix account authentication, so queue items must
+    not expose account-only artwork URLs such as /api/art/subsonic/... directly.
+    This endpoint validates lobby access, then proxies the artwork using Helix's
+    own backend credentials where needed.
+    """
+    db = SessionLocal()
+    try:
+        lobby = _get_lobby(db, lobby_id)
+        _actor_for_lobby(db, request, lobby)
+        item = db.execute(
+            select(SharedLobbyQueueItem).where(
+                SharedLobbyQueueItem.lobby_id == lobby.id,
+                SharedLobbyQueueItem.id == item_id,
+            )
+        ).scalar_one_or_none()
+        if not item:
+            raise HTTPException(status_code=404, detail="Lobby queue item not found")
+
+        raw_url = (item.art_url or "").strip()
+        yt_video_id = (item.yt_video_id or "").strip()
+        subsonic_id = (item.subsonic_song_id or "").strip()
+        settings = dict(get_settings(db) or {})
+    finally:
+        db.close()
+
+    # If a YT fallback is known, use the public thumbnail when no explicit art is stored.
+    if not raw_url and yt_video_id:
+        raw_url = f"https://i.ytimg.com/vi/{yt_video_id}/hqdefault.jpg"
+
+    # Proxy Helix's authenticated Subsonic art route for lobby guests.
+    parsed_relative = urllib.parse.urlparse(raw_url) if raw_url else None
+    if parsed_relative and (parsed_relative.path or "").startswith("/api/art/subsonic/"):
+        cover_id = urllib.parse.unquote((parsed_relative.path or "").rsplit("/", 1)[-1])
+        query = urllib.parse.parse_qs(parsed_relative.query or "")
+        try:
+            size = int((query.get("size") or ["512"])[0] or 512)
+        except Exception:
+            size = 512
+        client = None
+        try:
+            base_url = str(settings.get("subsonic_base_url") or "").strip()
+            username = str(settings.get("subsonic_username") or "").strip()
+            password = str(settings.get("subsonic_password") or "").strip()
+            if not base_url or not username or not password:
+                raise HTTPException(status_code=404, detail="Artwork unavailable")
+            from ..integrations.subsonic import SubsonicClient
+            client = SubsonicClient(
+                base_url=base_url,
+                username=username,
+                password=password,
+                client_name=str(settings.get("subsonic_client_name") or "Helix"),
+                api_version=str(settings.get("subsonic_api_version") or "1.16.1"),
+                timeout_s=int(settings.get("subsonic_timeout_s") or 20),
+            )
+            data = await client.fetch_cover_art_bytes(cover_id, size=max(32, min(2048, size)))
+            if not data:
+                raise HTTPException(status_code=404, detail="Artwork unavailable")
+            return Response(content=data, media_type=_guess_image_content_type(data), headers={"Cache-Control": "public, max-age=86400"})
+        finally:
+            if client is not None:
+                try:
+                    await client.close()
+                except Exception:
+                    pass
+
+    # Last resort for Subsonic-only items with no saved cover URL: try using the song id as cover id.
+    if not raw_url and subsonic_id:
+        client = None
+        try:
+            base_url = str(settings.get("subsonic_base_url") or "").strip()
+            username = str(settings.get("subsonic_username") or "").strip()
+            password = str(settings.get("subsonic_password") or "").strip()
+            if base_url and username and password:
+                from ..integrations.subsonic import SubsonicClient
+                client = SubsonicClient(
+                    base_url=base_url,
+                    username=username,
+                    password=password,
+                    client_name=str(settings.get("subsonic_client_name") or "Helix"),
+                    api_version=str(settings.get("subsonic_api_version") or "1.16.1"),
+                    timeout_s=int(settings.get("subsonic_timeout_s") or 20),
+                )
+                data = await client.fetch_cover_art_bytes(subsonic_id, size=512)
+                if data:
+                    return Response(content=data, media_type=_guess_image_content_type(data), headers={"Cache-Control": "public, max-age=86400"})
+        finally:
+            if client is not None:
+                try:
+                    await client.close()
+                except Exception:
+                    pass
+
+    if not raw_url:
+        raise HTTPException(status_code=404, detail="Artwork unavailable")
+
+    parsed = urllib.parse.urlparse(raw_url)
+    if parsed.scheme not in {"http", "https"}:
+        raise HTTPException(status_code=404, detail="Artwork unavailable")
+
+    try:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+            resp = await client.get(raw_url)
+            resp.raise_for_status()
+            data = resp.content
+            return Response(
+                content=data,
+                media_type=_guess_image_content_type(data, resp.headers.get("content-type", "")),
+                headers={"Cache-Control": "public, max-age=86400"},
+            )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail="Failed to fetch lobby artwork") from exc
+
+
+@router.get("/{lobby_id}/stream/{item_id}")
+async def stream_lobby_item(lobby_id: str, item_id: str, request: Request):
+    """Stream a lobby queue item without requiring a full Helix account for guests.
+
+    The DB session is intentionally opened and closed before returning the
+    StreamingResponse so a listening client does not hold a SQLAlchemy
+    connection for the life of the audio stream.
+    """
+    db = SessionLocal()
+    try:
+        lobby = _get_lobby(db, lobby_id)
+        _user, actor = _actor_for_lobby(db, request, lobby)
+        item = db.execute(
+            select(SharedLobbyQueueItem).where(
+                SharedLobbyQueueItem.lobby_id == lobby.id,
+                SharedLobbyQueueItem.id == item_id,
+            )
+        ).scalar_one_or_none()
+        if not item:
+            raise HTTPException(status_code=404, detail="Lobby queue item not found")
+
+        # If a manually added lobby item only has title/artist, recover a YTMusic
+        # source id so guests can still listen without the item being imported.
+        if not (item.subsonic_song_id or item.yt_video_id):
+            try:
+                duration_seconds = int((item.duration_ms or 0) / 1000) if (item.duration_ms or 0) else None
+                match = find_track(
+                    title=item.title or "",
+                    artist=item.artist or "",
+                    album=item.album or None,
+                    duration_seconds=duration_seconds,
+                )
+                if match.found and match.video_id:
+                    item.yt_video_id = match.video_id
+                    item.source = item.source or "ytmusic"
+                    if not item.art_url:
+                        item.art_url = f"https://i.ytimg.com/vi/{match.video_id}/hqdefault.jpg"
+                    db.add(item)
+                    db.commit()
+            except Exception:
+                db.rollback()
+
+        settings = get_settings(db)
+        cur = SimpleNamespace(
+            id=item.id,
+            session_user_id=lobby.host_user_id,
+            position=item.position or 0,
+            kind="song",
+            title=item.title or "",
+            artist=item.artist or "",
+            album=item.album or "",
+            duration_ms=int(item.duration_ms or 0),
+            art_url=item.art_url or "",
+            source=item.source or ("subsonic" if item.subsonic_song_id else "ytmusic" if item.yt_video_id else ""),
+            subsonic_song_id=item.subsonic_song_id or "",
+            yt_video_id=item.yt_video_id or "",
+            yt_browse_id=item.yt_browse_id or "",
+            mb_recording_id=item.mb_recording_id or "",
+            mb_artist_id=item.mb_artist_id or "",
+            inbound_path="",
+            download_status="",
+            is_playable=False,
+            error="",
+        )
+
+        await _ensure_playable_for_stream(db, cur, settings=settings, allow_subsonic_wait=False, progressive_inbound=True)
+        if cur.source != "subsonic":
+            if (cur.inbound_path or "").endswith(".part") or cur.download_status == "DOWNLOADING":
+                response = await _stream_inbound_progressive(request, cur)
+            else:
+                response = await _stream_inbound_with_range(request, cur)
+        else:
+            response = await _stream_subsonic_with_range(request, cur, settings=settings)
+        return response
+    finally:
+        db.close()
+
+
+@router.patch("/{lobby_id}", response_model=LobbyStateResponse)
+def update_lobby(lobby_id: str, payload: LobbyUpdateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    lobby = _get_lobby(db, lobby_id)
+    _require_host(lobby, user)
+    if payload.name is not None:
+        lobby.name = _clean_text(payload.name, 180) or lobby.name
+    if payload.is_open is not None:
+        lobby.is_open = bool(payload.is_open)
+    if payload.guest_permissions is not None:
+        lobby.permissions_json = _dump_permissions(payload.guest_permissions)
+    _touch_lobby(lobby)
+    db.add(lobby)
+    db.commit()
+    member = db.execute(select(SharedLobbyMember).where(SharedLobbyMember.lobby_id == lobby.id, SharedLobbyMember.user_id == user.id, SharedLobbyMember.role == "host")).scalar_one_or_none()
+    return _to_lobby_state(db, lobby, member, include_invite=True)
+
+
+@router.delete("/{lobby_id}", response_model=LobbyOkResponse)
+def delete_lobby(lobby_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    lobby = _get_lobby(db, lobby_id)
+    _require_host(lobby, user)
+    db.delete(lobby)
+    db.commit()
+    return LobbyOkResponse(ok=True)
+
+
+def _lobby_queue_item_from_meta(
+    *,
+    lobby_id: str,
+    actor_id: str,
+    position: int,
+    payload: LobbyQueueAddRequest,
+    meta: dict[str, Any] | None = None,
+) -> SharedLobbyQueueItem:
+    meta = meta or {}
+    yt_video_id = _clean_text(meta.get("yt_video_id") or payload.yt_video_id, 160)
+    title = _clean_text(meta.get("title") or payload.title, 400)
+    artist = _clean_text(meta.get("artist") or payload.artist, 400)
+    album = _clean_text(meta.get("album") or payload.album, 400)
+    duration_ms = max(0, int(meta.get("duration_ms") or payload.duration_ms or 0))
+    art_url = _clean_text(meta.get("art_url") or payload.art_url, 1200)
+
+    if yt_video_id and not art_url:
+        art_url = f"https://i.ytimg.com/vi/{yt_video_id}/hqdefault.jpg"
+    if yt_video_id and not title:
+        title = "YouTube track"
+    if yt_video_id and not artist:
+        artist = "YouTube Music"
+
+    if not title or not artist:
+        raise HTTPException(status_code=400, detail="title and artist are required unless a playable YouTube link is provided")
+
+    source = _clean_text(payload.source, 32) or ("subsonic" if payload.subsonic_song_id else "ytmusic" if yt_video_id else "")
+    return SharedLobbyQueueItem(
+        lobby_id=lobby_id,
+        added_by_member_id=actor_id,
+        position=position,
+        title=title,
+        artist=artist,
+        album=album,
+        duration_ms=duration_ms,
+        art_url=art_url,
+        source=source,
+        subsonic_song_id=_clean_text(payload.subsonic_song_id, 160),
+        yt_video_id=yt_video_id,
+        yt_browse_id=_clean_text(payload.yt_browse_id, 240),
+        mb_recording_id=_clean_text(payload.mb_recording_id, 80),
+        mb_artist_id=_clean_text(payload.mb_artist_id, 80),
+    )
+
+
+@router.post("/{lobby_id}/queue", response_model=LobbyStateResponse)
+def add_queue_item(lobby_id: str, payload: LobbyQueueAddRequest, request: Request, db: Session = Depends(get_db)):
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    perms = _member_permissions(actor)
+    if not perms.can_add_to_queue:
+        raise HTTPException(status_code=403, detail="You cannot add to this lobby queue")
+
+    yt_url = _clean_text(getattr(payload, "ytmusic_url", None), 1200)
+    yt_video_id = _clean_text(payload.yt_video_id, 160) or _extract_youtube_video_id(yt_url)
+
+    metas: list[dict[str, Any]] = []
+    if yt_url:
+        try:
+            metas = _youtube_entries_from_url(yt_url, yt_video_id)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Could not read that YouTube link: {exc}") from exc
+        if not metas:
+            raise HTTPException(status_code=400, detail="Could not find playable tracks in that YouTube link")
+    else:
+        metas = [{
+            "yt_video_id": yt_video_id,
+            "title": payload.title,
+            "artist": payload.artist,
+            "album": payload.album,
+            "duration_ms": payload.duration_ms or 0,
+            "art_url": payload.art_url,
+        }]
+
+    rows = _queue_rows(db, lobby.id)
+    base_pos = len(rows)
+    added = 0
+    for meta in metas:
+        try:
+            item = _lobby_queue_item_from_meta(
+                lobby_id=lobby.id,
+                actor_id=actor.id,
+                position=base_pos + added,
+                payload=payload,
+                meta=meta,
+            )
+        except HTTPException:
+            if len(metas) == 1:
+                raise
+            continue
+        db.add(item)
+        added += 1
+
+    if added <= 0:
+        raise HTTPException(status_code=400, detail="Could not find playable tracks in that YouTube link")
+
+    if len(rows) == 0:
+        lobby.current_index = 0
+        lobby.position_ms = 0
+        lobby.position_updated_at = _now()
+    _touch_lobby(lobby)
+    db.commit()
+    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+
+@router.delete("/{lobby_id}/queue/{item_id}", response_model=LobbyStateResponse)
+def remove_queue_item(lobby_id: str, item_id: str, request: Request, db: Session = Depends(get_db)):
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    perms = _member_permissions(actor)
+    include_invite = actor.role == "host"
+
+    # Read only primitive fields needed for permission/current-index math.
+    # Avoid keeping a loaded queue ORM object in the session and then deleting it,
+    # because that path can raise stale-object errors when multiple clients/polls
+    # touch the queue around the same time.
+    row = db.execute(
+        select(SharedLobbyQueueItem.position, SharedLobbyQueueItem.added_by_member_id).where(
+            SharedLobbyQueueItem.lobby_id == lobby.id,
+            SharedLobbyQueueItem.id == item_id,
+        )
+    ).first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Queue item not found")
+
+    removed_pos = int(row[0] or 0)
+    added_by_member_id = row[1] or ""
+    owns_item = added_by_member_id == actor.id
+    if not (perms.can_remove_any_queue_item or (owns_item and perms.can_remove_own_queue_items)):
+        raise HTTPException(status_code=403, detail="You cannot remove this queue item")
+
+    try:
+        result = db.execute(
+            delete(SharedLobbyQueueItem)
+            .where(
+                SharedLobbyQueueItem.lobby_id == lobby.id,
+                SharedLobbyQueueItem.id == item_id,
+            )
+            .execution_options(synchronize_session=False)
+        )
+        if getattr(result, "rowcount", 0) == 0:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="Queue item not found")
+
+        db.flush()
+        rows = _renumber_queue(db, lobby.id)
+        if not rows:
+            lobby.current_index = 0
+            lobby.position_ms = 0
+            lobby.is_playing = False
+            lobby.position_updated_at = _now()
+        else:
+            current_index = int(lobby.current_index or 0)
+            if removed_pos < current_index:
+                lobby.current_index = max(0, current_index - 1)
+            elif removed_pos == current_index:
+                lobby.current_index = min(current_index, len(rows) - 1)
+                lobby.position_ms = 0
+                lobby.position_updated_at = _now()
+            elif current_index >= len(rows):
+                lobby.current_index = len(rows) - 1
+
+        _touch_lobby(lobby)
+        db.add(lobby)
+        db.flush()
+
+        # Build the response before commit so SQLAlchemy expiration after commit
+        # cannot turn response rendering into a 500.
+        response = _to_lobby_state(db, lobby, actor, include_invite=include_invite)
+        db.commit()
+        return response
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Could not remove lobby queue item: {exc}") from exc
+
+@router.post("/{lobby_id}/play", response_model=LobbyStateResponse)
+def lobby_play(lobby_id: str, request: Request, db: Session = Depends(get_db)):
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    if not _member_permissions(actor).can_control_playback:
+        raise HTTPException(status_code=403, detail="You cannot control lobby playback")
+    if _queue_rows(db, lobby.id):
+        lobby.is_playing = True
+        lobby.position_updated_at = _now()
+    _touch_lobby(lobby)
+    db.commit()
+    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+
+@router.post("/{lobby_id}/pause", response_model=LobbyStateResponse)
+def lobby_pause(lobby_id: str, request: Request, db: Session = Depends(get_db)):
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    if not _member_permissions(actor).can_control_playback:
+        raise HTTPException(status_code=403, detail="You cannot control lobby playback")
+    lobby.position_ms = _effective_position_ms(lobby)
+    lobby.is_playing = False
+    lobby.position_updated_at = _now()
+    _touch_lobby(lobby)
+    db.commit()
+    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+
+@router.post("/{lobby_id}/seek", response_model=LobbyStateResponse)
+def lobby_seek(lobby_id: str, payload: LobbySeekRequest, request: Request, db: Session = Depends(get_db)):
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    perms = _member_permissions(actor)
+    if not (perms.can_seek or perms.can_control_playback):
+        raise HTTPException(status_code=403, detail="You cannot seek lobby playback")
+    lobby.position_ms = max(0, int(payload.position_ms or 0))
+    lobby.position_updated_at = _now()
+    _touch_lobby(lobby)
+    db.commit()
+    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+
+@router.post("/{lobby_id}/next", response_model=LobbyStateResponse)
+def lobby_next(lobby_id: str, request: Request, db: Session = Depends(get_db)):
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    perms = _member_permissions(actor)
+    if not (perms.can_skip or perms.can_control_playback):
+        raise HTTPException(status_code=403, detail="You cannot skip lobby playback")
+    rows = _queue_rows(db, lobby.id)
+    if rows:
+        lobby.current_index = min(len(rows) - 1, int(lobby.current_index or 0) + 1)
+    lobby.position_ms = 0
+    lobby.position_updated_at = _now()
+    _touch_lobby(lobby)
+    db.commit()
+    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+
+@router.post("/{lobby_id}/previous", response_model=LobbyStateResponse)
+def lobby_previous(lobby_id: str, request: Request, db: Session = Depends(get_db)):
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    perms = _member_permissions(actor)
+    if not (perms.can_skip or perms.can_control_playback):
+        raise HTTPException(status_code=403, detail="You cannot skip lobby playback")
+    lobby.current_index = max(0, int(lobby.current_index or 0) - 1)
+    lobby.position_ms = 0
+    lobby.position_updated_at = _now()
+    _touch_lobby(lobby)
+    db.commit()
+    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+
+@router.patch("/{lobby_id}/members/{member_id}", response_model=LobbyStateResponse)
+def update_member(lobby_id: str, member_id: str, payload: LobbyMemberUpdateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    lobby = _get_lobby(db, lobby_id)
+    _require_host(lobby, user)
+    member = db.execute(select(SharedLobbyMember).where(SharedLobbyMember.lobby_id == lobby.id, SharedLobbyMember.id == member_id)).scalar_one_or_none()
+    if not member:
+        raise HTTPException(status_code=404, detail="Member not found")
+    if member.role == "host":
+        raise HTTPException(status_code=400, detail="Cannot edit host permissions")
+    if payload.nickname is not None:
+        member.nickname = _clean_text(payload.nickname, 80) or member.nickname
+    if payload.is_active is not None:
+        member.is_active = bool(payload.is_active)
+    if payload.permissions is not None:
+        member.permissions_json = _dump_permissions(payload.permissions)
+    member.last_seen_at = _now()
+    _touch_lobby(lobby)
+    db.add(member)
+    db.commit()
+    host_member = db.execute(select(SharedLobbyMember).where(SharedLobbyMember.lobby_id == lobby.id, SharedLobbyMember.user_id == user.id, SharedLobbyMember.role == "host")).scalar_one_or_none()
+    return _to_lobby_state(db, lobby, host_member, include_invite=True)
+
+
+@router.post("/{lobby_id}/leave", response_model=LobbyOkResponse)
+def leave_lobby(lobby_id: str, request: Request, response: Response, db: Session = Depends(get_db)):
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    if actor.role == "host":
+        raise HTTPException(status_code=400, detail="Host cannot leave their own lobby; close the lobby instead")
+    actor.is_active = False
+    actor.last_seen_at = _now()
+    db.add(actor)
+    db.commit()
+    response.delete_cookie(LOBBY_TOKEN_COOKIE)
+    return LobbyOkResponse(ok=True)

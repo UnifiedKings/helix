@@ -1,7 +1,8 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { PlaybackBar } from './PlaybackBar'
 import { QueuePanel } from './QueuePanel'
 import { usePlayer } from '../hooks/usePlayer'
+import { useAuth } from '../auth'
 
 function SidebarLink({ to, label, icon }: { to: string; label: string; icon: string }) {
   return (
@@ -23,6 +24,13 @@ function SidebarPlaceholder({ label, icon }: { label: string; icon: string }) {
 
 export function Layout() {
   const player = usePlayer()
+  const auth = useAuth()
+  const navigate = useNavigate()
+
+  async function logout() {
+    await auth.logout()
+    navigate('/login', { replace: true })
+  }
 
   return (
     <div className="app-shell app-shell-with-sidebar">
@@ -34,11 +42,12 @@ export function Layout() {
 
         <nav className="side-nav" aria-label="Main navigation">
           <SidebarLink to="/" label="Home" icon="⌂" />
-          <SidebarLink to="/" label="Search" icon="⌕" />
+          <SidebarLink to="/search" label="Search" icon="⌕" />
           <SidebarLink to="/stations" label="Stations" icon="◉" />
           <SidebarLink to="/playlists" label="Playlists" icon="♫" />
           <SidebarPlaceholder label="Liked Songs" icon="♡" />
           <SidebarLink to="/history" label="History" icon="◷" />
+          <SidebarLink to="/lobbies" label="Lobbies" icon="◎" />
           <SidebarLink to="/settings" label="Settings" icon="⚙" />
         </nav>
 
@@ -50,9 +59,13 @@ export function Layout() {
 
       <div className="app-main-area">
         <header className="topbar topbar-redesigned topbar-minimal">
-          <button className="profile-placeholder" type="button" title="Profile placeholder" aria-label="Profile placeholder">
-            <span aria-hidden="true">H</span>
-          </button>
+          <div className="topbar-account">
+            <span className="topbar-username">{auth.user?.username ?? 'Helix'}</span>
+            <button className="profile-placeholder" type="button" title="Profile" aria-label="Profile">
+              <span aria-hidden="true">{(auth.user?.username ?? 'H').slice(0, 1).toUpperCase()}</span>
+            </button>
+            <button className="logout-button" type="button" onClick={() => void logout()}>Log out</button>
+          </div>
         </header>
 
         <main className="main-grid dashboard-grid">

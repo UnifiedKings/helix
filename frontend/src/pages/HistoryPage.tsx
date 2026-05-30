@@ -74,7 +74,7 @@ export function HistoryPage() {
               <span className="history-meta">{dateLabel(item.created_at)}</span>
               <div className="search-row-actions">
                 <button className="compact-text-action" onClick={() => player.run(() => api.replayHistory(item.id), 'play')}>Replay</button>
-                {item.yt_video_id ? <button className="compact-text-action" onClick={() => void api.addSongToSubsonic(item)}>Add</button> : null}
+                {item.yt_video_id ? <button className="icon-button compact-action subsonic-add-action" aria-label={`Add ${item.title} to Subsonic`} data-tooltip="Add to Subsonic" title="Add to Subsonic" onClick={() => void api.addSongToSubsonic(item)}><span aria-hidden="true">S+</span></button> : null}
               </div>
             </article>
           ))}

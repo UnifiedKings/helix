@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
+import type { AdminUser } from '../api/types'
 
 function parseSettingValue(raw: string, original: unknown): unknown {
   if (typeof original === 'boolean') return raw === 'true'
@@ -33,15 +34,20 @@ export function SettingsPage() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [saving, setSaving] = useState(false)
+  const [users, setUsers] = useState<AdminUser[]>([])
+  const [userDraft, setUserDraft] = useState({ username: '', password: '', role: 'user' as 'admin' | 'user' })
+  const [creatingUser, setCreatingUser] = useState(false)
+  const [updatingUserId, setUpdatingUserId] = useState('')
 
   const groupedKeys = useMemo(() => new Set(SETTING_GROUPS.flatMap((group) => group.keys)), [])
   const extraKeys = useMemo(() => Object.keys(settings).filter((key) => !groupedKeys.has(key)).sort(), [settings, groupedKeys])
 
   async function load() {
     try {
-      const [healthRes, settingsRes] = await Promise.all([api.health(), api.adminSettings()])
+      const [healthRes, settingsRes, usersRes] = await Promise.all([api.health(), api.adminSettings(), api.adminUsers()])
       setHealth(healthRes)
       setSettings(settingsRes)
+      setUsers(usersRes)
       setDraft(Object.fromEntries(Object.entries(settingsRes).map(([key, value]) => [key, typeof value === 'object' ? JSON.stringify(value) : String(value ?? '')])))
       setError('')
     } catch (err) {
@@ -70,6 +76,40 @@ export function SettingsPage() {
       setError(err instanceof Error ? err.message : 'Could not save settings')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function createUser(event: FormEvent) {
+    event.preventDefault()
+    const username = userDraft.username.trim()
+    if (!username || !userDraft.password || creatingUser) return
+    setCreatingUser(true)
+    setError('')
+    setStatus('')
+    try {
+      const created = await api.createAdminUser({ username, password: userDraft.password, role: userDraft.role })
+      setUsers((current) => [created, ...current])
+      setUserDraft({ username: '', password: '', role: 'user' })
+      setStatus(`Created user: ${created.username}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create user')
+    } finally {
+      setCreatingUser(false)
+    }
+  }
+
+  async function updateUser(user: AdminUser, patch: { is_active?: boolean; role?: 'admin' | 'user' }) {
+    setUpdatingUserId(user.id)
+    setError('')
+    setStatus('')
+    try {
+      const updated = await api.updateAdminUser(user.id, patch)
+      setUsers((current) => current.map((item) => item.id === updated.id ? updated : item))
+      setStatus(`Updated user: ${updated.username}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update user')
+    } finally {
+      setUpdatingUserId('')
     }
   }
 
@@ -110,6 +150,66 @@ export function SettingsPage() {
       <section className="panel settings-health-panel">
         <h2>Backend health</h2>
         <pre>{JSON.stringify(health, null, 2)}</pre>
+      </section>
+
+      <section className="panel settings-group admin-users-panel">
+        <div className="section-heading">
+          <div>
+            <h2>Users</h2>
+            <span className="muted">Create accounts and manage whether users are active.</span>
+          </div>
+        </div>
+
+        <form className="admin-user-create-form" onSubmit={createUser}>
+          <label className="setting-row">
+            <span><strong>Username</strong><small>3–64 chars</small></span>
+            <input value={userDraft.username} onChange={(event) => setUserDraft((prev) => ({ ...prev, username: event.target.value }))} placeholder="new-user" />
+          </label>
+          <label className="setting-row">
+            <span><strong>Password</strong><small>min 8 chars</small></span>
+            <input type="password" value={userDraft.password} onChange={(event) => setUserDraft((prev) => ({ ...prev, password: event.target.value }))} placeholder="Temporary password" />
+          </label>
+          <label className="setting-row">
+            <span><strong>Role</strong><small>access</small></span>
+            <select value={userDraft.role} onChange={(event) => setUserDraft((prev) => ({ ...prev, role: event.target.value as 'admin' | 'user' }))}>
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </label>
+          <div className="admin-user-create-actions">
+            <button className="primary" type="submit" disabled={creatingUser || !userDraft.username.trim() || userDraft.password.length < 8}>
+              {creatingUser ? 'Creating…' : 'Create user'}
+            </button>
+          </div>
+        </form>
+
+        <div className="admin-user-list">
+          {users.map((user) => (
+            <div className="admin-user-row" key={user.id}>
+              <div>
+                <strong>{user.username}</strong>
+                <span className="muted">{user.role} · {user.is_active ? 'active' : 'disabled'}</span>
+              </div>
+              <select
+                value={user.role}
+                disabled={updatingUserId === user.id}
+                onChange={(event) => void updateUser(user, { role: event.target.value as 'admin' | 'user' })}
+                aria-label={`Role for ${user.username}`}
+              >
+                <option value="user">User</option>
+                <option value="admin">Admin</option>
+              </select>
+              <button
+                type="button"
+                className={user.is_active ? 'ghost danger' : 'ghost'}
+                disabled={updatingUserId === user.id}
+                onClick={() => void updateUser(user, { is_active: !user.is_active })}
+              >
+                {user.is_active ? 'Disable' : 'Enable'}
+              </button>
+            </div>
+          ))}
+        </div>
       </section>
 
       {SETTING_GROUPS.map((group) => (

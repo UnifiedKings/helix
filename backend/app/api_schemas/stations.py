@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel
 
 
 class StationCreateRequest(BaseModel):
     name: str
+    station_type: str = "listenbrainz_similar_artist"
+    config: dict[str, Any] = {}
     seed_type: str = "artist"  # artist|track
     seed_title: str = ""
     seed_artist: str = ""
@@ -28,6 +30,8 @@ class StationCreateRequest(BaseModel):
 
 class StationUpdateRequest(BaseModel):
     name: Optional[str] = None
+    station_type: Optional[str] = None
+    config: Optional[dict[str, Any]] = None
     discovery: Optional[float] = None
     seed_influence: Optional[float] = None
     artist_cooldown: Optional[int] = None
@@ -44,6 +48,8 @@ class StationUpdateRequest(BaseModel):
 class StationResponse(BaseModel):
     id: str
     name: str
+    station_type: str = "listenbrainz_similar_artist"
+    config: dict[str, Any] = {}
     seed_type: str
     seed_title: str
     seed_artist: str
@@ -64,12 +70,32 @@ class StationResponse(BaseModel):
     created_at: str
     updated_at: str
     thumbnail_url: str = ""
+    cover_url: str = ""
+    has_custom_cover: bool = False
 
 
 class StationPlayRequest(BaseModel):
     # If true, clear the current queue and start the station fresh.
     reset: bool = True
 
-class StationPlayRequest(BaseModel):
-    # If true, clear the current queue and start the station fresh.
-    reset: bool = True
+
+class StationConfigOptionResponse(BaseModel):
+    key: str
+    label: str
+    type: str
+    description: str = ""
+    required: bool = False
+    default: Any = None
+    min: Any = None
+    max: Any = None
+    step: Any = None
+    choices: list[dict[str, Any]] = []
+
+
+class StationProviderResponse(BaseModel):
+    station_type: str
+    display_name: str
+    description: str
+    version: str = "1.0.0"
+    builtin: bool = False
+    config_options: list[StationConfigOptionResponse] = []

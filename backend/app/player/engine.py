@@ -5,7 +5,10 @@ import anyio
 import re
 import time
 import os
+import random
 import logging
+from types import SimpleNamespace
+from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -18,12 +21,13 @@ from sqlalchemy.exc import IntegrityError, OperationalError
 from ..auth import get_current_user
 from ..db import get_db, SessionLocal
 from ..models import User, PlaybackSession, QueueItem, ListenHistoryItem, Station, Playlist, PlaylistTrack, LikedTrack
-from ..api_schemas.player import PlayerPlayAlbumRequest, PlayerPlayPlaylistRequest, PlayerPlayTrackRequest, PlayerJumpRequest, PlayerQueueItem, PlayerStateResponse, PlayerQueueAppendTrackRequest, PlayerQueueAppendAlbumRequest, PlayerRemoveQueueItemResponse, PlayerHistoryItem, PlayerHistoryResponse, PlayerActionRequest, PlayerReplayRequest, AutoplaySetRequest
+from ..api_schemas.player import PlayerPlayAlbumRequest, PlayerPlayPlaylistRequest, PlayerPlayTrackRequest, PlayerJumpRequest, PlayerQueueItem, PlayerStateResponse, PlayerQueueAppendTrackRequest, PlayerQueueAppendAlbumRequest, PlayerQueueReorderRequest, PlayerRemoveQueueItemResponse, PlayerHistoryItem, PlayerHistoryResponse, PlayerActionRequest, PlayerReplayRequest, AutoplaySetRequest
 from ..settings_store import get_settings
 from ..integrations.subsonic import SubsonicClient
 from ..integrations.ytmusic import get_album_full, find_track
 from ..download_manager import DOWNLOAD_MANAGER, DownloadJob
 from ..stations_engine import generate_and_append_station_track
+from ..validators import is_valid_yt_video_id
 
 
 
@@ -31,6 +35,31 @@ from ..stations_engine import generate_and_append_station_track
 LOG = logging.getLogger("helix.player")
 
 HELIX_PROGRESSIVE_MIN_BYTES = int(os.getenv("HELIX_PROGRESSIVE_MIN_BYTES", "262144"))
+
+
+def _browser_audio_media_type(path: str) -> str:
+    """Return a browser-friendly audio MIME type for downloaded YT files.
+
+    yt-dlp often writes Opus-in-WebM as ``.webm.part`` while the file is still
+    downloading. Python's mimetype guessing treats ``.part`` as unknown, and
+    some browsers reject ``application/octet-stream`` for an ``<audio>`` source.
+    Use the underlying audio container extension instead.
+    """
+    import mimetypes
+
+    guess_path = (path or "").strip()
+    if guess_path.endswith(".part"):
+        guess_path = guess_path[:-5]
+    lower = guess_path.lower()
+    if lower.endswith(".webm"):
+        return "audio/webm; codecs=opus"
+    if lower.endswith(".opus") or lower.endswith(".ogg") or lower.endswith(".oga"):
+        return "audio/ogg; codecs=opus"
+    if lower.endswith(".mp3"):
+        return "audio/mpeg"
+    if lower.endswith(".m4a") or lower.endswith(".mp4"):
+        return "audio/mp4"
+    return mimetypes.guess_type(guess_path)[0] or "audio/webm"
 
 
 def _load_settings_short() -> dict:
@@ -128,10 +157,13 @@ def _append_queue_items_with_sqlite_lock(db: Session, user_id: str, items: list[
 async def _prefetch_next_downloads(user_id: str) -> None:
     """Prefetch downloads for upcoming queue items (FIFO) so playback doesn't stall.
 
-    This does not change playback order. It simply starts download/import for the next N
-    items after the current index, one at a time via DownloadManager.
+    IMPORTANT: this function intentionally does not hold a DB session while
+    awaiting Subsonic or DownloadManager work. Holding SQLite connections across
+    awaits is what makes the db watchdog report long-held connections during
+    frequent /api/playback/state polling.
     """
     try:
+        # DB burst only: snapshot settings/current queue, then close the session.
         db = SessionLocal()
         try:
             settings = get_settings(db)
@@ -139,81 +171,106 @@ async def _prefetch_next_downloads(user_id: str) -> None:
             if not sess:
                 return
 
-            items = db.execute(
+            all_items = db.execute(
                 select(QueueItem)
                 .where(QueueItem.session_user_id == user_id)
                 .order_by(QueueItem.position.asc())
             ).scalars().all()
 
-            if not items:
-                return
-
             ahead = _prefetch_ahead_count()
-            if ahead <= 0:
+            if ahead <= 0 or not all_items:
                 return
 
             cur_idx = int(sess.current_index or 0)
             start = cur_idx + 1
-            end = min(len(items), start + ahead)
+            end = min(len(all_items), start + ahead)
 
-            client = await _subsonic_client_from_settings(settings)
-            # Best-effort: trigger a scan occasionally so new imports become searchable quickly.
-            global _LAST_STARTSCAN_TS
-            now = time.time()
-            if (now - _LAST_STARTSCAN_TS) > 30:
-                try:
-                    await client.start_scan()
-                    _LAST_STARTSCAN_TS = now
-                except Exception:
-                    pass
-
-            for pos in range(start, end):
-                qi = items[pos]
-
-                # If already playable in Subsonic, skip.
-                if getattr(qi, "source", "") == "subsonic" and (qi.subsonic_song_id or ""):
-                    continue
-
-                # Re-check Subsonic by metadata to avoid re-download of existing library tracks.
-                try:
-                    want_ms = int(qi.duration_ms or 0) if getattr(qi, "duration_ms", None) else None
-                    found = await client.search_song_best(
-                        title=str(qi.title or ""),
-                        artist=str(qi.artist or ""),
-                        duration_ms=want_ms,
-                    )
-                    if found and found.get("id"):
-                        qi.source = "subsonic"
-                        qi.subsonic_song_id = str(found.get("id"))
-                        qi.is_playable = True
-                        qi.error = ""
-                        db.commit()
-                        continue
-                except Exception:
-                    pass
-
-                vid = _clean(getattr(qi, "yt_video_id", "") or "")
-                if not vid:
-                    continue
-
-                if DOWNLOAD_MANAGER.is_ready(vid):
-                    continue
-
-                # Lower priority number == sooner. Keep prefetch behind "play now".
-                prio = 20 + (pos - start)
-                await DOWNLOAD_MANAGER.enqueue_normal(DownloadJob(
-                    video_id=vid,
-                    url=f"https://music.youtube.com/watch?v={vid}",
-                    title=qi.title,
-                    artist=qi.artist,
-                    album=qi.album or "",
-                    art_url=qi.art_url or "",
-                    track_no=0,
-                    duration_ms=int(qi.duration_ms or 0),
-                    priority=prio,
-                ))
+            # Keep detached ORM objects out of the async section. Snapshot only
+            # the primitive fields needed for matching/download decisions.
+            candidates = [
+                {
+                    "id": item.id,
+                    "position": int(item.position or 0),
+                    "title": str(item.title or ""),
+                    "artist": str(item.artist or ""),
+                    "album": str(item.album or ""),
+                    "art_url": str(item.art_url or ""),
+                    "duration_ms": int(item.duration_ms or 0),
+                    "source": str(item.source or ""),
+                    "subsonic_song_id": str(item.subsonic_song_id or ""),
+                    "yt_video_id": str(item.yt_video_id or ""),
+                }
+                for item in all_items[start:end]
+            ]
         finally:
             db.close()
+
+        if not candidates:
+            return
+
+        client = await _subsonic_client_from_settings(settings)
+
+        # Best-effort: trigger a scan occasionally so new imports become searchable quickly.
+        global _LAST_STARTSCAN_TS
+        now = time.time()
+        if (now - _LAST_STARTSCAN_TS) > 30:
+            try:
+                await client.start_scan()
+                _LAST_STARTSCAN_TS = now
+            except Exception:
+                pass
+
+        for offset, qi in enumerate(candidates):
+            # If already playable in Subsonic, skip.
+            if qi["source"] == "subsonic" and qi["subsonic_song_id"]:
+                continue
+
+            # Re-check Subsonic by metadata without holding the DB connection.
+            try:
+                want_ms = int(qi["duration_ms"] or 0) or None
+                found = await client.search_song_best(
+                    title=qi["title"],
+                    artist=qi["artist"],
+                    duration_ms=want_ms,
+                )
+            except Exception:
+                found = None
+
+            if found and found.get("id"):
+                # DB burst only: persist the match after the await finishes.
+                db = SessionLocal()
+                try:
+                    current = db.get(QueueItem, qi["id"])
+                    if current and current.session_user_id == user_id:
+                        current.source = "subsonic"
+                        current.subsonic_song_id = str(found.get("id"))
+                        current.is_playable = True
+                        current.error = ""
+                        db.commit()
+                finally:
+                    db.close()
+                continue
+
+            vid = _clean(qi["yt_video_id"])
+            if not vid:
+                continue
+
+            if DOWNLOAD_MANAGER.is_ready(vid):
+                continue
+
+            # Lower priority number == sooner. Keep prefetch behind "play now".
+            prio = 20 + offset
+            await DOWNLOAD_MANAGER.enqueue_normal(DownloadJob(
+                video_id=vid,
+                url=f"https://music.youtube.com/watch?v={vid}",
+                title=qi["title"],
+                artist=qi["artist"],
+                album=qi["album"],
+                art_url=qi["art_url"],
+                track_no=0,
+                duration_ms=int(qi["duration_ms"] or 0),
+                priority=prio,
+            ))
     except Exception as e:
         LOG.warning("[download-prefetch] failed user=%s err=%r", user_id, e)
     finally:
@@ -301,6 +358,246 @@ async def _prefetch_next_station_item(user_id: str, station_id: str) -> None:
 
 def _clean(s: str) -> str:
     return " ".join((s or "").strip().split())
+
+def _yt_video_id_from_key(key: Any) -> str:
+    """Recover a YouTube video id from legacy stable identity keys.
+
+    Older liked-song rows may have been keyed as ``yt:<video_id>`` before the
+    explicit ``yt_video_id`` column was populated reliably. Liked Songs are not
+    guaranteed to exist in Subsonic anymore, so preserving/recovering this YT id
+    is required for playback fulfillment.
+    """
+    raw = _clean(str(key or ""))
+    for prefix in ("yt:", "ytmusic:", "youtube:"):
+        if raw.startswith(prefix):
+            candidate = raw[len(prefix):].strip()
+            return candidate if is_valid_yt_video_id(candidate) else ""
+    return raw if is_valid_yt_video_id(raw) else ""
+
+
+def _find_track_safe(*, title: str, artist: str, album: str | None = None, duration_seconds: int | None = None):
+    """Call the YTMusic resolver across older/newer helper signatures."""
+    try:
+        return find_track(title=title, artist=artist, album=album, duration_seconds=duration_seconds, limit=9)
+    except TypeError:
+        return find_track(title=title, artist=artist, album=album, duration_seconds=duration_seconds)
+
+
+def _liked_row_for_queue_item(db: Session, user_id: str, cur: QueueItem) -> LikedTrack | None:
+    """Best-effort match from a queue item back to its liked-track row."""
+    subsonic_id = _clean(getattr(cur, "subsonic_song_id", "") or "")
+    if subsonic_id:
+        row = db.execute(
+            select(LikedTrack).where(
+                LikedTrack.user_id == user_id,
+                LikedTrack.subsonic_song_id == subsonic_id,
+            )
+        ).scalars().first()
+        if row:
+            return row
+        row = db.execute(
+            select(LikedTrack).where(
+                LikedTrack.user_id == user_id,
+                LikedTrack.key == f"subsonic:{subsonic_id}",
+            )
+        ).scalar_one_or_none()
+        if row:
+            return row
+
+    title = _clean(getattr(cur, "title", "") or "")
+    artist = _clean(getattr(cur, "artist", "") or "")
+    if title and artist:
+        return db.execute(
+            select(LikedTrack)
+            .where(
+                LikedTrack.user_id == user_id,
+                LikedTrack.title == title,
+                LikedTrack.artist == artist,
+            )
+            .order_by(LikedTrack.created_at.desc())
+            .limit(1)
+        ).scalars().first()
+    return None
+
+
+def _playlist_track_row_for_queue_item(db: Session, user_id: str, cur: QueueItem) -> PlaylistTrack | None:
+    """Best-effort match from a queue item back to its playlist-track row.
+
+    Queue items intentionally do not own playlist mutation state, so stale-source
+    repair matches by user + source identity first, then by title/artist as a
+    fallback. This is used only when Subsonic playback already failed.
+    """
+    subsonic_id = _clean(getattr(cur, "subsonic_song_id", "") or "")
+    if subsonic_id:
+        row = db.execute(
+            select(PlaylistTrack)
+            .where(
+                PlaylistTrack.user_id == user_id,
+                PlaylistTrack.subsonic_song_id == subsonic_id,
+            )
+            .order_by(PlaylistTrack.created_at.desc())
+            .limit(1)
+        ).scalars().first()
+        if row:
+            return row
+        row = db.execute(
+            select(PlaylistTrack)
+            .where(
+                PlaylistTrack.user_id == user_id,
+                PlaylistTrack.key == f"subsonic:{subsonic_id}",
+            )
+            .order_by(PlaylistTrack.created_at.desc())
+            .limit(1)
+        ).scalars().first()
+        if row:
+            return row
+
+    title = _clean(getattr(cur, "title", "") or "")
+    artist = _clean(getattr(cur, "artist", "") or "")
+    if title and artist:
+        return db.execute(
+            select(PlaylistTrack)
+            .where(
+                PlaylistTrack.user_id == user_id,
+                PlaylistTrack.title == title,
+                PlaylistTrack.artist == artist,
+            )
+            .order_by(PlaylistTrack.created_at.desc())
+            .limit(1)
+        ).scalars().first()
+    return None
+
+
+async def _recover_stale_subsonic_playlist_track(db: Session, user_id: str, cur: QueueItem) -> bool:
+    """Mark a stale Subsonic playlist track and persist a recovered YTMusic id.
+
+    Normal playlist rows can point to Subsonic items that existed when the track
+    was added but were later deleted from Navidrome/the filesystem. Preserve the
+    historical Subsonic id, mark the row stale, and store a YTMusic fallback so
+    future playlist playback can use temporary YT fulfillment without importing
+    into Subsonic.
+    """
+    row = _playlist_track_row_for_queue_item(db, user_id, cur)
+    existing_vid = _clean(getattr(cur, "yt_video_id", "") or "")
+    if row:
+        existing_vid = existing_vid or _clean(row.yt_video_id or "") or _yt_video_id_from_key(getattr(row, "key", ""))
+        row.stale_subsonic = True
+
+    vid = existing_vid
+    if not vid:
+        try:
+            want_dur_s = int((cur.duration_ms or 0) / 1000) if (cur.duration_ms or 0) else None
+            found = await asyncio.to_thread(
+                _find_track_safe,
+                title=cur.title or "",
+                artist=cur.artist or "",
+                album=cur.album or None,
+                duration_seconds=want_dur_s,
+            )
+            if getattr(found, "found", False) and getattr(found, "video_id", ""):
+                candidate = str(found.video_id or "").strip()
+                if is_valid_yt_video_id(candidate):
+                    vid = candidate
+                    LOG.info(
+                        "[stream] recovered stale Subsonic playlist track via YTMusic vid=%s conf=%.2f title=%r artist=%r",
+                        vid,
+                        float(getattr(found, "confidence", 0.0) or 0.0),
+                        cur.title,
+                        cur.artist,
+                    )
+        except Exception as e:
+            LOG.warning("[stream] stale Subsonic playlist-track YT recovery failed: %r", e)
+
+    if row:
+        row.stale_subsonic = True
+        if vid:
+            row.yt_video_id = vid
+            row.source = "ytmusic"
+            row.ytmusic_recovered_at = datetime.utcnow()
+            if not _clean(row.art_url or ""):
+                row.art_url = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+        db.commit()
+
+    if vid:
+        cur.source = "ytmusic"
+        cur.yt_video_id = vid
+        cur.is_playable = False
+        cur.error = "STALE_SUBSONIC_PLAYLIST_RECOVERED_YT"
+        if not _clean(getattr(cur, "art_url", "") or ""):
+            cur.art_url = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+        db.commit()
+        return True
+
+    cur.is_playable = False
+    cur.error = "STALE_SUBSONIC_PLAYLIST_MISSING_YT"
+    db.commit()
+    return False
+
+
+async def _recover_stale_subsonic_liked_track(db: Session, user_id: str, cur: QueueItem) -> bool:
+    """Mark a stale Subsonic-liked song and persist a recovered YTMusic id.
+
+    This handles songs that were liked while present in Subsonic/Navidrome but
+    whose library file was later deleted. The liked row keeps its historical
+    Subsonic id, gets stale_subsonic=True, and stores a YT video id so future
+    playback does not need to rediscover the source.
+    """
+    row = _liked_row_for_queue_item(db, user_id, cur)
+    existing_vid = _clean(getattr(cur, "yt_video_id", "") or "")
+    if row:
+        existing_vid = existing_vid or _clean(row.yt_video_id or "") or _yt_video_id_from_key(getattr(row, "key", ""))
+        row.stale_subsonic = True
+
+    vid = existing_vid
+    if not vid:
+        try:
+            want_dur_s = int((cur.duration_ms or 0) / 1000) if (cur.duration_ms or 0) else None
+            found = await asyncio.to_thread(
+                _find_track_safe,
+                title=cur.title or "",
+                artist=cur.artist or "",
+                album=cur.album or None,
+                duration_seconds=want_dur_s,
+            )
+            if getattr(found, "found", False) and getattr(found, "video_id", ""):
+                candidate = str(found.video_id or "").strip()
+                if is_valid_yt_video_id(candidate):
+                    vid = candidate
+                    LOG.info(
+                        "[stream] recovered stale Subsonic liked song via YTMusic vid=%s conf=%.2f title=%r artist=%r",
+                        vid,
+                        float(getattr(found, "confidence", 0.0) or 0.0),
+                        cur.title,
+                        cur.artist,
+                    )
+        except Exception as e:
+            LOG.warning("[stream] stale Subsonic liked-song YT recovery failed: %r", e)
+
+    if row:
+        row.stale_subsonic = True
+        if vid:
+            row.yt_video_id = vid
+            row.source = "ytmusic"
+            row.ytmusic_recovered_at = datetime.utcnow()
+            if not _clean(row.art_url or ""):
+                row.art_url = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+        db.commit()
+
+    if vid:
+        cur.source = "ytmusic"
+        cur.yt_video_id = vid
+        cur.is_playable = False
+        cur.error = "STALE_SUBSONIC_RECOVERED_YT"
+        if not _clean(getattr(cur, "art_url", "") or ""):
+            cur.art_url = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+        db.commit()
+        return True
+
+    cur.is_playable = False
+    cur.error = "STALE_SUBSONIC_MISSING_YT"
+    db.commit()
+    return False
+
 
 
 
@@ -671,7 +968,11 @@ def state(db: Session = Depends(get_db), user: User = Depends(get_current_user))
                 }
             except Exception:
                 active_station = None
-    _schedule_download_prefetch(user.id)
+    # Do not schedule download prefetch from the high-frequency state polling
+    # endpoint. Scheduling can block sync request threads when the event loop is
+    # busy, and the request-scoped DB session remains open while that happens.
+    # Prefetch is already triggered from playback/queue-changing paths and from
+    # stream fulfillment.
     return PlayerStateResponse(
         is_playing=bool(sess.is_playing),
         current_index=int(sess.current_index),
@@ -943,7 +1244,30 @@ async def play_playlist(payload: PlayerPlayPlaylistRequest, user: User = Depends
                 .scalars()
                 .all()
             )
+            recovered_any = False
             for r in rows:
+                subsonic_song_id = _clean(r.subsonic_song_id or "")
+                yt_video_id = _clean(r.yt_video_id or "") or _yt_video_id_from_key(getattr(r, "key", ""))
+                is_stale_subsonic = bool(getattr(r, "stale_subsonic", False))
+                source = _clean(r.source or "")
+
+                if yt_video_id and not _clean(r.yt_video_id or ""):
+                    r.yt_video_id = yt_video_id
+                    recovered_any = True
+                if is_stale_subsonic and yt_video_id:
+                    # This liked song was originally Subsonic-backed, but that item/file
+                    # has gone stale. Queue it as YTMusic-backed while preserving the old
+                    # subsonic_song_id on the liked row for history.
+                    source = "ytmusic"
+                    if r.source != "ytmusic":
+                        r.source = "ytmusic"
+                        recovered_any = True
+                elif not source:
+                    source = "subsonic" if subsonic_song_id else ("ytmusic" if yt_video_id else "")
+                    if source:
+                        r.source = source
+                        recovered_any = True
+
                 items.append(
                     {
                         "title": r.title or "",
@@ -951,14 +1275,16 @@ async def play_playlist(payload: PlayerPlayPlaylistRequest, user: User = Depends
                         "album": r.album or "",
                         "duration_ms": int(r.duration_ms or 0),
                         "art_url": r.art_url or "",
-                        "source": r.source or "",
-                        "subsonic_song_id": r.subsonic_song_id or "",
-                        "yt_video_id": r.yt_video_id or "",
+                        "source": source,
+                        "subsonic_song_id": subsonic_song_id,
+                        "yt_video_id": yt_video_id,
                         "yt_browse_id": r.yt_browse_id or "",
                         "mb_recording_id": r.mb_recording_id or "",
                         "mb_artist_id": r.mb_artist_id or "",
                     }
                 )
+            if recovered_any:
+                db.commit()
         else:
             assert playlist is not None
             rows = (
@@ -970,7 +1296,27 @@ async def play_playlist(payload: PlayerPlayPlaylistRequest, user: User = Depends
                 .scalars()
                 .all()
             )
+            recovered_any = False
             for r in rows:
+                subsonic_song_id = _clean(r.subsonic_song_id or "")
+                yt_video_id = _clean(r.yt_video_id or "") or _yt_video_id_from_key(getattr(r, "key", ""))
+                is_stale_subsonic = bool(getattr(r, "stale_subsonic", False))
+                source = _clean(r.source or "")
+
+                if yt_video_id and not _clean(r.yt_video_id or ""):
+                    r.yt_video_id = yt_video_id
+                    recovered_any = True
+                if is_stale_subsonic and yt_video_id:
+                    source = "ytmusic"
+                    if r.source != "ytmusic":
+                        r.source = "ytmusic"
+                        recovered_any = True
+                elif not source:
+                    source = "subsonic" if subsonic_song_id else ("ytmusic" if yt_video_id else "")
+                    if source:
+                        r.source = source
+                        recovered_any = True
+
                 items.append(
                     {
                         "title": r.title or "",
@@ -978,17 +1324,22 @@ async def play_playlist(payload: PlayerPlayPlaylistRequest, user: User = Depends
                         "album": r.album or "",
                         "duration_ms": int(r.duration_ms or 0),
                         "art_url": r.art_url or "",
-                        "source": r.source or "",
-                        "subsonic_song_id": r.subsonic_song_id or "",
-                        "yt_video_id": r.yt_video_id or "",
+                        "source": source,
+                        "subsonic_song_id": subsonic_song_id,
+                        "yt_video_id": yt_video_id,
                         "yt_browse_id": r.yt_browse_id or "",
                         "mb_recording_id": r.mb_recording_id or "",
                         "mb_artist_id": r.mb_artist_id or "",
                     }
                 )
+            if recovered_any:
+                db.commit()
 
         if not items:
             raise HTTPException(status_code=400, detail="Playlist is empty")
+
+        if bool(getattr(payload, "shuffle", False)) and len(items) > 1:
+            random.SystemRandom().shuffle(items)
 
         # Clear the existing queue and write the full expanded playlist.
         _clear_queue(db, user.id, settings=settings, log_current=True, played_ms=0)
@@ -1014,11 +1365,12 @@ async def play_playlist(payload: PlayerPlayPlaylistRequest, user: User = Depends
             qi.mb_recording_id = _clean(it.get("mb_recording_id") or "")
             qi.mb_artist_id = _clean(it.get("mb_artist_id") or "")
 
-            # Mark playable when we have a Subsonic library id; otherwise the stream endpoint will fulfill via YT.
-            if qi.subsonic_song_id:
+            # Mark playable when we have a live Subsonic library id. Stale liked
+            # rows may still preserve subsonic_song_id but intentionally queue as
+            # YTMusic so stream fulfillment uses the recovered temporary-download path.
+            if qi.subsonic_song_id and qi.source == "subsonic":
                 qi.is_playable = True
                 qi.error = ""
-                qi.source = "subsonic"
             else:
                 qi.is_playable = False
                 qi.error = "NOT_IN_LIBRARY"
@@ -1174,6 +1526,89 @@ def queue_remove_item(queue_item_id: str, db: Session = Depends(get_db), user: U
     db.commit()
     return PlayerRemoveQueueItemResponse(ok=True)
 
+
+
+def queue_reorder(payload: PlayerQueueReorderRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Reorder the main playback queue while preserving the current track.
+
+    The main queue drives fulfillment, so this endpoint only rewrites queue
+    positions and updates current_index to keep the same QueueItem playing. It
+    does not enqueue downloads directly; the normal state/stream fulfillment
+    path will consider only the new current/front item after the reorder.
+    """
+    sess = _get_or_create_session(db, user.id)
+
+    requested_ids: list[str] = []
+    seen: set[str] = set()
+    for raw_id in getattr(payload, "item_ids", []) or []:
+        item_id = _clean(raw_id)
+        if not item_id or item_id in seen:
+            continue
+        requested_ids.append(item_id)
+        seen.add(item_id)
+
+    if not requested_ids:
+        raise HTTPException(status_code=400, detail="Reorder payload must include queue item ids")
+
+    try:
+        # Hold a SQLite write lock while reading the queue and renumbering positions.
+        # This avoids collisions with concurrent station prefetch / append requests.
+        db.rollback()
+        db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+
+        rows = db.execute(
+            select(QueueItem)
+            .where(QueueItem.session_user_id == user.id)
+            .order_by(QueueItem.position.asc(), QueueItem.created_at.asc())
+        ).scalars().all()
+
+        if not rows:
+            db.rollback()
+            return state(db=db, user=user)
+
+        by_id = {row.id: row for row in rows}
+        for item_id in requested_ids:
+            if item_id not in by_id:
+                db.rollback()
+                raise HTTPException(status_code=400, detail="Reorder payload contains an unknown queue item")
+
+        current_index = int(sess.current_index or 0)
+        current_item_id = rows[current_index].id if 0 <= current_index < len(rows) else ""
+
+        ordered_rows = [by_id[item_id] for item_id in requested_ids]
+        # Preserve items appended while the UI drag was in progress.
+        ordered_rows.extend(row for row in rows if row.id not in seen)
+
+        # Unique(session_user_id, position) means direct swaps can collide. Move
+        # everything out of the way first, then assign final contiguous positions.
+        for offset, row in enumerate(rows):
+            row.position = 100000 + offset
+            db.add(row)
+        db.flush()
+
+        for position, row in enumerate(ordered_rows):
+            row.position = position
+            db.add(row)
+
+        if current_item_id:
+            sess.current_index = next(
+                (index for index, row in enumerate(ordered_rows) if row.id == current_item_id),
+                min(current_index, len(ordered_rows) - 1),
+            )
+        else:
+            sess.current_index = min(current_index, len(ordered_rows) - 1)
+
+        db.add(sess)
+        db.commit()
+    except HTTPException:
+        raise
+    except (IntegrityError, OperationalError) as exc:
+        db.rollback()
+        if isinstance(exc, OperationalError) and "database is locked" in str(exc).lower():
+            raise HTTPException(status_code=503, detail="Queue is busy. Please try again.") from exc
+        raise
+
+    return state(db=db, user=user)
 
 def history(station_id: str | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     settings = get_settings(db)
@@ -1403,10 +1838,36 @@ def resume(db: Session = Depends(get_db), user: User = Depends(get_current_user)
     return state(db=db, user=user)
 
 
+def _stream_queue_item_snapshot(cur: QueueItem) -> SimpleNamespace:
+    """Copy queue item fields needed by stream generators before closing DB.
+
+    FastAPI cleans dependency sessions up after the whole response completes. Audio
+    responses can remain open for a long time, so stream endpoints must not return
+    a StreamingResponse that still references a request-scoped SQLAlchemy session or
+    ORM object. This snapshot is intentionally plain data.
+    """
+    return SimpleNamespace(
+        id=cur.id,
+        source=cur.source,
+        title=cur.title,
+        artist=cur.artist,
+        album=cur.album,
+        duration_ms=cur.duration_ms,
+        position=cur.position,
+        is_playable=cur.is_playable,
+        yt_video_id=cur.yt_video_id,
+        yt_browse_id=getattr(cur, "yt_browse_id", ""),
+        subsonic_song_id=cur.subsonic_song_id,
+        inbound_path=cur.inbound_path,
+        download_status=cur.download_status,
+        error=cur.error,
+        art_url=cur.art_url,
+    )
+
+
 async def stream_item(
     queue_item_id: str,
     request: Request,
-    db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     """Stream audio for a queue item.
@@ -1416,48 +1877,70 @@ async def stream_item(
     IMPORTANT: Support HTTP Range for both inbound and proxied Subsonic streams so
     Media3/ExoPlayer can seek and determine duration.
     """
-    settings = get_settings(db)
+    db = SessionLocal()
+    try:
+        settings = get_settings(db)
 
-    cur = db.execute(
-        select(QueueItem)
-        .where(QueueItem.session_user_id == user.id, QueueItem.id == queue_item_id)
-    ).scalar_one_or_none()
-    if not cur:
-        raise HTTPException(status_code=404, detail="Queue item not found.")
+        cur = db.execute(
+            select(QueueItem)
+            .where(QueueItem.session_user_id == user.id, QueueItem.id == queue_item_id)
+        ).scalar_one_or_none()
+        if not cur:
+            raise HTTPException(status_code=404, detail="Queue item not found.")
 
-    sess = db.get(PlaybackSession, user.id)
-    _maybe_prefetch_station(user_id=user.id, sess=sess, cur=cur)
+        sess = db.get(PlaybackSession, user.id)
+        _maybe_prefetch_station(user_id=user.id, sess=sess, cur=cur)
 
-    # Best-effort: fill missing yt id, repair meta.
-    await _maybe_lazy_resolve_yt_id(db, cur)
-    await _maybe_repair_from_mb_recording(db, cur)
+        # Best-effort: fill missing yt id, repair meta.
+        await _maybe_lazy_resolve_yt_id(db, cur)
+        await _maybe_repair_from_mb_recording(db, cur)
 
-    # Ensure the item is playable (Subsonic id or inbound file) *before* streaming.
-    # For stream requests, do not block on Subsonic scanning/polling. If not found quickly,
-    # start inbound download and stream progressively.
-    await _ensure_playable_for_stream(db, cur, settings=settings, allow_subsonic_wait=False, progressive_inbound=True)
+        # Ensure the item is playable (Subsonic id or inbound file) *before* streaming.
+        # For stream requests, do not block on Subsonic scanning/polling. If not found quickly,
+        # start inbound download and stream progressively.
+        await _ensure_playable_for_stream(db, cur, settings=settings, allow_subsonic_wait=False, progressive_inbound=True)
 
-    inbound_exists = bool((cur.inbound_path or "").strip()) and os.path.exists(cur.inbound_path)
-    LOG.warning(
-        "[stream-debug] id=%s source=%s playable=%s yt=%s sub=%s inbound_path=%r exists=%s status=%s error=%s",
-        cur.id,
-        cur.source,
-        cur.is_playable,
-        cur.yt_video_id,
-        cur.subsonic_song_id,
-        cur.inbound_path,
-        inbound_exists,
-        cur.download_status,
-        cur.error,
-    )
+        inbound_exists = bool((cur.inbound_path or "").strip()) and os.path.exists(cur.inbound_path)
+        LOG.warning(
+            "[stream-debug] id=%s source=%s playable=%s yt=%s sub=%s inbound_path=%r exists=%s status=%s error=%s",
+            cur.id,
+            cur.source,
+            cur.is_playable,
+            cur.yt_video_id,
+            cur.subsonic_song_id,
+            cur.inbound_path,
+            inbound_exists,
+            cur.download_status,
+            cur.error,
+        )
 
-    if cur.source != "subsonic":
-        # If the file is still downloading (often endswith .part) use progressive streaming.
-        if (cur.inbound_path or "").endswith('.part') or (cur.download_status == 'DOWNLOADING'):
-            return await _stream_inbound_progressive(request, cur)
-        return await _stream_inbound_with_range(request, cur)
+        if cur.source != "subsonic":
+            # If the file is still downloading (often endswith .part) use progressive streaming.
+            if (cur.inbound_path or "").endswith('.part'):
+                return await _stream_inbound_progressive(request, _stream_queue_item_snapshot(cur))
+            return await _stream_inbound_with_range(request, _stream_queue_item_snapshot(cur))
 
-    return await _stream_subsonic_with_range(request, cur, settings=settings)
+        try:
+            return await _stream_subsonic_with_range(request, _stream_queue_item_snapshot(cur), settings=settings)
+        except HTTPException as exc:
+            # Liked songs can point at Subsonic items that existed when they were liked
+            # but were later deleted from Navidrome/the filesystem. Treat that as a stale
+            # Subsonic reference, recover/persist a YTMusic id on the liked row, then
+            # fulfill this playback as a temporary YT download.
+            if exc.status_code not in {404, 409, 410, 415, 422, 502, 503}:
+                raise
+            recovered = await _recover_stale_subsonic_liked_track(db, user.id, cur)
+            if not recovered:
+                recovered = await _recover_stale_subsonic_playlist_track(db, user.id, cur)
+            if not recovered:
+                raise
+            await _ensure_playable_for_stream(db, cur, settings=settings, allow_subsonic_wait=False, progressive_inbound=True)
+            if (cur.inbound_path or "").endswith('.part'):
+                return await _stream_inbound_progressive(request, _stream_queue_item_snapshot(cur))
+            return await _stream_inbound_with_range(request, _stream_queue_item_snapshot(cur))
+
+    finally:
+        db.close()
 
 
 
@@ -1562,23 +2045,30 @@ async def _ensure_playable_for_stream(db: Session, cur: QueueItem, *, settings: 
 
     # Already playable inbound.
     if cur.source != "subsonic" and cur.inbound_path and os.path.exists(cur.inbound_path):
+        # Older progressive stream requests could leave a completed/cached file marked
+        # as DOWNLOADING. Only real .part files should be treated as progressive;
+        # finalized/cache files need normal Range support so refresh/seek resumes work.
+        if not str(cur.inbound_path or "").endswith(".part") and getattr(cur, "download_status", "") == "DOWNLOADING":
+            cur.download_status = "DOWNLOADED"
+            try:
+                db.commit()
+            except Exception:
+                db.rollback()
         return
 
     vid = _clean(getattr(cur, "yt_video_id", "") or "")
 
-    # If we have no video id and it's not in Subsonic, we can't fulfill here.
-    if not vid:
-        raise HTTPException(status_code=404, detail="Current item not playable (missing source).")
-
-    # Repair metadata if needed (structured YT album metadata).
-    if (not _clean(cur.artist or "") or _looks_like_views(cur.artist)) or (not _clean(cur.album or "")):
+    # Repair metadata if needed (structured YT album metadata). Only possible when a
+    # YouTube Music video id is known; otherwise we still try Subsonic by metadata below.
+    if vid and ((not _clean(cur.artist or "") or _looks_like_views(cur.artist)) or (not _clean(cur.album or ""))):
         try:
             _repair_from_album_full(cur)
             db.commit()
         except Exception as e:
             LOG.warning("[stream] metadata repair failed: %r", e)
 
-    # Try Subsonic lookup before downloading.
+    # Try Subsonic lookup before requiring a YouTube id. This is important for old
+    # liked-playlist rows that may have title/artist metadata but no stored source id.
     song = None
     client = None
     try:
@@ -1619,6 +2109,45 @@ async def _ensure_playable_for_stream(db: Session, cur: QueueItem, *, settings: 
         db.commit()
         return
 
+    # If the queue item came from an old liked-song row without a stored YT id,
+    # try one final YTMusic lookup by metadata before failing. This keeps liked
+    # tracks playable even when they were never explicitly added to Subsonic.
+    if not vid:
+        try:
+            want_dur_s = int((cur.duration_ms or 0) / 1000) if (cur.duration_ms or 0) else None
+            found = await asyncio.to_thread(
+                _find_track_safe,
+                title=cur.title or "",
+                artist=cur.artist or "",
+                album=cur.album or None,
+                duration_seconds=want_dur_s,
+            )
+            if getattr(found, "found", False) and getattr(found, "video_id", ""):
+                candidate = str(found.video_id or "").strip()
+                if is_valid_yt_video_id(candidate):
+                    vid = candidate
+                    cur.yt_video_id = vid
+                    cur.source = "ytmusic"
+                    if not _clean(getattr(cur, "art_url", "") or ""):
+                        cur.art_url = f"https://i.ytimg.com/vi/{vid}/hqdefault.jpg"
+                    db.commit()
+                    LOG.info(
+                        "[stream] recovered missing liked-song yt id vid=%s conf=%.2f title=%r artist=%r",
+                        vid,
+                        float(getattr(found, "confidence", 0.0) or 0.0),
+                        cur.title,
+                        cur.artist,
+                    )
+        except Exception as e:
+            LOG.warning("[stream] fallback yt lookup for missing source failed: %r", e)
+
+    # If we still have no video id and it isn't in Subsonic, we can't fulfill it.
+    if not vid:
+        cur.is_playable = False
+        cur.error = "MISSING_SOURCE"
+        db.commit()
+        raise HTTPException(status_code=404, detail="Current item not playable (missing source).")
+
     # Not in Subsonic: download/import (front-of-queue streaming only).
     job = DownloadJob(
         video_id=vid,
@@ -1639,6 +2168,11 @@ async def _ensure_playable_for_stream(db: Session, cur: QueueItem, *, settings: 
         if progressive_inbound:
             # Start download and stream from the growing file as soon as it exists.
             stream_path = await DOWNLOAD_MANAGER.ensure_started(job, min_bytes=HELIX_PROGRESSIVE_MIN_BYTES)
+            if not stream_path:
+                # Do not leave the browser pointing at a missing/unsupported media
+                # resource if progressive startup could not detect a usable part file.
+                inbound_path = await DOWNLOAD_MANAGER.ensure_downloaded(job)
+                stream_path = DOWNLOAD_MANAGER.ensure_stream_cache(vid, inbound_path)
         else:
             inbound_path = await DOWNLOAD_MANAGER.ensure_downloaded(job)
             stream_path = DOWNLOAD_MANAGER.ensure_stream_cache(vid, inbound_path)
@@ -1648,7 +2182,10 @@ async def _ensure_playable_for_stream(db: Session, cur: QueueItem, *, settings: 
 
     cur.source = "inbound"
     cur.inbound_path = stream_path
-    cur.download_status = "DOWNLOADED" if (not progressive_inbound) else "DOWNLOADING"
+    # Progressive mode may return either a growing .part file or an already-ready
+    # cached/final file. Mark only actual .part paths as DOWNLOADING. Completed files
+    # must be served with byte ranges so browser refresh/resume seeks work.
+    cur.download_status = "DOWNLOADING" if str(stream_path or "").endswith(".part") else "DOWNLOADED"
     cur.is_playable = True
     cur.error = ""
     db.commit()
@@ -1667,9 +2204,7 @@ async def _stream_inbound_progressive(request: Request, cur: QueueItem) -> Strea
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Current item not playable (missing).")
 
-    # For *.part, guess based on the underlying extension.
-    guess_path = file_path[:-5] if file_path.endswith(".part") else file_path
-    ctype = mimetypes.guess_type(guess_path)[0] or "application/octet-stream"
+    ctype = _browser_audio_media_type(file_path)
 
     vid = _clean(getattr(cur, "yt_video_id", "") or "")
     DOWNLOAD_MANAGER.mark_streaming(vid, True)
@@ -1748,7 +2283,7 @@ async def _stream_inbound_with_range(request: Request, cur: QueueItem) -> Stream
     if not file_path or not os.path.exists(file_path):
         raise HTTPException(status_code=404, detail="Current item not playable (missing).")
 
-    ctype = mimetypes.guess_type(file_path)[0] or "application/octet-stream"
+    ctype = _browser_audio_media_type(file_path)
     size = os.path.getsize(file_path)
     rng = _parse_range_header(request.headers.get("range"), size)
 
@@ -1839,6 +2374,17 @@ async def _stream_subsonic_with_range(request: Request, cur: QueueItem, *, setti
         ctype = r.headers.get("content-type")
         if not ctype:
             ctype = "audio/mpeg" if params.get("format") == "mp3" else "application/octet-stream"
+        ctype_l = ctype.lower()
+        if (not ctype_l.startswith("audio/")) and ("application/octet-stream" not in ctype_l):
+            # Subsonic/Navidrome may return an XML/JSON/text error body for a stale
+            # song id even when the transport request itself succeeded. Do not proxy
+            # that to the browser as media; trigger fallback recovery in stream_item.
+            try:
+                await r.aread()
+            finally:
+                await r.aclose()
+                await h.aclose()
+            raise HTTPException(status_code=502, detail="Subsonic item is not streamable; attempting fallback.")
 
         headers_out = {"Accept-Ranges": "bytes"}
         # Pass through important range/length headers when present.
@@ -1897,7 +2443,7 @@ async def request_fulfillment(queue_item_id: str, user: User = Depends(get_curre
             except Exception:
                 want_dur_s = None
             try:
-                r = find_track(title=title, artist=artist, album=album or None, duration_seconds=want_dur_s, limit=9)
+                r = _find_track_safe(title=title, artist=artist, album=album or None, duration_seconds=want_dur_s)
                 if r.found and r.video_id:
                     yt_video_id = _clean(r.video_id)
                     qi.yt_video_id = yt_video_id

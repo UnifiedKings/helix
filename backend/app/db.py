@@ -26,6 +26,7 @@ class Base(DeclarativeBase):
 
 def init_db() -> None:
     from . import models  # noqa: F401
+    from . import lobby_models  # noqa: F401
     Base.metadata.create_all(bind=engine)
 
     # Lightweight forward migrations for SQLite. (create_all does not alter existing tables.)

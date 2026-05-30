@@ -16,8 +16,10 @@ from .routers.admin import router as admin_router
 from .routers.album import router as album_router
 from .routers.art import router as art_router
 from .routers.auth import router as auth_router
+from .routers.home import router as home_router
 from .routers.dislikes import router as dislikes_router
 from .routers.likes import router as likes_router
+from .routers.lobbies import router as lobbies_router
 from .routers.playback import router as playback_router
 from .routers.queue import router as queue_router
 from .routers.playback_history import router as playback_history_router
@@ -82,6 +84,7 @@ def _startup():
 app.include_router(system_router)
 app.include_router(auth_router)
 app.include_router(settings_router)
+app.include_router(home_router)
 app.include_router(admin_router)
 app.include_router(search_router)
 app.include_router(album_router)
@@ -94,6 +97,7 @@ app.include_router(ytmusic_router)
 app.include_router(stations_router)
 app.include_router(art_router)
 app.include_router(likes_router)
+app.include_router(lobbies_router)
 app.include_router(dislikes_router)
 app.include_router(playlists_router)
 app.include_router(subsonic_router)

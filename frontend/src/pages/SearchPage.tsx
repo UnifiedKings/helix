@@ -95,7 +95,7 @@ function TopResultCard({ result, player, onStatus, searchReturn }: { result: Non
           <button className="primary" onClick={() => result.kind === 'album' ? player.run(() => api.playAlbum(result.item), 'play') : player.run(() => api.playSong(result.item), 'play')}>▶ Play</button>
           <button onClick={() => result.kind === 'album' ? player.run(() => api.queueAlbum(result.item)) : player.run(() => api.queueSong(result.item))}>Queue</button>
           {result.kind === 'album' && albumBrowseId(result.item) ? <Link className="button-link" to={`/albums/${encodeURIComponent(albumBrowseId(result.item))}`} state={{ searchReturn }}>Open album</Link> : null}
-          {isYt ? <button onClick={() => void addToSubsonic()}>Add to Subsonic</button> : null}
+          {isYt ? <button className="icon-button compact-action subsonic-add-action" aria-label={`Add ${title} to Subsonic`} data-tooltip="Add to Subsonic" title="Add to Subsonic" onClick={() => void addToSubsonic()}><span aria-hidden="true">S+</span></button> : null}
         </div>
       </article>
     </section>
@@ -118,9 +118,9 @@ function SongRow({ song, player, onStatus }: { song: SearchSong; player: PlayerC
       <SourceBadge source={song.source} />
       <span className="song-duration">{duration}</span>
       <div className="search-row-actions">
-        <button className="icon-button compact-action" aria-label={`Play ${song.title}`} title="Play" onClick={() => player.run(() => api.playSong(song), 'play')}>▶</button>
-        <button className="icon-button compact-action" aria-label={`Queue ${song.title}`} title="Queue" onClick={() => player.run(() => api.queueSong(song))}>＋</button>
-        {canAdd && song.source !== 'subsonic' ? <button className="compact-text-action" onClick={() => void addToSubsonic()}>Add</button> : null}
+        <button className="icon-button compact-action" aria-label={`Play ${song.title}`} data-tooltip="Play" title="Play" onClick={() => player.run(() => api.playSong(song), 'play')}>▶</button>
+        <button className="icon-button compact-action" aria-label={`Queue ${song.title}`} data-tooltip="Add to queue" title="Add to queue" onClick={() => player.run(() => api.queueSong(song))}>＋</button>
+        {canAdd && song.source !== 'subsonic' ? <button className="icon-button compact-action subsonic-add-action" aria-label={`Add ${song.title} to Subsonic`} data-tooltip="Add to Subsonic" title="Add to Subsonic" onClick={() => void addToSubsonic()}><span aria-hidden="true">S+</span></button> : null}
       </div>
     </article>
   )
@@ -170,7 +170,7 @@ function AlbumCard({ album, player, onStatus, searchReturn }: { album: SearchAlb
           <summary className="icon-button compact-action album-more-button" aria-label={`More options for ${album.title}`} title="More options">⋯</summary>
           <div className="album-card-menu-popover">
             <button type="button" onClick={() => player.run(() => api.queueAlbum(album))}>Queue</button>
-            {canAdd && album.source !== 'subsonic' ? <button type="button" onClick={() => void addToSubsonic()}>Add to Subsonic</button> : null}
+            {canAdd && album.source !== 'subsonic' ? <button className="icon-button compact-action subsonic-add-action" aria-label={`Add ${album.title} to Subsonic`} data-tooltip="Add to Subsonic" title="Add to Subsonic" onClick={() => void addToSubsonic()}><span aria-hidden="true">S+</span></button> : null}
           </div>
         </details>
       </div>

@@ -55,6 +55,8 @@ class PlayerPlayTrackRequest(BaseModel):
 class PlayerPlayPlaylistRequest(BaseModel):
     # Playlist identifier. Use "liked" for the system Liked Songs playlist.
     playlist_id: str
+    # When true, the backend expands the playlist and randomizes the queue order.
+    shuffle: bool = False
 
 class PlayerPlayAlbumRequest(BaseModel):
     # YT Music album identifier (browseId). MusicBrainz is no longer the primary source.
@@ -85,6 +87,12 @@ class PlayerQueueAppendTrackRequest(BaseModel):
     art_url: Optional[str] = None
     yt_video_id: Optional[str] = None
     ytmusic_url: Optional[str] = None
+
+
+class PlayerQueueReorderRequest(BaseModel):
+    # Ordered queue item ids. Items not included because they were appended during
+    # the drag are preserved at the end in existing order.
+    item_ids: list[str] = []
 
 
 class PlayerRemoveQueueItemResponse(BaseModel):

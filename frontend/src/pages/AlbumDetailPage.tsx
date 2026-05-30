@@ -76,8 +76,8 @@ export function AlbumDetailPage() {
               <div className="detail-actions">
                 <button className="primary" onClick={() => player.run(() => api.playAlbum(album), 'play')}>▶ Play album</button>
                 <button onClick={() => player.run(() => api.queueAlbum(album))}>Queue album</button>
-                <button onClick={() => void addAlbumToSubsonic()}>Add album to Subsonic</button>
-                <Link className="button-link" to="/" state={searchReturnState}>Back to search</Link>
+                <button className="icon-button compact-action subsonic-add-action" aria-label={`Add ${album.title} to Subsonic`} data-tooltip="Add to Subsonic" title="Add to Subsonic" onClick={() => void addAlbumToSubsonic()}><span aria-hidden="true">S+</span></button>
+                <Link className="button-link" to="/search" state={searchReturnState}>Back to search</Link>
               </div>
             </div>
           </section>
@@ -93,9 +93,9 @@ export function AlbumDetailPage() {
                     <div className="song-title-cell"><strong>{song.title}</strong><span>{song.artist}</span></div>
                     <span className="song-duration">{durationLabel(song)}</span>
                     <div className="search-row-actions">
-                      <button className="icon-button compact-action" title="Play" onClick={() => player.run(() => api.playSong(song), 'play')}>▶</button>
-                      <button className="icon-button compact-action" title="Queue" onClick={() => player.run(() => api.queueSong(song))}>＋</button>
-                      <button className="compact-text-action" onClick={() => void api.addSongToSubsonic(song).then(() => setStatus(`Queued track for Subsonic import: ${song.title}`))}>Add</button>
+                      <button className="icon-button compact-action" data-tooltip="Play" title="Play" onClick={() => player.run(() => api.playSong(song), 'play')}>▶</button>
+                      <button className="icon-button compact-action" data-tooltip="Add to queue" title="Add to queue" onClick={() => player.run(() => api.queueSong(song))}>＋</button>
+                      <button className="icon-button compact-action subsonic-add-action" aria-label={`Add ${song.title} to Subsonic`} data-tooltip="Add to Subsonic" title="Add to Subsonic" onClick={() => void api.addSongToSubsonic(song).then(() => setStatus(`Queued track for Subsonic import: ${song.title}`))}><span aria-hidden="true">S+</span></button>
                     </div>
                   </article>
                 )

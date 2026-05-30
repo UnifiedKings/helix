@@ -147,6 +147,15 @@ class Station(Base):
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
 
     name: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    # Internal provider key used by the station-provider registry. Existing
+    # stations default to the original ListenBrainz similar-artist logic.
+    station_type: Mapped[str] = mapped_column(String(96), nullable=False, default="listenbrainz_similar_artist")
+
+    # Provider-specific JSON config. The legacy columns below remain for
+    # backward compatibility and are mirrored into provider config at runtime.
+    config_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+
     seed_type: Mapped[str] = mapped_column(String(16), nullable=False, default="artist")  # artist|track
     seed_title: Mapped[str] = mapped_column(Text, nullable=False, default="")
     seed_artist: Mapped[str] = mapped_column(Text, nullable=False, default="")
@@ -223,6 +232,12 @@ class LikedTrack(Base):
     subsonic_song_id: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     yt_video_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
     yt_browse_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    # If a liked track was originally backed by Subsonic but that Subsonic item/file
+    # later disappears, keep the old Subsonic id for history but mark it stale and
+    # persist a recovered YTMusic video id for future playback.
+    stale_subsonic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    ytmusic_recovered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
     mb_recording_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     mb_artist_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
@@ -316,6 +331,12 @@ class PlaylistTrack(Base):
     subsonic_song_id: Mapped[str] = mapped_column(String(128), nullable=False, default="")
     yt_video_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
     yt_browse_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
+
+    # If a playlist track was originally backed by Subsonic but that Subsonic
+    # item/file later disappears, keep the historical Subsonic id but persist a
+    # recovered YTMusic video id for future temporary playback.
+    stale_subsonic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    ytmusic_recovered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, default=None)
 
     mb_recording_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
     mb_artist_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")

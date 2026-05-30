@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageOps, UnidentifiedImageError
 
 """Station cover generation.
 
@@ -40,6 +40,93 @@ def _cover_paths(station_id: str) -> Tuple[str, str]:
     img_path = os.path.join(d, f"{station_id}.jpg")
     meta_path = os.path.join(d, f"{station_id}.json")
     return img_path, meta_path
+
+
+def _safe_station_filename(station_id: str) -> str:
+    safe = "".join(ch for ch in str(station_id or "") if ch.isalnum() or ch in ("-", "_"))
+    return safe or "station"
+
+
+def _custom_covers_dir() -> str:
+    d = os.path.join(_covers_dir(), "custom")
+    _ensure_dir(d)
+    return d
+
+
+def custom_station_cover_path(station_id: str) -> str:
+    return os.path.join(_custom_covers_dir(), f"{_safe_station_filename(station_id)}.jpg")
+
+
+def has_custom_station_cover(station_id: str) -> bool:
+    return os.path.exists(custom_station_cover_path(station_id))
+
+
+def delete_custom_station_cover(station_id: str) -> bool:
+    path = custom_station_cover_path(station_id)
+    if not os.path.exists(path):
+        return False
+    try:
+        os.remove(path)
+        return True
+    except FileNotFoundError:
+        return False
+
+
+def delete_generated_station_cover(station_id: str) -> None:
+    """Remove the generated fallback cover so a custom upload cannot appear stale."""
+    img_path, meta_path = _cover_paths(station_id)
+    for path in (img_path, meta_path):
+        try:
+            os.remove(path)
+        except FileNotFoundError:
+            pass
+        except Exception:
+            pass
+
+
+def save_custom_station_cover(
+    station_id: str,
+    image_bytes: bytes,
+    *,
+    output_size: int = 1024,
+    minimum_side: int = 128,
+    max_bytes: int = 10 * 1024 * 1024,
+) -> str:
+    """Normalize and save a user-supplied station cover.
+
+    User guidance:
+    - Recommended: 1024x1024 square image.
+    - Minimum: 512x512 effective square crop.
+    - Accepted formats are whatever Pillow can identify from PNG/JPG/WebP uploads.
+    - Non-square images are center-cropped.
+    """
+    if not image_bytes:
+        raise ValueError("cover image is required")
+    if len(image_bytes) > max_bytes:
+        raise ValueError("cover image is too large; maximum upload size is 10 MB")
+
+    try:
+        with Image.open(io.BytesIO(image_bytes)) as raw:
+            image = ImageOps.exif_transpose(raw).convert("RGB")
+    except UnidentifiedImageError as exc:
+        raise ValueError("cover image must be a valid PNG, JPG, or WebP image") from exc
+    except Exception as exc:
+        raise ValueError("cover image could not be processed") from exc
+
+    width, height = image.size
+    if min(width, height) < minimum_side:
+        raise ValueError(f"cover image must be at least {minimum_side}x{minimum_side} px before cropping")
+
+    try:
+        resample = Image.Resampling.LANCZOS
+    except AttributeError:  # Pillow < 9
+        resample = Image.LANCZOS
+
+    image = _center_crop_square(image).resize((output_size, output_size), resample)
+    path = custom_station_cover_path(station_id)
+    _ensure_dir(os.path.dirname(path))
+    image.save(path, format="JPEG", quality=90, optimize=True)
+    return path
 
 
 def _now_ts() -> float:

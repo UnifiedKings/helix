@@ -134,9 +134,33 @@ export type PlaybackHistoryResponse = {
   items: PlaybackHistoryItem[]
 }
 
+export type StationConfigOption = {
+  key: string
+  label: string
+  type: 'string' | 'number' | 'integer' | 'boolean' | 'select' | 'multiselect' | 'textarea' | string
+  description?: string
+  required?: boolean
+  default?: unknown
+  min?: number
+  max?: number
+  step?: number
+  choices?: Array<{ label?: string; value: unknown }>
+}
+
+export type StationProviderInfo = {
+  station_type: string
+  display_name: string
+  description: string
+  version?: string
+  builtin?: boolean
+  config_options: StationConfigOption[]
+}
+
 export type Station = {
   id: string
   name: string
+  station_type?: string
+  config?: Record<string, unknown>
   seed_type: 'artist' | 'track' | string
   seed_title?: string
   seed_artist?: string
@@ -155,6 +179,8 @@ export type Station = {
   artist_blacklist?: string
   temperature?: number
   cover_url?: string
+  thumbnail_url?: string
+  has_custom_cover?: boolean
   created_at?: string
   updated_at?: string
 }
@@ -196,4 +222,114 @@ export type DislikeState = {
 export type AudioIntent = {
   id: number
   action: 'play' | 'pause'
+}
+
+
+export type LobbyPermissions = {
+  can_add_to_queue: boolean
+  can_remove_own_queue_items: boolean
+  can_remove_any_queue_item: boolean
+  can_control_playback: boolean
+  can_skip: boolean
+  can_seek: boolean
+}
+
+export type LobbyMember = {
+  id: string
+  nickname: string
+  role: 'host' | 'guest' | string
+  is_active: boolean
+  permissions: LobbyPermissions
+  joined_at: string
+  last_seen_at: string
+}
+
+export type LobbyQueueItem = {
+  id: string
+  position: number
+  title: string
+  artist: string
+  album?: string
+  duration_ms?: number
+  art_url?: string
+  source?: string
+  subsonic_song_id?: string
+  yt_video_id?: string
+  yt_browse_id?: string
+  mb_recording_id?: string
+  mb_artist_id?: string
+  added_by_member_id?: string
+  added_by_nickname?: string
+  created_at: string
+}
+
+export type LobbyState = {
+  id: string
+  name: string
+  host_user_id: string
+  invite_code?: string | null
+  is_open: boolean
+  guest_permissions: LobbyPermissions
+  self_member_id: string
+  self_role: 'host' | 'guest' | string
+  self_permissions: LobbyPermissions
+  is_playing: boolean
+  current_index: number
+  position_ms: number
+  effective_position_ms: number
+  server_time_ms: number
+  position_updated_at: string
+  now_playing?: LobbyQueueItem | null
+  queue: LobbyQueueItem[]
+  members: LobbyMember[]
+  created_at: string
+  updated_at: string
+}
+
+export type LobbyJoinResponse = {
+  guest_token: string
+  member: LobbyMember
+  lobby: LobbyState
+}
+
+export type LobbyListResponse = {
+  lobbies: LobbyState[]
+}
+
+
+export type HomeAttentionItem = {
+  id: string
+  severity: 'info' | 'warning' | 'error' | string
+  title: string
+  detail: string
+  href?: string
+}
+
+export type HomeActivityItem = {
+  id: string
+  kind: string
+  title: string
+  detail: string
+  icon?: string
+  art_url?: string
+  source?: string
+  created_at: string
+}
+
+export type HomeSummary = {
+  generated_at: string
+  health: {
+    status: 'ok' | 'attention' | string
+    label: string
+  }
+  attention: HomeAttentionItem[]
+  recent_activity: HomeActivityItem[]
+}
+
+
+export type AdminUser = {
+  id: string
+  username: string
+  role: 'admin' | 'user' | string
+  is_active: boolean
 }

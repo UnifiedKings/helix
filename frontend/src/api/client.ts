@@ -1,25 +1,56 @@
-import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, DislikeState, LikeState, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, User } from './types'
+import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, DislikeState, HomeSummary, LikeState, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, StationProviderInfo, AdminUser, User, LobbyJoinResponse, LobbyListResponse, LobbyPermissions, LobbyState } from './types'
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const { headers, ...rest } = options
   const res = await fetch(path, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
-    ...options,
+    ...rest,
+    headers: { 'Content-Type': 'application/json', ...(headers ?? {}) },
   })
+
+  const responseText = await res.text()
 
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`
-    try {
-      const body = await res.json()
-      detail = body.detail ?? JSON.stringify(body)
-    } catch {
-      detail = await res.text()
+    if (responseText) {
+      try {
+        const body = JSON.parse(responseText)
+        detail = body.detail ?? JSON.stringify(body)
+      } catch {
+        detail = responseText
+      }
     }
     throw new Error(detail || 'Request failed')
   }
 
-  if (res.status === 204) return undefined as T
-  return res.json() as Promise<T>
+  if (res.status === 204 || !responseText) return undefined as T
+  return JSON.parse(responseText) as T
+}
+
+
+async function rawRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const res = await fetch(path, {
+    credentials: 'include',
+    ...options,
+  })
+
+  const responseText = await res.text()
+
+  if (!res.ok) {
+    let detail = `${res.status} ${res.statusText}`
+    if (responseText) {
+      try {
+        const body = JSON.parse(responseText)
+        detail = body.detail ?? JSON.stringify(body)
+      } catch {
+        detail = responseText
+      }
+    }
+    throw new Error(detail || 'Request failed')
+  }
+
+  if (res.status === 204 || !responseText) return undefined as T
+  return JSON.parse(responseText) as T
 }
 
 
@@ -139,6 +170,41 @@ function identityQuery(item: QueueItem) {
   return params.toString()
 }
 
+
+function lobbyTokenKey(lobbyId: string) {
+  return `helix.lobby.token.${lobbyId}`
+}
+
+function getLobbyToken(lobbyId: string) {
+  return window.localStorage.getItem(lobbyTokenKey(lobbyId)) || ''
+}
+
+function saveLobbyToken(lobbyId: string, token: string) {
+  if (lobbyId && token) window.localStorage.setItem(lobbyTokenKey(lobbyId), token)
+}
+
+function lobbyHeaders(lobbyId: string): Record<string, string> {
+  const token = getLobbyToken(lobbyId)
+  return token ? { 'x-helix-lobby-token': token } : {}
+}
+
+function lobbyQueuePayload(song: SearchSong | QueueItem | { title: string; artist: string; album?: string }) {
+  if ('duration_ms' in song || 'duration_seconds' in song || 'yt_video_id' in song || 'video_id' in song || 'videoId' in song || 'subsonic_song_id' in song || 'source' in song) {
+    return songToPayload(song as SearchSong)
+  }
+  return {
+    title: song.title,
+    artist: song.artist,
+    album: song.album ?? '',
+    duration_ms: 0,
+    art_url: '',
+    source: '',
+    subsonic_song_id: '',
+    yt_video_id: '',
+    ytmusic_url: '',
+  }
+}
+
 export const api = {
   me: () => request<User>('/auth/me'),
   login: (username: string, password: string) => request<User>('/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
@@ -147,12 +213,13 @@ export const api = {
   setupEnabled: () => request<{ enabled: boolean }>('/setup/enabled'),
 
   health: () => request<{ ok?: boolean; status?: string }>('/health'),
+  homeSummary: () => request<HomeSummary>('/api/home/summary'),
   settings: () => request<Record<string, unknown>>('/settings'),
 
   playerState: () => request<PlayerState>('/api/playback/state'),
   playSong: (song: SearchSong) => request<PlayerState>('/api/playback/track', { method: 'POST', body: JSON.stringify(songToPayload(song)) }),
   playAlbum: (album: SearchAlbum) => request<PlayerState>('/api/playback/album', { method: 'POST', body: JSON.stringify(albumToPayload(album)) }),
-  playPlaylist: (playlistId: string) => request<PlayerState>('/api/playback/playlist', { method: 'POST', body: JSON.stringify({ playlist_id: playlistId }) }),
+  playPlaylist: (playlistId: string, shuffle = false) => request<PlayerState>('/api/playback/playlist', { method: 'POST', body: JSON.stringify({ playlist_id: playlistId, shuffle }) }),
   pause: () => request<PlayerState>('/api/playback/pause', { method: 'POST', body: JSON.stringify({}) }),
   resume: () => request<PlayerState>('/api/playback/resume', { method: 'POST', body: JSON.stringify({}) }),
   next: () => request<PlayerState>('/api/playback/next', { method: 'POST', body: JSON.stringify({}) }),
@@ -169,8 +236,10 @@ export const api = {
   queueSong: (song: SearchSong) => request<PlayerState>('/api/queue/track', { method: 'POST', body: JSON.stringify(songToPayload(song)) }),
   queueAlbum: (album: SearchAlbum) => request<PlayerState>('/api/queue/album', { method: 'POST', body: JSON.stringify(albumToPayload(album)) }),
   removeQueueItem: (id: string) => request<{ ok: boolean }>(`/api/queue/items/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  reorderQueue: (itemIds: string[]) => request<PlayerState>('/api/queue/items/reorder', { method: 'PATCH', body: JSON.stringify({ item_ids: itemIds }) }),
 
   search: async (q: string, mode: SearchMode = 'hybrid') => normalizeSearchResponse(await request<SearchResponse>(`/api/search/${mode}?q=${encodeURIComponent(q)}&song_limit=20&album_limit=20`)),
+  lobbySearch: async (lobbyId: string, q: string, mode: SearchMode = 'hybrid') => normalizeSearchResponse(await request<SearchResponse>(`/api/lobbies/${encodeURIComponent(lobbyId)}/search/${mode}?q=${encodeURIComponent(q)}&song_limit=20&album_limit=20`, { headers: lobbyHeaders(lobbyId) })),
   searchArtists: async (q: string) => {
     const payload = await request<{ artists: SearchArtist[] }>(`/api/ytmusic/search/artists?q=${encodeURIComponent(q)}&artist_limit=12`)
     return { artists: (payload.artists ?? []).map(normalizeArtist) }
@@ -200,11 +269,22 @@ export const api = {
 
   adminSettings: () => request<Record<string, unknown>>('/admin/settings'),
   updateAdminSettings: (payload: Record<string, unknown>) => request<Record<string, unknown>>('/admin/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
+  adminUsers: () => request<AdminUser[]>('/admin/users'),
+  createAdminUser: (payload: { username: string; password: string; role: 'admin' | 'user' }) => request<AdminUser>('/admin/users', { method: 'POST', body: JSON.stringify(payload) }),
+  updateAdminUser: (id: string, payload: { is_active?: boolean; role?: 'admin' | 'user' }) => request<AdminUser>(`/admin/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
+  stationTypes: () => request<StationProviderInfo[]>('/api/stations/types'),
+  reloadStationTypes: () => request<StationProviderInfo[]>('/api/stations/types/reload', { method: 'POST', body: JSON.stringify({}) }),
   stations: () => request<Station[]>('/api/stations'),
-  createStation: (payload: Partial<Station>) => request<Station>('/api/stations', { method: 'POST', body: JSON.stringify(payload) }),
+  createStation: (payload: { name: string; station_type: string; config: Record<string, unknown>; seed_type?: string; seed_artist?: string; seed_title?: string }) => request<Station>('/api/stations', { method: 'POST', body: JSON.stringify(payload) }),
+  updateStation: (id: string, payload: { name?: string; station_type?: string; config?: Record<string, unknown> }) => request<Station>(`/api/stations/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   playStation: (id: string) => request<PlayerState>(`/api/stations/${encodeURIComponent(id)}/play`, { method: 'POST', body: JSON.stringify({}) }),
   deleteStation: (id: string) => request<{ ok: boolean }>(`/api/stations/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  uploadStationCover: (id: string, file: File) => {
+    const headers = file.type ? { 'Content-Type': file.type } : undefined
+    return rawRequest<Station>(`/api/stations/${encodeURIComponent(id)}/cover`, { method: 'POST', headers, body: file })
+  },
+  deleteStationCover: (id: string) => request<Station>(`/api/stations/${encodeURIComponent(id)}/cover`, { method: 'DELETE' }),
 
   playlists: async () => (await request<Playlist[]>('/api/playlists')).map(normalizePlaylist),
   createPlaylist: (name: string) => request<Playlist>('/api/playlists', { method: 'POST', body: JSON.stringify({ name }) }),
@@ -213,4 +293,29 @@ export const api = {
   removePlaylistTrack: async (playlistId: string, trackId: string) => normalizePlaylistDetail(await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/${encodeURIComponent(trackId)}`, { method: 'DELETE' })),
   reorderPlaylistTracks: async (playlistId: string, trackIds: string[]) => normalizePlaylistDetail(await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/reorder`, { method: 'PATCH', body: JSON.stringify({ track_ids: trackIds }) })),
   deletePlaylist: (id: string) => request<{ ok: boolean }>(`/api/playlists/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+
+  lobbies: () => request<LobbyListResponse>('/api/lobbies'),
+  createLobby: (name: string, guestPermissions?: LobbyPermissions) => request<LobbyState>('/api/lobbies', { method: 'POST', body: JSON.stringify({ name, guest_permissions: guestPermissions }) }),
+  updateLobby: (lobbyId: string, payload: { name?: string; is_open?: boolean; guest_permissions?: LobbyPermissions }) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteLobby: (lobbyId: string) => request<{ ok: boolean }>(`/api/lobbies/${encodeURIComponent(lobbyId)}`, { method: 'DELETE' }),
+  joinLobby: async (inviteCode: string, nickname: string) => {
+    const response = await request<LobbyJoinResponse>('/api/lobbies/join', { method: 'POST', body: JSON.stringify({ invite_code: inviteCode, nickname }) })
+    saveLobbyToken(response.lobby.id, response.guest_token)
+    return response
+  },
+  lobbyState: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/state?t=${Date.now()}`, { headers: lobbyHeaders(lobbyId), cache: 'no-store' }),
+  lobbyAddQueueItem: (lobbyId: string, item: SearchSong | QueueItem | { title: string; artist: string; album?: string }) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/queue`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify(lobbyQueuePayload(item)) }),
+  lobbyAddYoutubeUrl: (lobbyId: string, url: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/queue`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({ ytmusic_url: url }) }),
+  lobbyRemoveQueueItem: (lobbyId: string, itemId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/queue/${encodeURIComponent(itemId)}`, { method: 'DELETE', headers: lobbyHeaders(lobbyId) }),
+  lobbyJumpToQueueItem: (lobbyId: string, itemId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/queue/${encodeURIComponent(itemId)}/play`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
+  lobbyReorderQueue: (lobbyId: string, itemIds: string[]) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/queue/reorder`, { method: 'PATCH', headers: lobbyHeaders(lobbyId), body: JSON.stringify({ item_ids: itemIds }) }),
+  lobbyClearQueue: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/queue`, { method: 'DELETE', headers: lobbyHeaders(lobbyId) }),
+  lobbyPlay: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/play`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
+  lobbyPause: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/pause`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
+  lobbySeek: (lobbyId: string, positionMs: number) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/seek`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({ position_ms: positionMs }) }),
+  lobbyNext: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/next`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
+  lobbyPrevious: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/previous`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
+  lobbyUpdateMember: (lobbyId: string, memberId: string, payload: { nickname?: string; is_active?: boolean; permissions?: LobbyPermissions }) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/members/${encodeURIComponent(memberId)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  lobbyKickMember: (lobbyId: string, memberId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/members/${encodeURIComponent(memberId)}`, { method: 'PATCH', body: JSON.stringify({ is_active: false }) }),
+  lobbyLeave: (lobbyId: string) => request<{ ok: boolean }>(`/api/lobbies/${encodeURIComponent(lobbyId)}/leave`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
 }

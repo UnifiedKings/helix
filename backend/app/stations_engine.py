@@ -24,6 +24,8 @@ from .integrations.subsonic import SubsonicClient
 from .integrations.ytmusic import find_song, search_ytmusic
 from .validators import is_valid_yt_video_id
 from .art_sources import yt_thumbnail_url, is_allowed_art_url
+from .station_providers import get_station_provider
+from .station_providers.models import StationContext, StationHistorySnapshot, StationQueueSnapshot, StationResult
 
 
 LOG = logging.getLogger("helix.stations")
@@ -525,162 +527,125 @@ async def match_track_to_subsonic(*, settings: Dict[str, Any], title: str, artis
             pass
 
 
-async def generate_and_append_station_track(user_id: str, station_id: str, *, settings: Dict[str, Any], advance_to_new_item: bool, position: int | None = None) -> Optional[QueueItem]:
-    """Generate and append a new station queue item.
 
-    IMPORTANT: Never holds a DB session across awaits. DB access is done in short bursts.
+def _station_config_from_model(station: Station) -> dict[str, Any]:
+    """Build provider config from the station row.
+
+    Existing Station columns are mirrored into config so old stations keep working
+    while new provider-specific config lives in config_json.
     """
-    # Phase 1: DB burst — load station + recent history snapshot
-    db = SessionLocal()
     try:
-        station = db.get(Station, station_id)
-        if not station or station.user_id != user_id:
-            return None
+        import json
+        cfg = json.loads(str(getattr(station, "config_json", "{}") or "{}"))
+        if not isinstance(cfg, dict):
+            cfg = {}
+    except Exception:
+        cfg = {}
 
-        # Snapshot only the fields used by the algorithm (avoid keeping ORM session-bound objects).
-        seed_artist = _clean(getattr(station, "seed_artist", "") or "")
-        mb_artist_id = _clean(getattr(station, "mb_artist_id", "") or "")
-        discovery = float(getattr(station, "discovery", 0.35) or 0.35)
-        seed_influence = float(getattr(station, "seed_influence", 0.55) or 0.55)
-        artist_cooldown = int(getattr(station, "artist_cooldown", 8) or 8)
-        popular_track_pool_size = int(getattr(station, "popular_track_pool_size", 10) or 10)
+    cfg.setdefault("seed_type", getattr(station, "seed_type", "artist") or "artist")
+    cfg.setdefault("seed_title", getattr(station, "seed_title", "") or "")
+    cfg.setdefault("seed_artist", getattr(station, "seed_artist", "") or "")
+    cfg.setdefault("mb_artist_id", getattr(station, "mb_artist_id", "") or "")
+    cfg.setdefault("mb_recording_id", getattr(station, "mb_recording_id", "") or "")
+    cfg.setdefault("discovery", float(getattr(station, "discovery", 0.35) or 0.35))
+    cfg.setdefault("seed_influence", float(getattr(station, "seed_influence", 0.75) or 0.75))
+    cfg.setdefault("artist_cooldown", int(getattr(station, "artist_cooldown", 5) or 5))
+    cfg.setdefault("artist_variety", int(getattr(station, "artist_variety", 1) or 1))
+    cfg.setdefault("allow_seed_alternates", bool(int(getattr(station, "allow_seed_alternates", 0) or 0)))
+    cfg.setdefault("era_start", int(getattr(station, "era_start", 0) or 0))
+    cfg.setdefault("era_end", int(getattr(station, "era_end", 0) or 0))
+    cfg.setdefault("popularity_bias", int(getattr(station, "popularity_bias", 50) or 50))
+    cfg.setdefault("tag_strictness", int(getattr(station, "tag_strictness", 70) or 70))
+    cfg.setdefault("popular_track_pool_size", int(getattr(station, "popular_track_pool_size", 10) or 10))
+    cfg.setdefault("artist_blacklist", str(getattr(station, "artist_blacklist", "") or ""))
+    cfg.setdefault("artist_blacklist_items", _parse_artist_list(str(getattr(station, "artist_blacklist", "") or "")))
+    cfg.setdefault("temperature", float(getattr(station, "temperature", 0.9) or 0.9))
+    cfg.setdefault("source_mode", "prefer_library")
+    return cfg
 
-        # Build blacklist / recent pairs snapshot
-        recent_pairs = _recent_pairs(db, user_id, limit=200)
-        recent_artists = _recent_artists(db, user_id, limit=200)
-        blacklist = set(_station_blacklist(station))
-    finally:
-        db.close()
 
-    # Ensure tags exist (may perform external I/O + short DB bursts internally).
-    await ensure_station_tags(user_id, station_id)
+def _station_source_mode(config: dict[str, Any] | None) -> str:
+    mode = str((config or {}).get("source_mode") or "prefer_library").strip().lower()
+    if mode in {"library", "library_only", "subsonic", "subsonic_only"}:
+        return "library_only"
+    return "prefer_library"
 
-    if not mb_artist_id and seed_artist:
-        # If we still don't have MBID, try a bounded lookup (without holding DB).
-        try:
-            mb_artist_id = await asyncio.wait_for(
-                lookup_artist_mbid_by_name(seed_artist),
-                timeout=float(os.getenv("HELIX_MB_LOOKUP_TIMEOUT_S", "8")),
-            )
-        except Exception:
-            mb_artist_id = ""
 
-    if not mb_artist_id:
-        raise StationSeedArtistNotFound(f"Station seed artist MBID not found for {seed_artist!r}")
+def _queue_item_from_result(choice: StationResult) -> QueueItem:
+    return QueueItem(
+        position=0,
+        kind="station",
+        title=_clean(choice.title) or "(Station Track)",
+        artist=_clean(choice.artist),
+        album=_clean(choice.album),
+        duration_ms=_infer_int(choice.duration_ms or 0, 0),
+        art_url="",
+    )
 
-    # External I/O: similar artists list (bounded).
-    try:
-        similar_artists = await asyncio.wait_for(
-            lb_similar_artists_for_artist(mb_artist_id, limit=100),
-            timeout=float(os.getenv("HELIX_LB_SIMILAR_TIMEOUT_S", "10")),
-        )
-    except asyncio.TimeoutError:
-        similar_artists = []
-    except Exception as e:
-        LOG.warning("lb similar artists failed: %s", e)
-        similar_artists = []
 
-    # Compute candidate artists (station algorithm)
-    # Prefer seed artist with probability seed_influence; otherwise sample from similar list by discovery.
-    candidate_artists: List[Dict[str, Any]] = []
-    if similar_artists:
-        candidate_artists = similar_artists
-    # Always include the seed artist as a fallback
-    if seed_artist:
-        candidate_artists = [{"similar_artist_name": seed_artist, "rank": 0}] + candidate_artists
+async def _resolve_station_result_to_queue_item(choice: StationResult, *, settings: Dict[str, Any], source_mode: str = "prefer_library") -> Optional[QueueItem]:
+    """Resolve a source-neutral provider recommendation to a playable queue item.
 
-    #this returns a cleaned name, not a MBID
-    random_artist = _pick_station_artist(candidate_artists, seed_artist=seed_artist, seed_influence=seed_influence, discovery=discovery, recent_artists=recent_artists, blacklist=blacklist)
-    random_artist_mbid = await asyncio.wait_for(
-                lookup_artist_mbid_by_name(random_artist),
-                timeout=float(os.getenv("HELIX_MB_LOOKUP_TIMEOUT_S", "8")),
-            )
-    # External I/O: pick a track for the artist (bounded), and avoid very recent (title, artist) pairs.
-    max_pair_retries = int(os.getenv("HELIX_STATION_RECENT_PAIR_RETRY", "6") or 6)
-    selected_track = None
-    cleaned_track_name = ""
-    cleaned_artist_name = ""
-    for _attempt in range(max_pair_retries + 1):
-        try:
-            print(random_artist_mbid)
-            selected_track = await asyncio.wait_for(
-                select_random_track_with_artist(random_artist_mbid, popular_track_pool_size),
-                timeout=float(os.getenv("HELIX_LB_TOP_TRACK_TIMEOUT_S", "10")),
-            )
-        except Exception as e:
-            LOG.warning("[station] failed to select track for %r: %s", random_artist, e)
-            return None
-
-        cleaned_track_name = _clean_recording_name(selected_track)
-        cleaned_artist_name = _clean_artist_name(selected_track) or _clean(random_artist)
-
-        if cleaned_track_name and cleaned_artist_name and _norm_pair(cleaned_track_name, cleaned_artist_name) in (recent_pairs or set()):
-            # Try again: same (title, artist) played recently.
-            continue
-        break
-
-    if not selected_track:
+    source_mode="library_only" prevents YTMusic fallback/download fulfillment.
+    """
+    cleaned_track_name = _clean(choice.title)
+    cleaned_artist_name = _clean(choice.artist)
+    if not cleaned_track_name or not cleaned_artist_name:
         return None
 
-    # External I/O: resolve to Subsonic (bounded).
     try:
         subsonic_track = await asyncio.wait_for(
-            match_track_to_subsonic(settings=settings, title=cleaned_track_name, artist=cleaned_artist_name, duration_ms=None),
+            match_track_to_subsonic(settings=settings, title=cleaned_track_name, artist=cleaned_artist_name, duration_ms=choice.duration_ms or None),
             timeout=float(os.getenv("HELIX_SUBSONIC_SEARCH_TIMEOUT_S", "10")),
         )
     except asyncio.TimeoutError:
         subsonic_track = None
 
-    # Find on YT if needed. For non-Subsonic items, do not append a queue item until we
-    # have at least resolved the YT song metadata we rely on for video id / art / album.
+    mode = _station_source_mode({"source_mode": source_mode})
+    if mode == "library_only" and not (subsonic_track and subsonic_track.get("id")):
+        return None
+
     song_on_yt = None
-    try:
-        song_on_yt = _best_yt_song_result(cleaned_track_name, cleaned_artist_name)
-    except Exception:
-        song_on_yt = None
+    if mode != "library_only" and not (subsonic_track and subsonic_track.get("id")):
+        try:
+            song_on_yt = _best_yt_song_result(cleaned_track_name, cleaned_artist_name)
+        except Exception:
+            song_on_yt = None
 
     if not (subsonic_track and subsonic_track.get("id")) and not song_on_yt:
         return None
 
-    resolved_title = _clean(cleaned_track_name) or "(Station Track)"
-    resolved_artist = _clean(cleaned_artist_name)
-    resolved_album = ""
-    resolved_duration_ms = _infer_int(selected_track.get("duration_ms") or selected_track.get("durationMs") or 0, 0)
-    resolved_art_url = ""
+    qitem = _queue_item_from_result(choice)
 
     if song_on_yt:
-        resolved_title = _clean(str(song_on_yt.get("title") or "")) or resolved_title
-        resolved_artist = _clean(str(song_on_yt.get("artist") or "")) or resolved_artist
-        resolved_album = _clean(str(song_on_yt.get("album") or ""))
+        qitem.title = _clean(str(song_on_yt.get("title") or "")) or qitem.title
+        qitem.artist = _clean(str(song_on_yt.get("artist") or "")) or qitem.artist
+        qitem.album = _clean(str(song_on_yt.get("album") or "")) or qitem.album
         yt_duration_s = _infer_int(song_on_yt.get("duration_seconds") or 0, 0)
         if yt_duration_s > 0:
-            resolved_duration_ms = yt_duration_s * 1000
+            qitem.duration_ms = yt_duration_s * 1000
         thumb = str(song_on_yt.get("thumbnail_url") or "").strip()
         if thumb and is_allowed_art_url(thumb):
-            resolved_art_url = thumb
-
-    qitem = QueueItem(
-        session_user_id=user_id,
-        position=0,  # temporary; will be set based on session below
-        kind="station",
-        title=resolved_title,
-        artist=resolved_artist,
-        album=resolved_album,
-        duration_ms=resolved_duration_ms,
-        art_url=resolved_art_url,
-    )
+            qitem.art_url = thumb
 
     if subsonic_track and subsonic_track.get("id"):
         qitem.source = "subsonic"
         qitem.subsonic_song_id = str(subsonic_track.get("id"))
         qitem.is_playable = True
         qitem.error = ""
-
-        # Fill album + art from Subsonic when available so station items look identical to direct-play items.
         try:
+            sub_title = str(subsonic_track.get("title") or "").strip()
+            sub_artist = str(subsonic_track.get("artist") or "").strip()
+            if sub_title:
+                qitem.title = sub_title
+            if sub_artist:
+                qitem.artist = sub_artist
             alb = str(subsonic_track.get("album") or "").strip()
             if alb:
                 qitem.album = alb
+            sub_duration_s = _infer_int(subsonic_track.get("duration") or 0, 0)
+            if sub_duration_s > 0:
+                qitem.duration_ms = sub_duration_s * 1000
             cover_id = str(subsonic_track.get("coverArt") or "").strip()
             if cover_id:
                 qitem.art_url = _subsonic_cover_url(cover_id)
@@ -695,15 +660,12 @@ async def generate_and_append_station_track(user_id: str, station_id: str, *, se
             vid = str(song_on_yt.get("video_id") or "").strip()
             if vid:
                 qitem.yt_video_id = vid
-
-            # Best-effort: resolve the YT Music album browseId (so /stream + finalizer can call get_album_full()).
             try:
                 alb = str(song_on_yt.get("album") or "").strip()
                 search_artist = qitem.artist or cleaned_artist_name
                 if alb:
                     res = search_ytmusic(f"{search_artist} {alb}", song_limit=0, album_limit=10) or {}
                     albums = res.get("albums") or []
-                    # pick the first album whose title roughly matches; search_ytmusic already filters to albums.
                     alb_n = _norm(alb)
                     art_n = _norm(search_artist)
                     for a in albums:
@@ -714,21 +676,70 @@ async def generate_and_append_station_track(user_id: str, station_id: str, *, se
                                 bid = str(a.get("browse_id") or "").strip()
                                 if bid:
                                     qitem.yt_browse_id = bid
-                                # Prefer album thumbnail when available (often cleaner than raw video thumbs).
                                 athumb = str(a.get("thumbnail_url") or "").strip()
                                 if athumb and is_allowed_art_url(athumb):
                                     qitem.art_url = athumb
                                 break
             except Exception:
                 pass
-
-            # Fallback art: YouTube thumbnail (safe allowlist-checked).
             if not (qitem.art_url or "").strip():
                 thumb = yt_thumbnail_url(vid) if vid else ""
                 if thumb and is_allowed_art_url(thumb):
                     qitem.art_url = thumb
+    return qitem
 
-    # Phase 3: DB burst — append to queue and update session
+
+def _build_station_context(user_id: str, station_id: str) -> tuple[StationContext, str] | None:
+    db = SessionLocal()
+    try:
+        station = db.get(Station, station_id)
+        if not station or station.user_id != user_id:
+            return None
+        station_type = str(getattr(station, "station_type", "") or "listenbrainz_similar_artist")
+        config = _station_config_from_model(station)
+        recent_rows = db.execute(
+            select(ListenHistoryItem.title, ListenHistoryItem.artist, ListenHistoryItem.album, ListenHistoryItem.source)
+            .where(ListenHistoryItem.user_id == user_id)
+            .order_by(ListenHistoryItem.created_at.desc())
+            .limit(200)
+        ).all()
+        recent_tracks = [
+            StationHistorySnapshot(title=_clean(r[0] or ""), artist=_clean(r[1] or ""), album=_clean(r[2] or ""), source=_clean(r[3] or ""))
+            for r in recent_rows
+            if _clean(r[0] or "") and _clean(r[1] or "")
+        ]
+        recent_artists = _recent_artists(db, user_id, limit=200)
+        queue_rows = db.execute(
+            select(QueueItem.title, QueueItem.artist, QueueItem.album, QueueItem.source, QueueItem.position)
+            .where(QueueItem.session_user_id == user_id)
+            .order_by(QueueItem.position.asc())
+            .limit(500)
+        ).all()
+        queued_tracks = [
+            StationQueueSnapshot(
+                title=_clean(r[0] or ""),
+                artist=_clean(r[1] or ""),
+                album=_clean(r[2] or ""),
+                source=_clean(r[3] or ""),
+                position=_infer_int(r[4] or 0, 0),
+            )
+            for r in queue_rows
+        ]
+        return StationContext(
+            user_id=user_id,
+            station_id=station_id,
+            station_name=station.name,
+            station_type=station_type,
+            config=config,
+            recent_tracks=recent_tracks,
+            recent_artists=recent_artists,
+            queued_tracks=queued_tracks,
+        ), station_type
+    finally:
+        db.close()
+
+
+def _append_station_queue_item(user_id: str, qitem: QueueItem, *, advance_to_new_item: bool, position: int | None = None) -> Optional[QueueItem]:
     db = SessionLocal()
     try:
         sess = db.get(PlaybackSession, user_id)
@@ -737,9 +748,7 @@ async def generate_and_append_station_track(user_id: str, station_id: str, *, se
             db.add(sess)
             db.commit()
             db.refresh(sess)
-
-        # Determine position to append.
-        # If a specific position is provided (station prefetch safety cap), we try to place it there.
+        qitem.session_user_id = user_id
         if position is None:
             max_pos = db.execute(
                 select(QueueItem.position)
@@ -750,10 +759,7 @@ async def generate_and_append_station_track(user_id: str, station_id: str, *, se
             qitem.position = int(max_pos or -1) + 1
         else:
             qitem.position = int(position)
-
         db.add(qitem)
-
-        # If we're advancing, update current index to the newly appended item.
         if advance_to_new_item:
             sess.current_index = qitem.position
             sess.is_playing = True
@@ -761,23 +767,96 @@ async def generate_and_append_station_track(user_id: str, station_id: str, *, se
         try:
             db.commit()
         except IntegrityError:
-            # Another concurrent task claimed this position.
             db.rollback()
             return None
-
-        LOG.info(
-            "[station] appended station=%s user=%s pick=%r - %r src=%s cfg={cooldown:%s discover:%s blacklist:%s}",
-            station_id,
-            user_id,
-            qitem.title,
-            qitem.artist,
-            qitem.source,
-            artist_cooldown,
-            round(discovery * 100.0),
-            len(blacklist),
-        )
-
+        db.refresh(qitem)
         return qitem
     finally:
         db.close()
 
+
+async def generate_and_append_station_tracks(
+    user_id: str,
+    station_id: str,
+    *,
+    settings: Dict[str, Any],
+    count: int,
+    advance_to_new_item: bool,
+    positions: list[int] | None = None,
+) -> list[QueueItem]:
+    count = max(1, int(count or 1))
+    ctx_tuple = _build_station_context(user_id, station_id)
+    if not ctx_tuple:
+        return []
+    context, station_type = ctx_tuple
+    provider = get_station_provider(station_type)
+    source_mode = _station_source_mode(context.config)
+    provider_count = count
+    if source_mode == "library_only":
+        provider_count = max(count * 10, min(100, count + 25))
+    try:
+        results = await asyncio.wait_for(
+            provider.next_tracks(context, provider_count),
+            timeout=float(os.getenv("HELIX_STATION_PROVIDER_TIMEOUT_S", "20")),
+        )
+    except ValueError as exc:
+        if "mbid" in str(exc).lower() or "seed artist" in str(exc).lower():
+            raise StationSeedArtistNotFound(str(exc)) from exc
+        raise StationGenerationError(str(exc), status_code=400) from exc
+    except asyncio.TimeoutError as exc:
+        raise StationGenerationError(f"Station provider timed out: {provider.station_type}", status_code=504) from exc
+
+    if not results:
+        raise StationGenerationError(f"Station provider returned no candidates: {provider.station_type}", status_code=503)
+
+    appended: list[QueueItem] = []
+    seen: set[str] = set()
+    skipped_unplayable = 0
+    for idx, choice in enumerate(results or []):
+        if not choice or not _clean(choice.title) or not _clean(choice.artist):
+            continue
+        key = choice.key()
+        if key in seen:
+            continue
+        seen.add(key)
+        qitem = await _resolve_station_result_to_queue_item(choice, settings=settings, source_mode=source_mode)
+        if not qitem:
+            skipped_unplayable += 1
+            continue
+        target_position = positions[len(appended)] if positions and len(appended) < len(positions) else None
+        saved = _append_station_queue_item(
+            user_id,
+            qitem,
+            advance_to_new_item=advance_to_new_item and not appended,
+            position=target_position,
+        )
+        if saved:
+            appended.append(saved)
+            LOG.info(
+                "[station] appended station=%s user=%s provider=%s pick=%r - %r src=%s",
+                station_id,
+                user_id,
+                provider.station_type,
+                saved.title,
+                saved.artist,
+                saved.source,
+            )
+            if len(appended) >= count:
+                break
+    if not appended and skipped_unplayable:
+        source_hint = " Library-only mode may be filtering out all candidates." if source_mode == "library_only" else ""
+        raise StationGenerationError(f"Station candidates were found, but none resolved to playable tracks.{source_hint}", status_code=503)
+    return appended
+
+
+async def generate_and_append_station_track(user_id: str, station_id: str, *, settings: Dict[str, Any], advance_to_new_item: bool, position: int | None = None) -> Optional[QueueItem]:
+    positions = [position] if position is not None else None
+    items = await generate_and_append_station_tracks(
+        user_id,
+        station_id,
+        settings=settings,
+        count=1,
+        advance_to_new_item=advance_to_new_item,
+        positions=positions,
+    )
+    return items[0] if items else None

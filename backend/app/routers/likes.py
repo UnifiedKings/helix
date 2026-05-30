@@ -55,6 +55,8 @@ def _to_row(x: LikedTrack) -> LikedTrackResponse:
         yt_browse_id=x.yt_browse_id or "",
         mb_recording_id=x.mb_recording_id or "",
         mb_artist_id=x.mb_artist_id or "",
+        stale_subsonic=bool(getattr(x, "stale_subsonic", False)),
+        ytmusic_recovered_at=(x.ytmusic_recovered_at.isoformat() + "Z") if getattr(x, "ytmusic_recovered_at", None) else "",
         created_at=x.created_at.isoformat() + "Z",
     )
 

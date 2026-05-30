@@ -40,6 +40,8 @@ class PlaylistTrackResponse(BaseModel):
     subsonic_song_id: str = ""
     yt_video_id: str = ""
     yt_browse_id: str = ""
+    stale_subsonic: bool = False
+    ytmusic_recovered_at: str | None = None
     mb_recording_id: str = ""
     mb_artist_id: str = ""
     created_at: str

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from datetime import datetime
 import asyncio
+import json
 import os
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -14,10 +15,11 @@ from ..auth import get_current_user
 from ..db import get_db, SessionLocal
 from ..models import User, Station, PlaybackSession, QueueItem, ListenHistoryItem
 from ..api_schemas.player import PlayerStateResponse
-from ..api_schemas.stations import StationCreateRequest, StationUpdateRequest, StationResponse, StationPlayRequest
+from ..api_schemas.stations import StationCreateRequest, StationUpdateRequest, StationResponse, StationPlayRequest, StationProviderResponse
 from ..settings_store import get_settings
 from ..stations_engine import generate_and_append_station_track, StationSeedArtistNotFound, StationGenerationError
-from ..station_covers import ensure_station_cover
+from ..station_providers import get_station_provider, list_station_providers, reload_station_providers
+from ..station_covers import ensure_station_cover, custom_station_cover_path, delete_custom_station_cover, delete_generated_station_cover, has_custom_station_cover, save_custom_station_cover
 from ..player.engine import state
 
 router = APIRouter(prefix="/api/stations", tags=["stations"])
@@ -34,15 +36,51 @@ def _thumb_for_station(db: Session, station_id: str) -> str:
     return (row[0] if row and row[0] else "")
 
 
-def _cover_url(station_id: str) -> str:
+def _cover_url(station_id: str, updated_at: datetime | None = None) -> str:
+    if updated_at:
+        try:
+            return f"/api/stations/{station_id}/cover?v={int(updated_at.timestamp() * 1000)}"
+        except Exception:
+            pass
     return f"/api/stations/{station_id}/cover"
 
+
+
+def _station_config_payload(s: Station) -> dict:
+    try:
+        raw = json.loads(str(getattr(s, "config_json", "{}") or "{}"))
+        if not isinstance(raw, dict):
+            raw = {}
+    except Exception:
+        raw = {}
+    # Mirror legacy config columns so the provider API has one stable config shape.
+    raw.setdefault("seed_type", getattr(s, "seed_type", "artist") or "artist")
+    raw.setdefault("seed_title", getattr(s, "seed_title", "") or "")
+    raw.setdefault("seed_artist", getattr(s, "seed_artist", "") or "")
+    raw.setdefault("mb_artist_id", getattr(s, "mb_artist_id", "") or "")
+    raw.setdefault("mb_recording_id", getattr(s, "mb_recording_id", "") or "")
+    raw.setdefault("discovery", float(getattr(s, "discovery", 0.35) or 0.35))
+    raw.setdefault("seed_influence", float(getattr(s, "seed_influence", 0.75) or 0.75))
+    raw.setdefault("artist_cooldown", int(getattr(s, "artist_cooldown", 5) or 5))
+    raw.setdefault("artist_variety", int(getattr(s, "artist_variety", 1) or 1))
+    raw.setdefault("allow_seed_alternates", bool(int(getattr(s, "allow_seed_alternates", 0) or 0)))
+    raw.setdefault("era_start", int(getattr(s, "era_start", 0) or 0))
+    raw.setdefault("era_end", int(getattr(s, "era_end", 0) or 0))
+    raw.setdefault("popularity_bias", int(getattr(s, "popularity_bias", 50) or 50))
+    raw.setdefault("tag_strictness", int(getattr(s, "tag_strictness", 70) or 70))
+    raw.setdefault("popular_track_pool_size", int(getattr(s, "popular_track_pool_size", 10) or 10))
+    raw.setdefault("artist_blacklist", str(getattr(s, "artist_blacklist", "") or ""))
+    raw.setdefault("temperature", float(getattr(s, "temperature", 0.9) or 0.9))
+    raw.setdefault("source_mode", "prefer_library")
+    return raw
 
 
 def _to_station(s: Station, thumbnail_url: str = "") -> StationResponse:
     return StationResponse(
         id=s.id,
         name=s.name,
+        station_type=str(getattr(s, "station_type", "") or "listenbrainz_similar_artist"),
+        config=_station_config_payload(s),
         seed_type=s.seed_type,
         seed_title=s.seed_title,
         seed_artist=s.seed_artist,
@@ -61,10 +99,25 @@ def _to_station(s: Station, thumbnail_url: str = "") -> StationResponse:
         artist_blacklist=str(getattr(s, "artist_blacklist", "") or ""),
         temperature=float(getattr(s, "temperature", 0.9) or 0.9),
         # Station cards should represent the seed artist, not the last played track.
-        thumbnail_url=thumbnail_url or _cover_url(s.id),
+        thumbnail_url=thumbnail_url or _cover_url(s.id, s.updated_at),
+        cover_url=thumbnail_url or _cover_url(s.id, s.updated_at),
+        has_custom_cover=has_custom_station_cover(s.id),
         created_at=s.created_at.isoformat() + "Z",
         updated_at=s.updated_at.isoformat() + "Z",
     )
+
+
+@router.get("/types", response_model=list[StationProviderResponse])
+def list_station_types(user: User = Depends(get_current_user)):
+    return [info.to_dict() for info in list_station_providers()]
+
+
+@router.post("/types/reload", response_model=list[StationProviderResponse])
+def reload_station_types(user: User = Depends(get_current_user)):
+    if str(getattr(user, "role", "") or "").lower() != "admin":
+        raise HTTPException(status_code=403, detail="admin only")
+    reload_station_providers()
+    return [info.to_dict() for info in list_station_providers()]
 
 
 @router.get("", response_model=List[StationResponse])
@@ -72,7 +125,7 @@ def list_stations(db: Session = Depends(get_db), user: User = Depends(get_curren
     rows = db.execute(
         select(Station).where(Station.user_id == user.id).order_by(Station.updated_at.desc())
     ).scalars().all()
-    return [_to_station(s, _cover_url(s.id)) for s in rows]
+    return [_to_station(s, _cover_url(s.id, s.updated_at)) for s in rows]
 
 
 @router.post("", response_model=StationResponse)
@@ -85,9 +138,28 @@ def create_station(payload: StationCreateRequest, db: Session = Depends(get_db),
     if seed_type not in ("artist", "track"):
         raise HTTPException(status_code=400, detail="seed_type must be 'artist' or 'track'")
 
+    station_type = (payload.station_type or "listenbrainz_similar_artist").strip()
+    config = dict(payload.config or {})
+    # Mirror legacy create fields into the provider config unless explicitly supplied.
+    config.setdefault("seed_type", seed_type)
+    config.setdefault("seed_title", (payload.seed_title or "").strip())
+    config.setdefault("seed_artist", (payload.seed_artist or "").strip())
+    config.setdefault("mb_artist_id", (payload.mb_artist_id or "").strip())
+    config.setdefault("mb_recording_id", (payload.mb_recording_id or "").strip())
+    config.setdefault("discovery", max(0.0, min(1.0, float(payload.discovery or 0.35))))
+    config.setdefault("seed_influence", max(0.0, min(1.0, float(payload.seed_influence or 0.75))))
+    config.setdefault("popular_track_pool_size", max(0, min(200, int(payload.popular_track_pool_size or 10))))
+    config.setdefault("artist_blacklist", payload.artist_blacklist or "")
+    try:
+        get_station_provider(station_type).validate_config(config)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     s = Station(
         user_id=user.id,
         name=name,
+        station_type=station_type,
+        config_json=json.dumps(config),
         seed_type=seed_type,
         seed_title=(payload.seed_title or "").strip(),
         seed_artist=(payload.seed_artist or "").strip(),
@@ -111,7 +183,7 @@ def create_station(payload: StationCreateRequest, db: Session = Depends(get_db),
     db.add(s)
     db.commit()
     db.refresh(s)
-    return _to_station(s, _cover_url(s.id))
+    return _to_station(s, _cover_url(s.id, s.updated_at))
 
 
 @router.get("/{station_id}/cover")
@@ -125,6 +197,9 @@ async def station_cover(station_id: str, user: User = Depends(get_current_user))
         settings = dict(get_settings(db) or {})
         seed_artist = st.seed_artist or st.seed_title or st.name or "Station"
         sid = st.id
+        custom_path = custom_station_cover_path(sid)
+        if os.path.exists(custom_path):
+            return FileResponse(custom_path, media_type="image/jpeg", headers={"Cache-Control": "no-cache, max-age=0"})
     finally:
         db.close()
 
@@ -161,7 +236,55 @@ async def station_cover(station_id: str, user: User = Depends(get_current_user))
             tiles=4,
         )
 
-    return FileResponse(img_path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=3600"})
+    cache_headers = {"Cache-Control": "no-cache, max-age=0"} if has_custom_station_cover(sid) else {"Cache-Control": "public, max-age=3600"}
+    return FileResponse(img_path, media_type="image/jpeg", headers=cache_headers)
+
+async def _save_station_cover_upload(station_id: str, request: Request, db: Session, user: User) -> StationResponse:
+    st = db.get(Station, station_id)
+    if not st or st.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Station not found")
+
+    # Do not trust or require the browser-provided Content-Type. Some browsers
+    # report drag/dropped images as application/octet-stream or omit the MIME
+    # type entirely. Pillow validates the actual bytes below.
+    body = await request.body()
+    try:
+        saved_path = save_custom_station_cover(station_id, body)
+        delete_generated_station_cover(station_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not os.path.exists(saved_path):
+        raise HTTPException(status_code=500, detail="cover image was processed but not saved")
+
+    st.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(st)
+    return _to_station(st, _cover_url(st.id, st.updated_at))
+
+
+@router.put("/{station_id}/cover", response_model=StationResponse)
+async def upload_station_cover(station_id: str, request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return await _save_station_cover_upload(station_id, request, db, user)
+
+
+@router.post("/{station_id}/cover", response_model=StationResponse)
+async def upload_station_cover_post(station_id: str, request: Request, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    return await _save_station_cover_upload(station_id, request, db, user)
+
+
+@router.delete("/{station_id}/cover", response_model=StationResponse)
+def delete_station_cover(station_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    st = db.get(Station, station_id)
+    if not st or st.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Station not found")
+
+    delete_custom_station_cover(station_id)
+    st.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(st)
+    return _to_station(st, _cover_url(st.id, st.updated_at))
+
 
 @router.patch("/{station_id}", response_model=StationResponse)
 def update_station(station_id: str, payload: StationUpdateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -171,6 +294,12 @@ def update_station(station_id: str, payload: StationUpdateRequest, db: Session =
 
     if payload.name is not None:
         st.name = (payload.name or "").strip()
+    if payload.station_type is not None:
+        st.station_type = (payload.station_type or "listenbrainz_similar_artist").strip()
+    if payload.config is not None:
+        current = _station_config_payload(st)
+        current.update(dict(payload.config or {}))
+        st.config_json = json.dumps(current)
     if payload.discovery is not None:
         st.discovery = max(0.0, min(1.0, float(payload.discovery)))
     if payload.seed_influence is not None:
@@ -193,6 +322,13 @@ def update_station(station_id: str, payload: StationUpdateRequest, db: Session =
         st.popular_track_pool_size = max(0, min(200, int(payload.popular_track_pool_size)))
     if payload.artist_blacklist is not None:
         st.artist_blacklist = payload.artist_blacklist or ""
+
+    config = _station_config_payload(st)
+    try:
+        get_station_provider(getattr(st, "station_type", "listenbrainz_similar_artist")).validate_config(config)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    st.config_json = json.dumps(config)
 
     st.updated_at = datetime.utcnow()
     db.commit()
@@ -239,9 +375,11 @@ async def play_station(station_id: str, payload: StationPlayRequest, user: User 
     try:
         first = await generate_and_append_station_track(user.id, station_id, settings=settings, advance_to_new_item=True)
         if not first:
-            raise StationGenerationError("Unable to generate station right now.", status_code=503)
+            raise StationGenerationError("Unable to generate station right now. The provider returned no playable tracks for the current station settings.", status_code=503)
     except StationSeedArtistNotFound as e:
-        raise StationGenerationError(str(e), status_code=404) from e
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    except StationGenerationError as e:
+        raise HTTPException(status_code=e.status_code, detail=e.detail) from e
 
     # Return current player state
     db = SessionLocal()
@@ -262,6 +400,8 @@ def delete_station(station_id: str, db: Session = Depends(get_db), user: User = 
     if sess and sess.active_station_id == station_id:
         sess.active_station_id = None
         sess.autoplay_enabled = False
+
+    delete_custom_station_cover(station_id)
 
     # Remove station (StationTag cascades)
     db.delete(st)

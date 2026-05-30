@@ -46,6 +46,7 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
   const currentItemIdRef = useRef<string>('')
   const pendingRestoreRef = useRef(0)
   const lastIntentIdRef = useRef(0)
+  const continueAfterEndedRef = useRef(false)
   const [audioError, setAudioError] = useState('')
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -65,6 +66,7 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
     if (!nowId) {
       currentItemIdRef.current = ''
       audio.pause()
+      continueAfterEndedRef.current = false
       audio.removeAttribute('src')
       audio.load()
       setCurrentTime(0)
@@ -94,6 +96,7 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
 
     if (audioIntent.action === 'pause') {
       audio.pause()
+      continueAfterEndedRef.current = false
       onLocalPlayingChange?.(false)
       return
     }
@@ -127,7 +130,7 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
 
   async function handleEnded() {
     const endedItemId = currentItemIdRef.current
-    const wasPlaying = !audioRef.current?.paused
+    const shouldContinue = continueAfterEndedRef.current
     clearPosition(endedItemId)
     onLocalPlayingChange?.(false)
 
@@ -136,7 +139,7 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
       const next = await api.ended()
       onStateChange(next)
 
-      if (wasPlaying && next.now_playing && next.autoplay_enabled) {
+      if (shouldContinue && next.now_playing) {
         window.setTimeout(() => {
           const audio = audioRef.current
           if (!audio || !next.now_playing) return
@@ -144,8 +147,16 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
           pendingRestoreRef.current = 0
           audio.src = streamUrl(next.now_playing.id)
           audio.load()
-          void audio.play().then(() => onLocalPlayingChange?.(true)).catch(() => onLocalPlayingChange?.(false))
+          void audio.play().then(() => {
+            continueAfterEndedRef.current = true
+            onLocalPlayingChange?.(true)
+          }).catch(() => {
+            continueAfterEndedRef.current = false
+            onLocalPlayingChange?.(false)
+          })
         }, 0)
+      } else {
+        continueAfterEndedRef.current = false
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not advance playback'
@@ -177,8 +188,14 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
         preload="auto"
         onEnded={handleEnded}
         onError={handleError}
-        onPause={() => onLocalPlayingChange?.(false)}
-        onPlay={() => onLocalPlayingChange?.(true)}
+        onPause={(event) => {
+          if (!event.currentTarget.ended) continueAfterEndedRef.current = false
+          onLocalPlayingChange?.(false)
+        }}
+        onPlay={() => {
+          continueAfterEndedRef.current = true
+          onLocalPlayingChange?.(true)
+        }}
         onLoadedMetadata={(event) => {
           const audio = event.currentTarget
           const mediaDuration = audio.duration || 0

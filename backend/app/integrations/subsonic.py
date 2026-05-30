@@ -42,6 +42,30 @@ def _contains_bad_variant(title: str) -> bool:
     return any(b in t for b in bad)
 
 
+def _artist_match_quality(want_artist: str, candidate_artist: str) -> float:
+    want = _norm(want_artist)
+    cand = _norm(candidate_artist)
+    if not want or not cand:
+        return 0.0
+    if cand == want:
+        return 1.0
+    want_parts = set(want.split())
+    cand_parts = set(cand.split())
+    if not want_parts or not cand_parts:
+        return 0.0
+    overlap = len(want_parts & cand_parts) / max(1, len(want_parts | cand_parts))
+    # Avoid extremely loose substring matches like soundtrack/team/various-artist
+    # metadata matching the requested title but not the requested performer.
+    if overlap >= 0.67:
+        return overlap
+    if want in cand or cand in want:
+        shorter = min(len(want), len(cand))
+        longer = max(len(want), len(cand))
+        if shorter >= 6 and (shorter / max(1, longer)) >= 0.72:
+            return 0.55
+    return overlap
+
+
 def _album_candidate_score(album: str, artist: str, candidate: Dict[str, Any]) -> float:
     """Score a Subsonic album candidate by normalized title/artist match quality."""
     nalb = _norm(album)
@@ -142,12 +166,15 @@ class SubsonicClient:
             score = 0.0
             score += 100 if st == nt else 60
 
-            if sa == na:
+            artist_quality = _artist_match_quality(artist, sa_raw)
+            if artist_quality >= 0.98:
                 score += 80
-            elif na in sa or sa in na:
-                score += 40
+            elif artist_quality >= 0.55:
+                score += 40 * artist_quality
             else:
-                score -= 50
+                # Title-only matches are dangerous for station fulfillment: they
+                # can make Helix label and play the wrong song.
+                continue
 
             if _contains_bad_variant(st_raw):
                 score -= 25
@@ -168,6 +195,8 @@ class SubsonicClient:
                 best_score = score
                 best = s
 
+        if best is not None:
+            best["_helix_match_score"] = best_score
         return best
 
 

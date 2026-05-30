@@ -4,6 +4,7 @@ import hashlib
 import io
 import json
 import os
+import random
 import time
 import asyncio
 import urllib.request
@@ -107,6 +108,7 @@ class CoverMeta:
     cover_ids: List[str]
     real_tiles: int
     generated_tiles: int
+    sample_version: int = 2
 
 
 def _read_meta(meta_path: str) -> Optional[CoverMeta]:
@@ -119,6 +121,7 @@ def _read_meta(meta_path: str) -> Optional[CoverMeta]:
             cover_ids=list(d.get("cover_ids") or []),
             real_tiles=int(d.get("real_tiles") or 0),
             generated_tiles=int(d.get("generated_tiles") or 0),
+            sample_version=int(d.get("sample_version") or 0),
         )
     except Exception:
         return None
@@ -134,6 +137,7 @@ def _write_meta(meta_path: str, meta: CoverMeta) -> None:
                     "cover_ids": meta.cover_ids,
                     "real_tiles": meta.real_tiles,
                     "generated_tiles": meta.generated_tiles,
+                    "sample_version": meta.sample_version,
                 },
                 f,
             )
@@ -155,7 +159,7 @@ async def ensure_playlist_cover(
     meta = _read_meta(meta_path)
     now = _now_ts()
 
-    if os.path.exists(img_path) and meta and meta.rebuild_after and now < meta.rebuild_after:
+    if os.path.exists(img_path) and meta and meta.rebuild_after and now < meta.rebuild_after and meta.sample_version >= 2:
         return img_path
 
     grid = int(tiles)
@@ -167,11 +171,18 @@ async def ensure_playlist_cover(
 
     # Gather coverArt ids by looking up Subsonic songs, and also collect
     # direct art URLs stored on playlist tracks (e.g., YouTube thumbnails).
+    #
+    # Do not just use the first N playlist rows. Long playlists otherwise get
+    # covers that always represent the first few tracks. Shuffle a bounded copy
+    # before collecting artwork so each regeneration samples across the playlist.
     cover_ids: List[str] = []
     art_urls: List[str] = []
     seen = set()
 
-    for t in tracks[:200]:
+    sampled_tracks = list(tracks or [])[:500]
+    random.SystemRandom().shuffle(sampled_tracks)
+
+    for t in sampled_tracks:
         au = str(t.get("art_url") or "").strip()
         # Only use known-safe remote art sources.
         if au and is_allowed_art_url(au) and au not in seen:
@@ -259,6 +270,7 @@ async def ensure_playlist_cover(
             cover_ids=cover_ids[:grid],
             real_tiles=real_tiles,
             generated_tiles=grid - real_tiles,
+            sample_version=2,
         ),
     )
 

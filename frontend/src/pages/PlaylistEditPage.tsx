@@ -183,9 +183,14 @@ export function PlaylistEditPage() {
           </div>
         </div>
         {playlist ? (
-          <button className="primary" onClick={() => player.run(() => api.playPlaylist(playlist.id), 'play')}>
-            ▶ Play Playlist
-          </button>
+          <div className="playlist-editor-actions">
+            <button className="primary" onClick={() => player.run(() => api.playPlaylist(playlist.id), 'play')}>
+              ▶ Play Playlist
+            </button>
+            <button onClick={() => player.run(() => api.playPlaylist(playlist.id, true), 'play')}>
+              Shuffle Play
+            </button>
+          </div>
         ) : null}
       </div>
 
