@@ -24,17 +24,13 @@ services:
       # Optional custom station providers. Disabled by default.
       - ./custom_stations:/data/plugins/stations
 
-      # Optional: only use this if your backend expects a bind-mounted frontend.
-      # If your Dockerfile builds/copies the frontend into the image, remove this.
-      # - ./frontend:/app/static
-
     environment:
       # Optional ListenBrainz token. Some station/discovery features may work
       # better with this configured.
       LISTENBRAINZ_TOKEN: ""
 
       # Optional Subsonic/Navidrome connection.
-      # You can also configure these inside the Helix settings UI if supported.
+      # You can also configure these inside the Helix settings UI.
       SUBSONIC_BASE_URL: ""
       SUBSONIC_USERNAME: ""
       SUBSONIC_PASSWORD: ""

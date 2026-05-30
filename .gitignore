@@ -1,7 +1,6 @@
 mr_data/
 yt_cookies/
 docker-compose.yml
-Dockerfile
 beets_config/import.log
 beets_config/library.db
 collab_prompt.md
