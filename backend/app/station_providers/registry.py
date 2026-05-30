@@ -17,17 +17,42 @@ LOG = logging.getLogger("helix.station_providers")
 
 DEFAULT_STATION_TYPE = "listenbrainz_similar_artist"
 
-SOURCE_MODE_OPTION = StationConfigOption(
-    key="source_mode",
-    label="Track source",
-    type="select",
-    description="Choose whether this station may use discovery tracks, or only songs already present in your Subsonic library.",
-    default="prefer_library",
-    choices=[
-        {"value": "prefer_library", "label": "Prefer library, allow discovery"},
-        {"value": "library_only", "label": "Library only"},
-    ],
-)
+def _subsonic_configured_from_env_or_settings() -> bool:
+    """Best-effort check for UI option exposure.
+
+    Station provider metadata is not user-specific, so read the global settings
+    directly and hide Library-only mode when Subsonic is not configured.
+    """
+    try:
+        from ..db import SessionLocal
+        from ..settings_store import get_settings
+
+        db = SessionLocal()
+        try:
+            settings = get_settings(db)
+            return bool(
+                str(settings.get("subsonic_base_url") or "").strip()
+                and str(settings.get("subsonic_username") or "").strip()
+                and str(settings.get("subsonic_password") or "").strip()
+            )
+        finally:
+            db.close()
+    except Exception:
+        return False
+
+
+def _source_mode_option() -> StationConfigOption:
+    choices = [{"value": "prefer_library", "label": "Prefer library, allow discovery"}]
+    if _subsonic_configured_from_env_or_settings():
+        choices.append({"value": "library_only", "label": "Library only"})
+    return StationConfigOption(
+        key="source_mode",
+        label="Track source",
+        type="select",
+        description="Choose whether this station may use discovery tracks, or only songs already present in your Subsonic library.",
+        default="prefer_library",
+        choices=choices,
+    )
 
 _PROVIDERS: dict[str, StationProvider] = {}
 _LOADED = False
@@ -155,7 +180,7 @@ def _with_common_options(provider: StationProvider) -> list[StationConfigOption]
     options = list(provider.config_options())
     keys = {str(opt.key or "") for opt in options}
     if "source_mode" not in keys:
-        options.insert(0, SOURCE_MODE_OPTION)
+        options.insert(0, _source_mode_option())
     return options
 
 

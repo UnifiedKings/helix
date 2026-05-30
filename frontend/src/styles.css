@@ -2219,11 +2219,38 @@ nav a.active {
 }
 .lobby-search-results button {
   text-align: left;
-  display: flex;
-  flex-direction: column;
-  gap: 0.2rem;
-  padding: 0.7rem 0.8rem;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.62rem 0.72rem;
 }
+
+.lobby-search-result-art {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  object-fit: cover;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.22);
+}
+
+.lobby-search-result-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.lobby-search-result-copy strong,
+.lobby-search-result-copy span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .lobby-search-results span { color: var(--muted); font-size: 0.88rem; }
 .lobby-member-list {
   display: flex;
@@ -4124,8 +4151,9 @@ nav a.active {
 /* Playlist card compact icon actions */
 .playlist-card-actions {
   align-items: center;
-  justify-content: flex-start;
-  gap: 0.5rem;
+  justify-content: center;
+  gap: 0.6rem;
+  width: 100%;
 }
 
 .playlist-card-action {
@@ -4216,55 +4244,7 @@ nav a.active {
 }
 
 
-.admin-user-create-form {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) minmax(220px, 1fr) minmax(140px, 0.45fr) auto;
-  gap: 0.85rem;
-  align-items: end;
-}
-
-.admin-user-create-actions {
-  display: flex;
-  align-items: flex-end;
-  min-height: 100%;
-}
-
-.admin-user-list {
-  display: grid;
-  gap: 0.65rem;
-  margin-top: 1rem;
-}
-
-.admin-user-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 140px auto;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.85rem;
-  border: 1px solid rgba(255,255,255,0.065);
-  border-radius: 18px;
-  background: rgba(255,255,255,0.035);
-}
-
-.admin-user-row > div {
-  min-width: 0;
-}
-
-.admin-user-row strong {
-  display: block;
-}
-
-.admin-user-row select {
-  width: 100%;
-}
-
-@media (max-width: 920px) {
-  .admin-user-create-form,
-  .admin-user-row {
-    grid-template-columns: 1fr;
-  }
-
-  .admin-user-create-actions {
-    min-height: 0;
-  }
+.playlist-card-actions .playlist-card-action:nth-child(2) {
+  font-size: 1.35rem;
+  font-weight: 900;
 }

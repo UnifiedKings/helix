@@ -1,4 +1,4 @@
-import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, DislikeState, HomeSummary, LikeState, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, StationProviderInfo, AdminUser, User, LobbyJoinResponse, LobbyListResponse, LobbyPermissions, LobbyState } from './types'
+import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, DislikeState, HomeSummary, LikeState, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, StationProviderInfo, AdminUser, Capabilities, User, LobbyJoinResponse, LobbyListResponse, LobbyPermissions, LobbyState } from './types'
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const { headers, ...rest } = options
@@ -175,6 +175,10 @@ function lobbyTokenKey(lobbyId: string) {
   return `helix.lobby.token.${lobbyId}`
 }
 
+function lobbyInviteKey(inviteCode: string) {
+  return `helix.lobby.invite.${inviteCode}`
+}
+
 function getLobbyToken(lobbyId: string) {
   return window.localStorage.getItem(lobbyTokenKey(lobbyId)) || ''
 }
@@ -183,8 +187,39 @@ function saveLobbyToken(lobbyId: string, token: string) {
   if (lobbyId && token) window.localStorage.setItem(lobbyTokenKey(lobbyId), token)
 }
 
+function saveLobbyInviteMapping(inviteCode: string, lobbyId: string, token: string, nickname?: string) {
+  const invite = inviteCode.trim()
+  if (!invite || !lobbyId || !token) return
+  window.localStorage.setItem(lobbyInviteKey(invite), JSON.stringify({ lobbyId, token, nickname: nickname || '', saved_at: Date.now() }))
+  saveLobbyToken(lobbyId, token)
+}
+
+function readLobbyInviteMapping(inviteCode: string): { lobbyId: string; token: string; nickname?: string } | null {
+  const raw = window.localStorage.getItem(lobbyInviteKey(inviteCode.trim()))
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as { lobbyId?: string; token?: string; nickname?: string }
+    if (!parsed.lobbyId || !parsed.token) return null
+    return { lobbyId: parsed.lobbyId, token: parsed.token, nickname: parsed.nickname || '' }
+  } catch {
+    return null
+  }
+}
+
+function clearLobbyInviteMapping(inviteCode: string) {
+  const invite = inviteCode.trim()
+  if (!invite) return
+  const mapping = readLobbyInviteMapping(invite)
+  if (mapping?.lobbyId) window.localStorage.removeItem(lobbyTokenKey(mapping.lobbyId))
+  window.localStorage.removeItem(lobbyInviteKey(invite))
+}
+
 function lobbyHeaders(lobbyId: string): Record<string, string> {
   const token = getLobbyToken(lobbyId)
+  return token ? { 'x-helix-lobby-token': token } : {}
+}
+
+function lobbyTokenHeaders(token: string): Record<string, string> {
   return token ? { 'x-helix-lobby-token': token } : {}
 }
 
@@ -216,7 +251,7 @@ export const api = {
   homeSummary: () => request<HomeSummary>('/api/home/summary'),
   settings: () => request<Record<string, unknown>>('/settings'),
 
-  playerState: () => request<PlayerState>('/api/playback/state'),
+  playerState: () => request<PlayerState>(`/api/playback/state?t=${Date.now()}`, { cache: 'no-store' }),
   playSong: (song: SearchSong) => request<PlayerState>('/api/playback/track', { method: 'POST', body: JSON.stringify(songToPayload(song)) }),
   playAlbum: (album: SearchAlbum) => request<PlayerState>('/api/playback/album', { method: 'POST', body: JSON.stringify(albumToPayload(album)) }),
   playPlaylist: (playlistId: string, shuffle = false) => request<PlayerState>('/api/playback/playlist', { method: 'POST', body: JSON.stringify({ playlist_id: playlistId, shuffle }) }),
@@ -267,6 +302,7 @@ export const api = {
   replayHistory: (historyId: string) => request<PlayerState>('/api/playback/replay', { method: 'POST', body: JSON.stringify({ history_id: historyId }) }),
   setHistoryLimit: (limit: number) => request<PlaybackHistoryResponse>('/api/history/limit', { method: 'POST', body: JSON.stringify({ limit }) }),
 
+  capabilities: () => request<Capabilities>('/capabilities'),
   adminSettings: () => request<Record<string, unknown>>('/admin/settings'),
   updateAdminSettings: (payload: Record<string, unknown>) => request<Record<string, unknown>>('/admin/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
   adminUsers: () => request<AdminUser[]>('/admin/users'),
@@ -299,9 +335,22 @@ export const api = {
   updateLobby: (lobbyId: string, payload: { name?: string; is_open?: boolean; guest_permissions?: LobbyPermissions }) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   deleteLobby: (lobbyId: string) => request<{ ok: boolean }>(`/api/lobbies/${encodeURIComponent(lobbyId)}`, { method: 'DELETE' }),
   joinLobby: async (inviteCode: string, nickname: string) => {
-    const response = await request<LobbyJoinResponse>('/api/lobbies/join', { method: 'POST', body: JSON.stringify({ invite_code: inviteCode, nickname }) })
-    saveLobbyToken(response.lobby.id, response.guest_token)
+    const cleanedInvite = inviteCode.trim()
+    const cleanedNickname = nickname.trim()
+    const response = await request<LobbyJoinResponse>('/api/lobbies/join', { method: 'POST', body: JSON.stringify({ invite_code: cleanedInvite, nickname: cleanedNickname }) })
+    saveLobbyInviteMapping(cleanedInvite, response.lobby.id, response.guest_token, response.member?.nickname || cleanedNickname)
     return response
+  },
+  savedLobbyInvite: (inviteCode: string) => readLobbyInviteMapping(inviteCode),
+  clearSavedLobbyInvite: (inviteCode: string) => clearLobbyInviteMapping(inviteCode),
+  resumeJoinedLobby: (inviteCode: string) => {
+    const cleanedInvite = inviteCode.trim()
+    const mapping = readLobbyInviteMapping(cleanedInvite)
+    if (mapping) {
+      saveLobbyToken(mapping.lobbyId, mapping.token)
+      return request<LobbyState>(`/api/lobbies/${encodeURIComponent(mapping.lobbyId)}/state?t=${Date.now()}`, { headers: lobbyTokenHeaders(mapping.token), cache: 'no-store' })
+    }
+    return request<LobbyState>(`/api/lobbies/join/${encodeURIComponent(cleanedInvite)}/resume?t=${Date.now()}`, { cache: 'no-store' })
   },
   lobbyState: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/state?t=${Date.now()}`, { headers: lobbyHeaders(lobbyId), cache: 'no-store' }),
   lobbyAddQueueItem: (lobbyId: string, item: SearchSong | QueueItem | { title: string; artist: string; album?: string }) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/queue`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify(lobbyQueuePayload(item)) }),

@@ -6,22 +6,31 @@ services:
       - "10011:8000"
     restart: unless-stopped
 
-    # Persisted state + your library mounts
     volumes:
-      # Helix data (db, logs, beets config, stream_cache, etc.)
-      - ./mr_data:/data
+      # Helix persisted data: db, logs, stream cache, etc.
+      - ./data:/data
 
-      # Static frontend served by Helix (adjust if your backend expects a different path)
+      # Static frontend served by backend
       - ./frontend:/app/static
 
-      # Inbound download staging
+      # Inbound YouTube/YTMusic download staging
       - ./inbound_yt:/inbound_yt
 
-      # Your Navidrome/Subsonic library root (host path -> container path)
-      - /network-drives-2/music:/data/music
+      # Music library root used by Navidrome/Subsonic/beets (not required)
+      - /path/to/music:/data/music
 
-      #Your files will be stored based on the beets config
+      # Beets config
       - ./beets_config:/data/helix/beets
+
     environment:
       LISTENBRAINZ_TOKEN: insert-listenbrainz-token-here
+
+      # Station / queue prefetch
       HELIX_PREFETCH_AHEAD: 3
+
+      # Max tracks added when someone pastes a YT playlist/album link into a lobby
+      HELIX_LOBBY_YT_LINK_MAX_ITEMS: 100
+
+      # Optional DB watchdog tuning
+      HELIX_DB_WATCHDOG_WARN_S: 2
+      HELIX_DB_WATCHDOG_ERROR_S: 10

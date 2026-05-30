@@ -103,6 +103,10 @@ async def add_track(
     if not vid or not title or not artist:
         raise HTTPException(status_code=400, detail="yt_video_id, title, and artist are required")
 
+    settings = _load_settings_short()
+    if _subsonic_client_from_settings(settings) is None:
+        raise HTTPException(status_code=409, detail="Subsonic is not configured. Add-to-library is disabled.")
+
     job = DownloadJob(
         video_id=vid,
         url=f"https://music.youtube.com/watch?v={vid}",
@@ -161,6 +165,8 @@ async def add_album(
 
     settings = _load_settings_short()
     client = _subsonic_client_from_settings(settings)
+    if client is None:
+        raise HTTPException(status_code=409, detail="Subsonic is not configured. Add-to-library is disabled.")
 
     existing_title_keys: Set[str] = set()
     existing_timed_keys: Set[tuple[str, int]] = set()

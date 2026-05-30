@@ -75,6 +75,7 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
   const [ratingBusy, setRatingBusy] = useState(false)
   const now = player?.now_playing
   const hasTrack = Boolean(now)
+  const shouldKeepPlaying = Boolean(player?.is_playing || localPlaying)
   const trackIdentity = `${now?.subsonic_song_id ?? ''}|${now?.yt_video_id ?? ''}|${now?.id ?? ''}`
 
   useEffect(() => {
@@ -160,7 +161,7 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
           <button className="icon-button transport-extra" type="button" title="Shuffle placeholder" aria-label="Shuffle placeholder" disabled>
             <IconShuffle />
           </button>
-          <button className="icon-button transport-side" aria-label="Previous track" title="Previous" onClick={() => run(api.previous, localPlaying ? 'play' : 'pause')} disabled={!player}>
+          <button className="icon-button transport-side" aria-label="Previous track" title="Previous" onClick={() => run(api.previous, shouldKeepPlaying ? 'play' : 'pause')} disabled={!player}>
             <IconPrevious />
           </button>
           {localPlaying ? (
@@ -172,7 +173,7 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
               <IconPlay />
             </button>
           )}
-          <button className="icon-button transport-side" aria-label="Next track" title="Next" onClick={() => run(api.next, localPlaying ? 'play' : 'pause')} disabled={!player}>
+          <button className="icon-button transport-side" aria-label="Next track" title="Next" onClick={() => run(api.next, shouldKeepPlaying ? 'play' : 'pause')} disabled={!player}>
             <IconNext />
           </button>
           <button className="icon-button transport-extra" type="button" title="Repeat placeholder" aria-label="Repeat placeholder" disabled>

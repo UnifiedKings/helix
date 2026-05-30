@@ -208,33 +208,41 @@ async def _prefetch_next_downloads(user_id: str) -> None:
         if not candidates:
             return
 
-        client = await _subsonic_client_from_settings(settings)
-
-        # Best-effort: trigger a scan occasionally so new imports become searchable quickly.
-        global _LAST_STARTSCAN_TS
-        now = time.time()
-        if (now - _LAST_STARTSCAN_TS) > 30:
+        client = None
+        if _is_subsonic_configured(settings):
             try:
-                await client.start_scan()
-                _LAST_STARTSCAN_TS = now
+                client = await _subsonic_client_from_settings(settings)
             except Exception:
-                pass
+                client = None
+
+        if client is not None:
+            # Best-effort: trigger a scan occasionally so new imports become searchable quickly.
+            global _LAST_STARTSCAN_TS
+            now = time.time()
+            if (now - _LAST_STARTSCAN_TS) > 30:
+                try:
+                    await client.start_scan()
+                    _LAST_STARTSCAN_TS = now
+                except Exception:
+                    pass
 
         for offset, qi in enumerate(candidates):
             # If already playable in Subsonic, skip.
             if qi["source"] == "subsonic" and qi["subsonic_song_id"]:
                 continue
 
-            # Re-check Subsonic by metadata without holding the DB connection.
-            try:
-                want_ms = int(qi["duration_ms"] or 0) or None
-                found = await client.search_song_best(
-                    title=qi["title"],
-                    artist=qi["artist"],
-                    duration_ms=want_ms,
-                )
-            except Exception:
-                found = None
+            found = None
+            if client is not None:
+                # Re-check Subsonic by metadata without holding the DB connection.
+                try:
+                    want_ms = int(qi["duration_ms"] or 0) or None
+                    found = await client.search_song_best(
+                        title=qi["title"],
+                        artist=qi["artist"],
+                        duration_ms=want_ms,
+                    )
+                except Exception:
+                    found = None
 
             if found and found.get("id"):
                 # DB burst only: persist the match after the await finishes.
@@ -274,6 +282,11 @@ async def _prefetch_next_downloads(user_id: str) -> None:
     except Exception as e:
         LOG.warning("[download-prefetch] failed user=%s err=%r", user_id, e)
     finally:
+        try:
+            if "client" in locals() and client is not None:
+                await client.close()
+        except Exception:
+            pass
         _DOWNLOAD_PREFETCH_TASKS.pop(user_id, None)
 
 async def _schedule_download_prefetch_async(user_id: str) -> None:
@@ -899,6 +912,34 @@ async def _subsonic_client_from_settings(settings: Dict[str, Any]) -> SubsonicCl
     return SubsonicClient(base_url=base_url, username=username, password=password, client_name=client_name, api_version=api_version, timeout_s=timeout_s)
 
 
+def _is_subsonic_configured(settings: Dict[str, Any]) -> bool:
+    return bool(
+        str(settings.get("subsonic_base_url") or "").strip()
+        and str(settings.get("subsonic_username") or "").strip()
+        and str(settings.get("subsonic_password") or "").strip()
+    )
+
+
+async def _try_match_subsonic_song(settings: Dict[str, Any], *, title: str, artist: str, duration_ms: int | None) -> Optional[Dict[str, Any]]:
+    if not _is_subsonic_configured(settings):
+        return None
+    client = None
+    try:
+        client = await _subsonic_client_from_settings(settings)
+        return await asyncio.wait_for(
+            client.search_song_best(title=title, artist=artist, duration_ms=duration_ms or None),
+            timeout=float(os.getenv("HELIX_SUBSONIC_SEARCH_TIMEOUT_S", "10")),
+        )
+    except Exception:
+        return None
+    finally:
+        if client is not None:
+            try:
+                await client.close()
+            except Exception:
+                pass
+
+
 def _rep_release(releases: List[Dict[str, Any]], preferred_country: str = "US") -> Optional[Dict[str, Any]]:
     if not releases:
         return None
@@ -1015,17 +1056,8 @@ async def play_track(payload: PlayerPlayTrackRequest, user: User = Depends(get_c
     art_url = _clean(payload.art_url or "")
     yt_video_id = _clean(getattr(payload, "yt_video_id", None) or "")
 
-    # External I/O first (bounded): resolve against Subsonic without holding a DB connection.
-    client = await _subsonic_client_from_settings(settings)
-    try:
-        song = await asyncio.wait_for(
-            client.search_song_best(title=title, artist=artist, duration_ms=duration_ms or None),
-            timeout=float(os.getenv("HELIX_SUBSONIC_SEARCH_TIMEOUT_S", "10")),
-        )
-    except asyncio.TimeoutError:
-        song = None
-    finally:
-        await client.close()
+    # External I/O first (bounded): resolve against Subsonic only when configured.
+    song = await _try_match_subsonic_song(settings, title=title, artist=artist, duration_ms=duration_ms or None)
 
     db = SessionLocal()
     try:
@@ -1106,16 +1138,7 @@ async def play_album(payload: PlayerPlayAlbumRequest, user: User = Depends(get_c
     if not t0_artist:
         t0_artist = _safe_artist(t0.get("artist") or "", "")
 
-    client = await _subsonic_client_from_settings(settings)
-    try:
-        song0 = await asyncio.wait_for(
-            client.search_song_best(title=t0_title, artist=t0_artist, duration_ms=t0_len_ms or None),
-            timeout=float(os.getenv("HELIX_SUBSONIC_SEARCH_TIMEOUT_S", "10")),
-        )
-    except asyncio.TimeoutError:
-        song0 = None
-    finally:
-        await client.close()
+    song0 = await _try_match_subsonic_song(settings, title=t0_title, artist=t0_artist, duration_ms=t0_len_ms or None)
 
     # DB burst: clear + insert queue items.
     db = SessionLocal()
@@ -1400,17 +1423,8 @@ async def queue_append_track(payload: PlayerQueueAppendTrackRequest, user: User 
     art_url = _clean(payload.art_url or "")
     yt_video_id = _clean(getattr(payload, "yt_video_id", None) or "")
 
-    # External I/O first (bounded)
-    client = await _subsonic_client_from_settings(settings)
-    try:
-        song = await asyncio.wait_for(
-            client.search_song_best(title=title, artist=artist, duration_ms=duration_ms or None),
-            timeout=float(os.getenv("HELIX_SUBSONIC_SEARCH_TIMEOUT_S", "10")),
-        )
-    except asyncio.TimeoutError:
-        song = None
-    finally:
-        await client.close()
+    # External I/O first (bounded): resolve against Subsonic only when configured.
+    song = await _try_match_subsonic_song(settings, title=title, artist=artist, duration_ms=duration_ms or None)
 
     db = SessionLocal()
     try:

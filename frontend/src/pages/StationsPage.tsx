@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
-import type { Station, StationConfigOption, StationProviderInfo } from '../api/types'
+import type { Capabilities, Station, StationConfigOption, StationProviderInfo } from '../api/types'
 import { Artwork } from '../components/Artwork'
 import type { usePlayer } from '../hooks/usePlayer'
 
@@ -36,6 +36,22 @@ function configFromProvider(provider: StationProviderInfo, existing?: StationCon
     next[option.key] = existing && existing[option.key] !== undefined ? existing[option.key] : optionDefault(option)
   }
   return next
+}
+
+function providerForCapabilities(provider: StationProviderInfo, capabilities: Capabilities | null): StationProviderInfo {
+  if (capabilities?.subsonic_configured !== false) return provider
+  return {
+    ...provider,
+    config_options: (provider.config_options ?? []).map((option) => {
+      if (option.key !== 'source_mode') return option
+      return {
+        ...option,
+        default: 'prefer_library',
+        choices: (option.choices ?? []).filter((choice) => String(choice.value) !== 'library_only'),
+        description: 'Subsonic is not configured, so this station can use discovery tracks only.',
+      }
+    }),
+  }
 }
 
 function withFreshCoverUrl(station: Station): Station {
@@ -166,6 +182,7 @@ function StationConfigForm({ provider, config, onChange }: { provider: StationPr
 export function StationsPage() {
   const player = useOutletContext<PlayerContext>()
   const [providers, setProviders] = useState<StationProviderInfo[]>([])
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const [stations, setStations] = useState<Station[]>([])
   const [selectedType, setSelectedType] = useState('')
   const [stationName, setStationName] = useState('')
@@ -184,9 +201,10 @@ export function StationsPage() {
   const [status, setStatus] = useState('')
   const [startingStation, setStartingStation] = useState<Station | null>(null)
 
-  const providerByType = useMemo(() => new Map(providers.map((provider) => [provider.station_type, provider])), [providers])
+  const visibleProviders = useMemo(() => providers.map((provider) => providerForCapabilities(provider, capabilities)), [providers, capabilities])
+  const providerByType = useMemo(() => new Map(visibleProviders.map((provider) => [provider.station_type, provider])), [visibleProviders])
   const selectedProvider = selectedType ? providerByType.get(selectedType) : undefined
-  const editingProvider = providerByType.get(editingType) ?? providers[0]
+  const editingProvider = providerByType.get(editingType) ?? visibleProviders[0]
 
   const sortedStations = useMemo(() => {
     const rows = [...stations]
@@ -199,9 +217,10 @@ export function StationsPage() {
   async function load() {
     try {
       setError('')
-      const [typeRows, stationRows] = await Promise.all([api.stationTypes(), api.stations()])
+      const [typeRows, stationRows, capabilityRows] = await Promise.all([api.stationTypes(), api.stations(), api.capabilities()])
       setProviders(typeRows)
       setStations(stationRows)
+      setCapabilities(capabilityRows)
       if (selectedType) {
         const currentProvider = typeRows.find((provider) => provider.station_type === selectedType)
         if (currentProvider) {
@@ -235,7 +254,7 @@ export function StationsPage() {
   }
 
   function openCreateModal() {
-    const fallbackType = selectedType || providers[0]?.station_type || ''
+    const fallbackType = selectedType || visibleProviders[0]?.station_type || ''
     const provider = fallbackType ? providerByType.get(fallbackType) : undefined
     setSelectedType(fallbackType)
     if (provider) setConfig((current) => Object.keys(current).length ? current : configFromProvider(provider))
@@ -267,7 +286,7 @@ export function StationsPage() {
   }
 
   function startEditing(station: Station) {
-    const stationType = station.station_type || providers[0]?.station_type || ''
+    const stationType = station.station_type || visibleProviders[0]?.station_type || ''
     const provider = providerByType.get(stationType)
     setEditingStation(station)
     setEditingName(station.name)
@@ -438,13 +457,14 @@ export function StationsPage() {
         </div>
         <div className="station-stats">
           <StationStat icon="▥" value={stations.length} label="Stations" />
-          <StationStat icon="◉" value={providers.length} label="Types" />
-          <StationStat icon="⚙" value={providers.filter((provider) => !provider.builtin).length} label="Custom" />
+          <StationStat icon="◉" value={visibleProviders.length} label="Types" />
+          <StationStat icon="⚙" value={visibleProviders.filter((provider) => !provider.builtin).length} label="Custom" />
         </div>
       </section>
 
       {error ? <div className="error-banner">{error}</div> : null}
       {status ? <div className="info-banner">{status}</div> : null}
+      {capabilities?.subsonic_configured === false ? <div className="info-banner">Subsonic is not configured. Library-only station mode is hidden and stations will use discovery playback.</div> : null}
 
       <section className="station-actions-panel">
         <div>
@@ -452,7 +472,7 @@ export function StationsPage() {
           <span className="muted">Station setup now opens in focused modals so the station list stays clean.</span>
         </div>
         <div className="station-toolbar-actions">
-          <button type="button" className="primary" onClick={openCreateModal} disabled={busy || !providers.length}>Create station</button>
+          <button type="button" className="primary" onClick={openCreateModal} disabled={busy || !visibleProviders.length}>Create station</button>
           <button type="button" onClick={reloadTypes} disabled={busy}>Reload types</button>
         </div>
       </section>
@@ -470,7 +490,7 @@ export function StationsPage() {
 
             <div className="station-modal-body">
               <div className="station-type-picker station-type-picker-modal" role="list" aria-label="Station types">
-                {providers.map((provider) => (
+                {visibleProviders.map((provider) => (
                   <button
                     type="button"
                     role="listitem"
@@ -500,7 +520,7 @@ export function StationsPage() {
                 </form>
               ) : (
                 <div className="info-banner">
-                  {providers.length ? 'Choose a station provider to start configuring a new station.' : 'No station providers are available.'}
+                  {visibleProviders.length ? 'Choose a station provider to start configuring a new station.' : 'No station providers are available.'}
                 </div>
               )}
             </div>
@@ -598,7 +618,7 @@ export function StationsPage() {
                   <span className="station-config-label">Station provider</span>
                   <small>Changing provider will rebuild the configurable option set.</small>
                   <select value={editingType} onChange={(event) => chooseEditingProvider(event.target.value)}>
-                    {providers.map((provider) => <option key={provider.station_type} value={provider.station_type}>{provider.display_name}</option>)}
+                    {visibleProviders.map((provider) => <option key={provider.station_type} value={provider.station_type}>{provider.display_name}</option>)}
                   </select>
                 </label>
                 <StationConfigForm provider={editingProvider} config={editingConfig} onChange={setEditingConfig} />

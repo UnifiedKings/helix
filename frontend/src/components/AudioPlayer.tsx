@@ -47,6 +47,7 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
   const pendingRestoreRef = useRef(0)
   const lastIntentIdRef = useRef(0)
   const continueAfterEndedRef = useRef(false)
+  const playAttemptRef = useRef(0)
   const [audioError, setAudioError] = useState('')
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -65,6 +66,7 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
 
     if (!nowId) {
       currentItemIdRef.current = ''
+      playAttemptRef.current += 1
       audio.pause()
       continueAfterEndedRef.current = false
       audio.removeAttribute('src')
@@ -77,15 +79,16 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
 
     if (currentItemIdRef.current !== nowId) {
       currentItemIdRef.current = nowId
+      playAttemptRef.current += 1
       audio.pause()
       audio.src = streamUrl(nowId)
-      pendingRestoreRef.current = readSavedPosition(nowId)
+      pendingRestoreRef.current = audioIntent.id !== lastIntentIdRef.current ? 0 : readSavedPosition(nowId)
       audio.load()
       setCurrentTime(pendingRestoreRef.current)
       setDuration(0)
       onLocalPlayingChange?.(false)
     }
-  }, [nowId, onLocalPlayingChange])
+  }, [audioIntent.id, nowId, onLocalPlayingChange])
 
   useEffect(() => {
     const audio = audioRef.current
@@ -105,14 +108,24 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
       if (currentItemIdRef.current !== nowId) {
         currentItemIdRef.current = nowId
         audio.src = streamUrl(nowId)
-        pendingRestoreRef.current = readSavedPosition(nowId)
+        pendingRestoreRef.current = 0
         audio.load()
       }
 
+      const attemptId = ++playAttemptRef.current
       setAudioError('')
       audio.play().then(() => {
+        if (attemptId !== playAttemptRef.current || currentItemIdRef.current !== nowId) return
         onLocalPlayingChange?.(true)
       }).catch((err) => {
+        if (attemptId !== playAttemptRef.current || currentItemIdRef.current !== nowId) return
+        const name = err instanceof DOMException ? err.name : ''
+        // Rapid next/previous clicks intentionally interrupt pending play() calls
+        // by changing src/load(). Those should not leave the playbar stuck.
+        if (name === 'AbortError' || name === 'NotAllowedError') {
+          onLocalPlayingChange?.(false)
+          return
+        }
         const message = err instanceof Error ? err.message : 'Browser blocked audio playback'
         setAudioError(message)
         onError?.(message)
@@ -147,10 +160,13 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
           pendingRestoreRef.current = 0
           audio.src = streamUrl(next.now_playing.id)
           audio.load()
+          const attemptId = ++playAttemptRef.current
           void audio.play().then(() => {
+            if (attemptId !== playAttemptRef.current || currentItemIdRef.current !== next.now_playing?.id) return
             continueAfterEndedRef.current = true
             onLocalPlayingChange?.(true)
           }).catch(() => {
+            if (attemptId !== playAttemptRef.current) return
             continueAfterEndedRef.current = false
             onLocalPlayingChange?.(false)
           })
@@ -167,7 +183,8 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
 
   function handleError() {
     const audio = audioRef.current
-    const message = audio?.error ? `Audio playback error ${audio.error.code}` : 'Audio playback failed'
+    if (!audio || !currentItemIdRef.current || !audio.currentSrc) return
+    const message = audio.error ? `Audio playback error ${audio.error.code}` : 'Audio playback failed'
     setAudioError(message)
     onError?.(message)
     onLocalPlayingChange?.(false)

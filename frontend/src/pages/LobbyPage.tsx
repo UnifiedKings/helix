@@ -1024,10 +1024,18 @@ function AddMusicCard({
                 disabled={!canAdd}
                 onClick={() => void addSearchSong(song)}
               >
-                <strong>{song.title}</strong>
-                <span>
-                  {song.artist}
-                  {song.album ? ` • ${song.album}` : ""}
+                <img
+                  className="lobby-search-result-art"
+                  src={song.art_url || song.thumbnail_url || "/helix-subsonic-mark.svg"}
+                  alt=""
+                  loading="lazy"
+                />
+                <span className="lobby-search-result-copy">
+                  <strong>{song.title}</strong>
+                  <span>
+                    {song.artist}
+                    {song.album ? ` • ${song.album}` : ""}
+                  </span>
                 </span>
               </button>
             ))}

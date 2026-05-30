@@ -488,6 +488,14 @@ async def _subsonic_client_from_settings(settings: Dict[str, Any]) -> SubsonicCl
     return SubsonicClient(base_url=base_url, username=username, password=password, client_name=client_name, api_version=api_version, timeout_s=timeout_s)
 
 
+def _subsonic_configured(settings: Dict[str, Any]) -> bool:
+    return bool(
+        str(settings.get("subsonic_base_url") or "").strip()
+        and str(settings.get("subsonic_username") or "").strip()
+        and str(settings.get("subsonic_password") or "").strip()
+    )
+
+
 async def match_track_to_subsonic(*, settings: Dict[str, Any], title: str, artist: str, duration_ms: Optional[int]) -> Optional[Dict[str, Any]]:
     """Resolve a (title, artist) pair to a Subsonic song dict if possible.
 
@@ -791,6 +799,8 @@ async def generate_and_append_station_tracks(
     context, station_type = ctx_tuple
     provider = get_station_provider(station_type)
     source_mode = _station_source_mode(context.config)
+    if source_mode == "library_only" and not _subsonic_configured(settings):
+        source_mode = "prefer_library"
     provider_count = count
     if source_mode == "library_only":
         provider_count = max(count * 10, min(100, count + 25))

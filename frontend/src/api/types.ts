@@ -333,3 +333,18 @@ export type AdminUser = {
   role: 'admin' | 'user' | string
   is_active: boolean
 }
+
+
+export type Capabilities = {
+  subsonic_configured: boolean
+  features: {
+    library_search: boolean
+    subsonic_import: boolean
+    library_only_stations: boolean
+    subsonic_playback: boolean
+    ytmusic_discovery: boolean
+    ytmusic_playback: boolean
+    lobbies: boolean
+    [key: string]: boolean
+  }
+}

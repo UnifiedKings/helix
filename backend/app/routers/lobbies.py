@@ -12,7 +12,7 @@ from datetime import datetime
 from types import SimpleNamespace
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 from yt_dlp import YoutubeDL
@@ -38,6 +38,18 @@ from ..api_schemas.lobbies import (
  )
 from ..settings_store import get_settings
 from ..integrations.ytmusic import find_track
+from ..routers.search import (
+    _RATE_LIMITER as SEARCH_RATE_LIMITER,
+    _SEARCH_CACHE as SEARCH_CACHE,
+    _load_settings_short as _search_load_settings_short,
+    _make_key as search_make_key,
+    _search_album_key,
+    _search_client_ip,
+    _search_mark_ytmusic,
+    _search_song_key,
+    _search_subsonic_only,
+    _ytmusic_search,
+)
 from ..player.engine import (
     _ensure_playable_for_stream,
     _stream_inbound_progressive,
@@ -443,6 +455,15 @@ def _touch_lobby(lobby: SharedLobby) -> None:
     lobby.updated_at = _now()
 
 
+def _commit_lobby_state(db: Session, lobby: SharedLobby, actor: SharedLobbyMember, *, include_invite: bool = False) -> LobbyStateResponse:
+    # Build the response before commit so SQLAlchemy's expire-on-commit behavior
+    # cannot trigger lazy refreshes while rendering high-frequency lobby state.
+    db.flush()
+    response = _to_lobby_state(db, lobby, actor, include_invite=include_invite)
+    db.commit()
+    return response
+
+
 @router.post("", response_model=LobbyStateResponse)
 def create_lobby(payload: LobbyCreateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     name = _clean_text(payload.name, 180) or "Shared Lobby"
@@ -532,13 +553,117 @@ def join_lobby(payload: LobbyJoinRequest, response: Response, db: Session = Depe
     )
 
 
+@router.get("/join/{invite_code}/resume", response_model=LobbyStateResponse)
+def resume_joined_lobby(invite_code: str, request: Request, db: Session = Depends(get_db)):
+    invite = _clean_text(invite_code, 128)
+    if not invite:
+        raise HTTPException(status_code=400, detail="invite_code is required")
+
+    lobby = db.execute(select(SharedLobby).where(SharedLobby.invite_code == invite)).scalar_one_or_none()
+    if not lobby or not lobby.is_open:
+        raise HTTPException(status_code=404, detail="Lobby not found or closed")
+
+    _, actor = _actor_for_lobby(db, request, lobby)
+    include_invite = actor.role == "host"
+    response = _to_lobby_state(db, lobby, actor, include_invite=include_invite)
+    db.commit()
+    return response
+
+
+@router.get("/{lobby_id}/search/{mode}", response_model=dict[str, Any])
+async def lobby_search(
+    lobby_id: str,
+    mode: str,
+    request: Request,
+    q: str = Query(..., description="Search query"),
+    song_limit: int = Query(20, ge=1, le=50),
+    album_limit: int = Query(20, ge=0, le=50),
+    subsonic_limit: int = Query(3, ge=0, le=10),
+    db: Session = Depends(get_db),
+):
+    """Lobby-safe Helix search.
+
+    Guests do not have normal account auth, so lobby search cannot call the
+    account-authenticated /api/search endpoints directly. Validate lobby access
+    and add-to-queue permission here, then run the same underlying search helpers.
+    """
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    perms = _member_permissions(actor)
+    if not perms.can_add_to_queue:
+        raise HTTPException(status_code=403, detail="You cannot add to this lobby queue")
+
+    qq = (q or "").strip()
+    search_mode = (mode or "hybrid").strip().lower()
+    if search_mode not in {"hybrid", "subsonic", "ytmusic"}:
+        raise HTTPException(status_code=400, detail="Unsupported search mode")
+    if not qq:
+        return {"mode": search_mode, "songs": [], "albums": []}
+
+    ip = _search_client_ip(request)
+    if not SEARCH_RATE_LIMITER.allow(
+        search_make_key(scope=f"lobby_search:{search_mode}", user_id=actor.id, ip=ip),
+        limit=30,
+        window_s=30,
+    ):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+    settings = _search_load_settings_short()
+    subsonic_enabled = bool(
+        str(settings.get("subsonic_base_url") or "").strip()
+        and str(settings.get("subsonic_username") or "").strip()
+        and str(settings.get("subsonic_password") or "").strip()
+    )
+
+    if search_mode == "subsonic" and not subsonic_enabled:
+        return {"mode": "subsonic", "songs": [], "albums": []}
+
+    cache_key = (
+        f"lobby_search:{search_mode}|{qq}|{song_limit}|{album_limit}|{subsonic_limit}|"
+        f"sub={1 if subsonic_enabled else 0}"
+    )
+    hit = SEARCH_CACHE.get(cache_key)
+    if hit is not None:
+        return hit
+
+    if search_mode == "ytmusic":
+        payload = _search_mark_ytmusic(_ytmusic_search(qq, song_limit=song_limit, album_limit=album_limit))
+        payload["mode"] = "ytmusic"
+    elif search_mode == "subsonic":
+        payload = await _search_subsonic_only(settings, qq, song_limit, album_limit)
+        payload["mode"] = "subsonic"
+    else:
+        yt_payload = _search_mark_ytmusic(_ytmusic_search(qq, song_limit=song_limit, album_limit=album_limit))
+        sub_payload = (
+            await _search_subsonic_only(settings, qq, subsonic_limit, subsonic_limit)
+            if subsonic_enabled and subsonic_limit > 0
+            else {"songs": [], "albums": []}
+        )
+        sub_song_keys = {_search_song_key(item) for item in sub_payload.get("songs") or []}
+        sub_album_keys = {_search_album_key(item) for item in sub_payload.get("albums") or []}
+        yt_songs = [item for item in yt_payload.get("songs") or [] if _search_song_key(item) not in sub_song_keys]
+        yt_albums = [item for item in yt_payload.get("albums") or [] if _search_album_key(item) not in sub_album_keys]
+        payload = {
+            "mode": "hybrid",
+            "songs": list(sub_payload.get("songs") or []) + yt_songs,
+            "albums": list(sub_payload.get("albums") or []) + yt_albums,
+        }
+
+    SEARCH_CACHE.set(cache_key, payload, ttl_seconds=60 * 2)
+    return payload
+
+
 @router.get("/{lobby_id}/state", response_model=LobbyStateResponse)
 def lobby_state(lobby_id: str, request: Request, db: Session = Depends(get_db)):
     lobby = _get_lobby(db, lobby_id)
     _, actor = _actor_for_lobby(db, request, lobby)
+    include_invite = actor.role == "host"
+    response = _to_lobby_state(db, lobby, actor, include_invite=include_invite)
+    # Persist the lightweight last_seen_at touch after the response is built.
+    # This avoids SQLAlchemy expiration/lazy reload during high-frequency lobby
+    # polling response rendering.
     db.commit()
-    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
-
+    return response
 
 @router.get("/{lobby_id}/art/{item_id}")
 async def lobby_item_art(lobby_id: str, item_id: str, request: Request):
@@ -864,8 +989,7 @@ def add_queue_item(lobby_id: str, payload: LobbyQueueAddRequest, request: Reques
         lobby.position_ms = 0
         lobby.position_updated_at = _now()
     _touch_lobby(lobby)
-    db.commit()
-    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+    return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
 
 
 @router.delete("/{lobby_id}/queue/{item_id}", response_model=LobbyStateResponse)
@@ -950,8 +1074,7 @@ def lobby_play(lobby_id: str, request: Request, db: Session = Depends(get_db)):
         lobby.is_playing = True
         lobby.position_updated_at = _now()
     _touch_lobby(lobby)
-    db.commit()
-    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+    return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
 
 
 @router.post("/{lobby_id}/pause", response_model=LobbyStateResponse)
@@ -964,8 +1087,7 @@ def lobby_pause(lobby_id: str, request: Request, db: Session = Depends(get_db)):
     lobby.is_playing = False
     lobby.position_updated_at = _now()
     _touch_lobby(lobby)
-    db.commit()
-    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+    return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
 
 
 @router.post("/{lobby_id}/seek", response_model=LobbyStateResponse)
@@ -978,8 +1100,7 @@ def lobby_seek(lobby_id: str, payload: LobbySeekRequest, request: Request, db: S
     lobby.position_ms = max(0, int(payload.position_ms or 0))
     lobby.position_updated_at = _now()
     _touch_lobby(lobby)
-    db.commit()
-    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+    return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
 
 
 @router.post("/{lobby_id}/next", response_model=LobbyStateResponse)
@@ -995,8 +1116,7 @@ def lobby_next(lobby_id: str, request: Request, db: Session = Depends(get_db)):
     lobby.position_ms = 0
     lobby.position_updated_at = _now()
     _touch_lobby(lobby)
-    db.commit()
-    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+    return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
 
 
 @router.post("/{lobby_id}/previous", response_model=LobbyStateResponse)
@@ -1010,8 +1130,7 @@ def lobby_previous(lobby_id: str, request: Request, db: Session = Depends(get_db
     lobby.position_ms = 0
     lobby.position_updated_at = _now()
     _touch_lobby(lobby)
-    db.commit()
-    return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+    return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
 
 
 @router.patch("/{lobby_id}/members/{member_id}", response_model=LobbyStateResponse)
