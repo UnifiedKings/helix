@@ -24,6 +24,24 @@ from ..player.engine import state
 
 router = APIRouter(prefix="/api/stations", tags=["stations"])
 
+
+async def _read_limited_body(request: Request, *, max_bytes: int) -> bytes:
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > max_bytes:
+                raise HTTPException(status_code=413, detail="Uploaded cover image is too large")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length")
+    chunks: list[bytes] = []
+    total = 0
+    async for chunk in request.stream():
+        total += len(chunk)
+        if total > max_bytes:
+            raise HTTPException(status_code=413, detail="Uploaded cover image is too large")
+        chunks.append(chunk)
+    return b"".join(chunks)
+
 def _thumb_for_station(db: Session, station_id: str) -> str:
     """Phase 1: derive a station thumbnail from recent station listen history."""
     row = db.execute(
@@ -247,7 +265,11 @@ async def _save_station_cover_upload(station_id: str, request: Request, db: Sess
     # Do not trust or require the browser-provided Content-Type. Some browsers
     # report drag/dropped images as application/octet-stream or omit the MIME
     # type entirely. Pillow validates the actual bytes below.
-    body = await request.body()
+    try:
+        max_bytes = max(1, int(os.getenv("HELIX_STATION_COVER_MAX_BYTES", str(5 * 1024 * 1024))))
+    except Exception:
+        max_bytes = 5 * 1024 * 1024
+    body = await _read_limited_body(request, max_bytes=max_bytes)
     try:
         saved_path = save_custom_station_cover(station_id, body)
         delete_generated_station_cover(station_id)

@@ -60,6 +60,42 @@ class YTMusicAlbum:
         return f"https://music.youtube.com/browse/{self.browse_id}" if self.browse_id else ""
 
 
+def _album_playlist_entries(playlist_id: str) -> List[Dict[str, Any]]:
+    """Return flat yt-dlp entries for a YTMusic album audio playlist.
+
+    ytmusicapi's album/playlist objects sometimes omit videoId for some rows.
+    yt-dlp's flat playlist extraction is a useful second source for every track id.
+    """
+    pid = (playlist_id or "").strip()
+    if not pid:
+        return []
+    url = f"https://music.youtube.com/playlist?list={pid}"
+    try:
+        ydl = YoutubeDL(
+            {
+                "quiet": True,
+                "skip_download": True,
+                "extract_flat": True,
+                "ignoreerrors": True,
+                "nocheckcertificate": True,
+            }
+        )
+        data = ydl.extract_info(url, download=False) or {}
+        entries = data.get("entries") or []
+        return [e for e in entries if isinstance(e, dict)]
+    except Exception:
+        return []
+
+
+def _video_id_from_flat_entry(entry: Dict[str, Any]) -> str:
+    vid = str(entry.get("id") or entry.get("video_id") or "").strip()
+    if vid:
+        return vid
+    url = str(entry.get("url") or entry.get("webpage_url") or "").strip()
+    m = re.search(r"(?:v=|/watch/|youtu\.be/)([A-Za-z0-9_-]{11})", url)
+    return m.group(1) if m else ""
+
+
 def _best_thumb(item: Dict[str, Any]) -> str:
     thumbs = item.get("thumbnails") or []
     if isinstance(thumbs, list) and thumbs:
@@ -399,22 +435,126 @@ def get_album_tracks(browse_id: str) -> List[Dict[str, Any]]:
     tracks_raw = data.get("tracks") or []
     album_artist = _artist_name_from_item(data, "")
 
+    def norm_title(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
+
+    # ytmusicapi album rows can sometimes omit videoId for alternating rows or
+    # partial rows. The album payload usually also has an audioPlaylistId; the
+    # playlist payload tends to contain video IDs for every track. Build lookup
+    # maps from that playlist and merge them into the album track list.
+    playlist_rows: List[Dict[str, Any]] = []
+    playlist_id = str(
+        data.get("audioPlaylistId")
+        or data.get("playlistId")
+        or data.get("audioPlaylist")
+        or ""
+    ).strip()
+    if playlist_id:
+        try:
+            playlist_payload = c.get_playlist(playlist_id, limit=500) or {}
+            raw_playlist_tracks = playlist_payload.get("tracks") or []
+            if isinstance(raw_playlist_tracks, list):
+                playlist_rows = [row for row in raw_playlist_tracks if isinstance(row, dict)]
+        except Exception:
+            playlist_rows = []
+
+    # Third source: yt-dlp flat playlist entries. This often has video IDs for
+    # rows that ytmusicapi returns without playable ids.
+    flat_rows: List[Dict[str, Any]] = _album_playlist_entries(playlist_id)
+    flat_by_title: Dict[str, Dict[str, Any]] = {}
+    for row in flat_rows:
+        key = norm_title(str(row.get("title") or ""))
+        if key and key not in flat_by_title:
+            flat_by_title[key] = row
+
+    playlist_by_title: Dict[str, Dict[str, Any]] = {}
+    for row in playlist_rows:
+        key = norm_title(str(row.get("title") or ""))
+        if key and key not in playlist_by_title:
+            playlist_by_title[key] = row
+
     tracks: List[Dict[str, Any]] = []
-    for it in tracks_raw:
+    for index, it in enumerate(tracks_raw, start=1):
         if not isinstance(it, dict):
             continue
         title = str(it.get("title") or "").strip()
         if not title:
             continue
+
         artist = _artist_name_from_item(it, album_artist)
+        duration_seconds = _duration_to_seconds(it.get("duration") or it.get("length"))
+        video_id = str(it.get("videoId") or it.get("video_id") or "").strip()
+
+        title_key = norm_title(title)
+        playlist_match = playlist_by_title.get(title_key)
+        flat_match = flat_by_title.get(title_key)
+
+        if not playlist_match and 0 <= index - 1 < len(playlist_rows):
+            # Fallback by album order. This is intentionally only used when the
+            # title lookup failed; it fixes partial album rows without making
+            # normal title-based matching less accurate.
+            playlist_match = playlist_rows[index - 1]
+        if not flat_match and 0 <= index - 1 < len(flat_rows):
+            flat_match = flat_rows[index - 1]
+
+        if playlist_match:
+            if not video_id:
+                video_id = str(playlist_match.get("videoId") or playlist_match.get("video_id") or "").strip()
+            if not duration_seconds:
+                duration_seconds = _duration_to_seconds(playlist_match.get("duration") or playlist_match.get("length"))
+            if (not artist or artist == album_artist) and playlist_match:
+                artist = _artist_name_from_item(playlist_match, album_artist)
+
+        if flat_match:
+            if not video_id:
+                video_id = _video_id_from_flat_entry(flat_match)
+            if not duration_seconds:
+                duration_seconds = _duration_to_seconds(flat_match.get("duration") or flat_match.get("length"))
+
         tracks.append(
             {
                 "title": title,
                 "artist": artist,
-                "duration_seconds": _duration_to_seconds(it.get("duration") or it.get("length")),
-                "video_id": str(it.get("videoId") or ""),
+                "duration_seconds": duration_seconds,
+                "duration_ms": int(duration_seconds * 1000) if duration_seconds else 0,
+                "video_id": video_id,
+                "videoId": video_id,
+                "track_no": index,
+                "pos": index,
             }
         )
+
+    # If get_album returned an incomplete/odd-only track list but the playlist is
+    # complete, append playlist-only rows that are not already present by title.
+    seen_titles = {norm_title(str(row.get("title") or "")) for row in tracks}
+
+    def append_playlist_only(row: Dict[str, Any], *, flat: bool = False) -> None:
+        title = str(row.get("title") or "").strip()
+        key = norm_title(title)
+        if not title or key in seen_titles:
+            return
+        index = len(tracks) + 1
+        duration_seconds = _duration_to_seconds(row.get("duration") or row.get("length"))
+        video_id = _video_id_from_flat_entry(row) if flat else str(row.get("videoId") or row.get("video_id") or "").strip()
+        tracks.append(
+            {
+                "title": title,
+                "artist": _artist_name_from_item(row, album_artist),
+                "duration_seconds": duration_seconds,
+                "duration_ms": int(duration_seconds * 1000) if duration_seconds else 0,
+                "video_id": video_id,
+                "videoId": video_id,
+                "track_no": index,
+                "pos": index,
+            }
+        )
+        seen_titles.add(key)
+
+    for row in playlist_rows:
+        append_playlist_only(row, flat=False)
+    for row in flat_rows:
+        append_playlist_only(row, flat=True)
+
     return tracks
 
 
@@ -539,27 +679,47 @@ def find_song(*, title: str, artist: str, album: Optional[str] = None, duration_
     return find_track(title=title, artist=artist, album=album, duration_seconds=duration_seconds)
 
 def find_track(*, title: str, artist: str, album: Optional[str] = None, duration_seconds: Optional[int] = None) -> MatchResult:
-    query = f"{title} {artist}"
+    queries = [f"{title} {artist}"]
+    if album:
+        queries.append(f"{title} {artist} {album}")
+        queries.append(f"{artist} {album} {title}")
+
     ydl = _ydl()
-    data = ydl.extract_info(f"ytsearch5:{query}", download=False)
-    entries = (data or {}).get("entries") or []
-
     best: Tuple[float, Optional[Dict[str, Any]]] = (0.0, None)
-    for e in entries:
-        if not isinstance(e, dict):
-            continue
-        score = _score_track_candidate(e, title=title, artist=artist, album=album, duration_seconds=duration_seconds)
-        if score > best[0]:
-            best = (score, e)
+    seen: set[str] = set()
 
-    if best[1] is None or best[0] < 0.45:
+    for query in queries:
+        try:
+            data = ydl.extract_info(f"ytsearch10:{query}", download=False)
+        except Exception:
+            continue
+        entries = (data or {}).get("entries") or []
+        for e in entries:
+            if not isinstance(e, dict):
+                continue
+            vid = str(e.get("id") or e.get("video_id") or "")
+            if vid and vid in seen:
+                continue
+            if vid:
+                seen.add(vid)
+            score = _score_track_candidate(e, title=title, artist=artist, album=album, duration_seconds=duration_seconds)
+            if score > best[0]:
+                best = (score, e)
+
+    if best[1] is None:
+        return MatchResult(found=False)
+
+    cand_title = str(best[1].get("title") or "")
+    strong_title_match = _jaccard(title, cand_title) >= 0.60 or _norm(title) in _norm(cand_title)
+    threshold = 0.36 if strong_title_match else 0.45
+    if best[0] < threshold:
         return MatchResult(found=False)
 
     e = best[1]
     return MatchResult(
         found=True,
         confidence=float(best[0]),
-        video_id=str(e.get("id") or ""),
+        video_id=str(e.get("id") or e.get("video_id") or ""),
         title=str(e.get("title") or ""),
         uploader=str(e.get("uploader") or e.get("channel") or ""),
         duration_seconds=int(e.get("duration")) if e.get("duration") is not None else None,

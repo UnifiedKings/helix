@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
+import os
+
 from fastapi import Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import select
@@ -9,6 +11,18 @@ from .db import SessionLocal
 from .models import User, SessionToken
 
 SESSION_COOKIE = "mr_session"
+
+
+def cookie_secure() -> bool:
+    return os.getenv("HELIX_COOKIE_SECURE", "true").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def session_max_age_seconds() -> int:
+    try:
+        return max(3600, int(os.getenv("HELIX_SESSION_MAX_AGE_SECONDS", str(60 * 60 * 24 * 30))))
+    except Exception:
+        return 60 * 60 * 24 * 30
+
 
 def _get_session_token_from_cookie(request: Request) -> str | None:
     return request.cookies.get(SESSION_COOKIE)
@@ -28,13 +42,21 @@ def get_current_user(request: Request) -> User:
         if not session:
             raise HTTPException(status_code=401, detail="Invalid session")
 
+        now = datetime.utcnow()
+        if session.created_at and session.created_at < now - timedelta(seconds=session_max_age_seconds()):
+            db.delete(session)
+            db.commit()
+            raise HTTPException(status_code=401, detail="Session expired")
+
         user = db.get(User, session.user_id)
         if not user:
+            db.delete(session)
+            db.commit()
             raise HTTPException(status_code=401, detail="Invalid session")
         if not user.is_active:
             raise HTTPException(status_code=403, detail="User is disabled")
 
-        session.last_seen_at = datetime.utcnow()
+        session.last_seen_at = now
         db.add(session)
         db.commit()
         # SQLAlchemy expires ORM instances on commit by default. If we return a

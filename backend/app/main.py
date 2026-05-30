@@ -9,6 +9,8 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 from starlette.responses import FileResponse
 
 from .db import SessionLocal, db_watchdog_loop, init_db
@@ -16,7 +18,6 @@ from .routers.admin import router as admin_router
 from .routers.album import router as album_router
 from .routers.art import router as art_router
 from .routers.auth import router as auth_router
-from .routers.home import router as home_router
 from .routers.dislikes import router as dislikes_router
 from .routers.likes import router as likes_router
 from .routers.lobbies import router as lobbies_router
@@ -25,6 +26,7 @@ from .routers.queue import router as queue_router
 from .routers.playback_history import router as playback_history_router
 from .routers.streaming import router as streaming_router
 from .routers.fulfillment import router as fulfillment_router
+from .routers.home import router as home_router
 from .routers.playlists import router as playlists_router
 from .routers.search import router as search_router
 from .routers.settings import router as settings_router
@@ -43,7 +45,58 @@ logging.basicConfig(
 
 app = FastAPI(title="Helix Backend", version="0.1.0")
 
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("Referrer-Policy", "same-origin")
+        response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            os.getenv(
+                "HELIX_CONTENT_SECURITY_POLICY",
+                "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' blob:; connect-src 'self'; script-src 'self' 'sha256-ieoeWczDHkReVBsRBqaal5AFMlBtNjMzgwKvLqi/tSU='; script-src-elem 'self' 'sha256-ieoeWczDHkReVBsRBqaal5AFMlBtNjMzgwKvLqi/tSU='; style-src 'self' 'unsafe-inline'; base-uri 'self'; frame-ancestors 'none'",
+            ),
+        )
+        return response
+
+
+class OriginGuardMiddleware(BaseHTTPMiddleware):
+    SAFE_METHODS = {"GET", "HEAD", "OPTIONS"}
+
+    async def dispatch(self, request, call_next):
+        if request.method.upper() not in self.SAFE_METHODS:
+            origin = request.headers.get("origin")
+            referer = request.headers.get("referer")
+            allowed = {FRONTEND_ORIGIN.rstrip("/")}
+            for extra in (os.getenv("HELIX_ALLOWED_ORIGINS", "") or "").split(","):
+                extra = extra.strip().rstrip("/")
+                if extra:
+                    allowed.add(extra)
+            request_host = (request.headers.get('host', '') or '').strip()
+            if request_host:
+                allowed.add(f"http://{request_host}".rstrip("/"))
+                allowed.add(f"https://{request_host}".rstrip("/"))
+            host_origin = f"{request.url.scheme}://{request_host}".rstrip("/")
+            allowed.add(host_origin)
+            candidate = (origin or "").rstrip("/")
+            if not candidate and referer:
+                try:
+                    from urllib.parse import urlparse
+                    parsed = urlparse(referer)
+                    candidate = f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+                except Exception:
+                    candidate = ""
+            if candidate and candidate not in allowed:
+                return Response("Forbidden origin", status_code=403)
+        return await call_next(request)
+
+
 FRONTEND_ORIGIN = os.getenv("MR_FRONTEND_ORIGIN", "http://localhost:8080")
+
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(OriginGuardMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -84,9 +137,9 @@ def _startup():
 app.include_router(system_router)
 app.include_router(auth_router)
 app.include_router(settings_router)
-app.include_router(home_router)
 app.include_router(admin_router)
 app.include_router(search_router)
+app.include_router(home_router)
 app.include_router(album_router)
 app.include_router(playback_router)
 app.include_router(queue_router)

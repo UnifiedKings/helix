@@ -19,11 +19,24 @@ function settingType(value: unknown) {
   return 'text'
 }
 
+const HIDDEN_SETTING_KEYS = new Set([
+  'artist_images_enable_wikipedia',
+  'artist_images_fallback_to_album_art',
+  'image_cache_max_mb',
+  'image_cache_thumb_px',
+  'image_cache_ttl_days',
+  'image_proxy_enabled',
+  'search_cache_ttl_seconds',
+  'search_hide_tracks_without_art',
+  'subsonic_configured',
+  'subsonic_password_configured',
+])
+
 const SETTING_GROUPS: Array<{ title: string; keys: string[] }> = [
   { title: 'Subsonic', keys: ['subsonic_base_url', 'subsonic_username', 'subsonic_password', 'subsonic_client_name', 'subsonic_api_version', 'subsonic_timeout_s'] },
   { title: 'Playback', keys: ['player_max_queue_items', 'player_omit_missing', 'listen_history_limit'] },
   { title: 'Fulfillment', keys: ['fulfillment_library_subfolder', 'fulfillment_tag_comment', 'fulfillment_first_play_timeout_seconds', 'fulfillment_version_preference'] },
-  { title: 'Search', keys: ['search_default_country', 'search_hide_non_official', 'search_prefer_original_release', 'search_hide_tracks_without_art', 'search_cache_ttl_seconds'] },
+  { title: 'Search', keys: ['search_default_country', 'search_hide_non_official', 'search_prefer_original_release'] },
   { title: 'MusicBrainz', keys: ['musicbrainz_min_interval_ms', 'musicbrainz_user_agent'] },
 ]
 
@@ -40,7 +53,10 @@ export function SettingsPage() {
   const [updatingUserId, setUpdatingUserId] = useState('')
 
   const groupedKeys = useMemo(() => new Set(SETTING_GROUPS.flatMap((group) => group.keys)), [])
-  const extraKeys = useMemo(() => Object.keys(settings).filter((key) => !groupedKeys.has(key)).sort(), [settings, groupedKeys])
+  const extraKeys = useMemo(
+    () => Object.keys(settings).filter((key) => !groupedKeys.has(key) && !HIDDEN_SETTING_KEYS.has(key)).sort(),
+    [settings, groupedKeys],
+  )
 
   async function load() {
     try {
@@ -114,20 +130,20 @@ export function SettingsPage() {
   }
 
   function renderSetting(key: string) {
-    if (!(key in settings)) return null
+    if (HIDDEN_SETTING_KEYS.has(key) || !(key in settings)) return null
     const value = settings[key]
     const type = settingType(value)
     const isSecret = key.toLowerCase().includes('password')
     return (
       <label className="setting-row" key={key}>
-        <span><strong>{key}</strong><small>{type}</small></span>
+        <span><strong>{key}</strong><small>{isSecret ? 'secret; leave blank to keep existing value' : type}</small></span>
         {type === 'boolean' ? (
           <select value={draft[key] ?? String(value)} onChange={(event) => setDraft((prev) => ({ ...prev, [key]: event.target.value }))}>
             <option value="true">true</option>
             <option value="false">false</option>
           </select>
         ) : (
-          <input type={isSecret ? 'password' : type === 'number' ? 'number' : 'text'} value={draft[key] ?? ''} onChange={(event) => setDraft((prev) => ({ ...prev, [key]: event.target.value }))} />
+          <input type={isSecret ? 'password' : type === 'number' ? 'number' : 'text'} value={draft[key] ?? ''} placeholder={isSecret && settings[`${key}_configured`] ? 'Configured; leave blank to keep' : ''} onChange={(event) => setDraft((prev) => ({ ...prev, [key]: event.target.value }))} />
         )}
       </label>
     )

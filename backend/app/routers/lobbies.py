@@ -17,7 +17,7 @@ from sqlalchemy import select, delete
 from sqlalchemy.orm import Session
 from yt_dlp import YoutubeDL
 
-from ..auth import SESSION_COOKIE, get_current_user
+from ..auth import SESSION_COOKIE, cookie_secure, get_current_user
 from ..db import get_db, SessionLocal
 from ..models import SessionToken, User
 from ..lobby_models import SharedLobby, SharedLobbyMember, SharedLobbyQueueItem
@@ -32,11 +32,13 @@ from ..api_schemas.lobbies import (
     LobbyPermissions,
     LobbyQueueAddRequest,
     LobbyQueueItemResponse,
+    LobbyQueueReorderRequest,
     LobbySeekRequest,
     LobbyStateResponse,
     LobbyUpdateRequest,
  )
 from ..settings_store import get_settings
+from ..art_sources import is_allowed_art_url
 from ..integrations.ytmusic import find_track
 from ..routers.search import (
     _RATE_LIMITER as SEARCH_RATE_LIMITER,
@@ -159,6 +161,18 @@ def _extract_youtube_video_id(value: str | None) -> str:
     return ""
 
 
+def _is_allowed_youtube_url(value: str | None) -> bool:
+    raw = (value or "").strip()
+    if not raw:
+        return False
+    try:
+        parsed = urllib.parse.urlparse(raw)
+    except Exception:
+        return False
+    host = (parsed.hostname or "").lower()
+    return parsed.scheme in {"http", "https"} and host in {"youtube.com", "www.youtube.com", "music.youtube.com", "m.youtube.com", "youtu.be"}
+
+
 def _youtube_collection_hint(value: str | None) -> bool:
     raw = (value or "").strip()
     if not raw:
@@ -223,6 +237,8 @@ def _youtube_entries_from_url(url: str, video_id: str = "") -> list[dict[str, An
         target = f"https://music.youtube.com/watch?v={video_id}"
     if not target:
         return []
+    if not _is_allowed_youtube_url(target):
+        raise ValueError("Only YouTube or YouTube Music links are allowed")
 
     is_collection = _youtube_collection_hint(target)
     max_items = max(1, min(500, int(os.getenv("HELIX_LOBBY_YT_LINK_MAX_ITEMS", "100") or "100")))
@@ -545,7 +561,7 @@ def join_lobby(payload: LobbyJoinRequest, response: Response, db: Session = Depe
     db.add(member)
     db.commit()
     db.refresh(member)
-    response.set_cookie(LOBBY_TOKEN_COOKIE, member.token or "", httponly=False, samesite="lax", secure=False)
+    response.set_cookie(LOBBY_TOKEN_COOKIE, member.token or "", httponly=False, samesite="lax", secure=cookie_secure())
     return LobbyJoinResponse(
         guest_token=member.token or "",
         member=_to_member_response(member),
@@ -765,11 +781,11 @@ async def lobby_item_art(lobby_id: str, item_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Artwork unavailable")
 
     parsed = urllib.parse.urlparse(raw_url)
-    if parsed.scheme not in {"http", "https"}:
+    if parsed.scheme not in {"https"} or not is_allowed_art_url(raw_url):
         raise HTTPException(status_code=404, detail="Artwork unavailable")
 
     try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True) as client:
+        async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
             resp = await client.get(raw_url)
             resp.raise_for_status()
             data = resp.content
@@ -992,6 +1008,151 @@ def add_queue_item(lobby_id: str, payload: LobbyQueueAddRequest, request: Reques
     return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
 
 
+@router.delete("/{lobby_id}/queue", response_model=LobbyStateResponse)
+def clear_queue_items(lobby_id: str, request: Request, db: Session = Depends(get_db)):
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    perms = _member_permissions(actor)
+    if not perms.can_remove_any_queue_item:
+        raise HTTPException(status_code=403, detail="You cannot clear this lobby queue")
+
+    try:
+        db.execute(
+            delete(SharedLobbyQueueItem)
+            .where(SharedLobbyQueueItem.lobby_id == lobby.id)
+            .execution_options(synchronize_session=False)
+        )
+        lobby.current_index = 0
+        lobby.position_ms = 0
+        lobby.is_playing = False
+        lobby.position_updated_at = _now()
+        _touch_lobby(lobby)
+        db.add(lobby)
+        db.flush()
+
+        # Build the response after the delete has flushed so the returned state
+        # cannot include the removed rows.
+        response = _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+        response.queue = []
+        response.now_playing = None
+        response.current_index = 0
+        response.is_playing = False
+        response.position_ms = 0
+        response.effective_position_ms = 0
+        db.commit()
+        return response
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Could not clear lobby queue: {exc}") from exc
+
+
+@router.patch("/{lobby_id}/queue/reorder", response_model=LobbyStateResponse)
+@router.post("/{lobby_id}/queue/reorder", response_model=LobbyStateResponse)
+def reorder_queue_items(lobby_id: str, payload: LobbyQueueReorderRequest, request: Request, db: Session = Depends(get_db)):
+    """Reorder the lobby queue.
+
+    This static route must be registered before /{lobby_id}/queue/{item_id};
+    otherwise FastAPI can treat "reorder" as an item id and return 405 for PATCH.
+    """
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    perms = _member_permissions(actor)
+    if not (perms.can_control_playback or actor.role == "host"):
+        raise HTTPException(status_code=403, detail="You cannot reorder this lobby queue")
+
+    requested_ids: list[str] = []
+    seen: set[str] = set()
+    for raw_id in getattr(payload, "item_ids", []) or []:
+        item_id = _clean_text(raw_id, 80)
+        if item_id and item_id not in seen:
+            requested_ids.append(item_id)
+            seen.add(item_id)
+
+    if not requested_ids:
+        raise HTTPException(status_code=400, detail="Reorder payload must include queue item ids")
+
+    try:
+        db.rollback()
+        db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+
+        rows = _queue_rows(db, lobby.id)
+        if not rows:
+            db.rollback()
+            return _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+        by_id = {row.id: row for row in rows}
+        for item_id in requested_ids:
+            if item_id not in by_id:
+                db.rollback()
+                raise HTTPException(status_code=400, detail="Reorder payload contains an unknown queue item")
+
+        current_index = int(lobby.current_index or 0)
+        current_item_id = rows[current_index].id if 0 <= current_index < len(rows) else ""
+
+        ordered_rows = [by_id[item_id] for item_id in requested_ids]
+        ordered_rows.extend(row for row in rows if row.id not in seen)
+
+        # UNIQUE(lobby_id, position) is checked row-by-row in SQLite. Move all
+        # rows into a temporary negative range first, then assign final positions.
+        for offset, row in enumerate(rows):
+            row.position = -100000 - offset
+            db.add(row)
+        db.flush()
+
+        for position, row in enumerate(ordered_rows):
+            row.position = position
+            db.add(row)
+
+        if current_item_id:
+            lobby.current_index = next(
+                (idx for idx, row in enumerate(ordered_rows) if row.id == current_item_id),
+                min(current_index, len(ordered_rows) - 1),
+            )
+        else:
+            lobby.current_index = min(current_index, max(0, len(ordered_rows) - 1))
+
+        _touch_lobby(lobby)
+        db.add(lobby)
+        db.flush()
+        response = _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+        db.commit()
+        return response
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Could not reorder lobby queue: {exc}") from exc
+
+
+@router.post("/{lobby_id}/queue/{item_id}/play", response_model=LobbyStateResponse)
+def play_queue_item(lobby_id: str, item_id: str, request: Request, db: Session = Depends(get_db)):
+    """Jump lobby playback to a specific queue item.
+
+    The frontend uses this when someone clicks a queue row. This route was
+    missing after a merge, so the browser was POSTing to a path that only had
+    nearby queue routes and getting 405 Method Not Allowed.
+    """
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    perms = _member_permissions(actor)
+    if not (perms.can_skip or perms.can_control_playback):
+        raise HTTPException(status_code=403, detail="You cannot jump lobby playback")
+
+    rows = _queue_rows(db, lobby.id)
+    index = next((idx for idx, row in enumerate(rows) if row.id == item_id), None)
+    if index is None:
+        raise HTTPException(status_code=404, detail="Queue item not found")
+
+    lobby.current_index = index
+    lobby.position_ms = 0
+    lobby.is_playing = True
+    lobby.position_updated_at = _now()
+    _touch_lobby(lobby)
+    return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+
 @router.delete("/{lobby_id}/queue/{item_id}", response_model=LobbyStateResponse)
 def remove_queue_item(lobby_id: str, item_id: str, request: Request, db: Session = Depends(get_db)):
     lobby = _get_lobby(db, lobby_id)
@@ -1111,9 +1272,17 @@ def lobby_next(lobby_id: str, request: Request, db: Session = Depends(get_db)):
     if not (perms.can_skip or perms.can_control_playback):
         raise HTTPException(status_code=403, detail="You cannot skip lobby playback")
     rows = _queue_rows(db, lobby.id)
-    if rows:
-        lobby.current_index = min(len(rows) - 1, int(lobby.current_index or 0) + 1)
-    lobby.position_ms = 0
+    current_index = int(lobby.current_index or 0)
+    if rows and current_index < len(rows) - 1:
+        lobby.current_index = current_index + 1
+        lobby.position_ms = 0
+        lobby.is_playing = True
+    else:
+        # End of the shared queue: stop instead of clamping to the final track,
+        # otherwise the browser fires ended -> next -> final track again forever.
+        lobby.current_index = max(0, min(current_index, len(rows) - 1)) if rows else 0
+        lobby.position_ms = 0
+        lobby.is_playing = False
     lobby.position_updated_at = _now()
     _touch_lobby(lobby)
     return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
@@ -1166,5 +1335,5 @@ def leave_lobby(lobby_id: str, request: Request, response: Response, db: Session
     actor.last_seen_at = _now()
     db.add(actor)
     db.commit()
-    response.delete_cookie(LOBBY_TOKEN_COOKIE)
+    response.delete_cookie(LOBBY_TOKEN_COOKIE, path="/")
     return LobbyOkResponse(ok=True)

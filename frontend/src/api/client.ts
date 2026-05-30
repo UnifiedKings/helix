@@ -271,6 +271,7 @@ export const api = {
   queueSong: (song: SearchSong) => request<PlayerState>('/api/queue/track', { method: 'POST', body: JSON.stringify(songToPayload(song)) }),
   queueAlbum: (album: SearchAlbum) => request<PlayerState>('/api/queue/album', { method: 'POST', body: JSON.stringify(albumToPayload(album)) }),
   removeQueueItem: (id: string) => request<{ ok: boolean }>(`/api/queue/items/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+  clearQueue: () => request<PlayerState>('/api/queue/items/clear', { method: 'DELETE' }),
   reorderQueue: (itemIds: string[]) => request<PlayerState>('/api/queue/items/reorder', { method: 'PATCH', body: JSON.stringify({ item_ids: itemIds }) }),
 
   search: async (q: string, mode: SearchMode = 'hybrid') => normalizeSearchResponse(await request<SearchResponse>(`/api/search/${mode}?q=${encodeURIComponent(q)}&song_limit=20&album_limit=20`)),

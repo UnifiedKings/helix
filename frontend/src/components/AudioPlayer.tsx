@@ -152,10 +152,16 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
       const next = await api.ended()
       onStateChange(next)
 
-      if (shouldContinue && next.now_playing) {
+      const shouldAdvanceAndPlay =
+        shouldContinue &&
+        Boolean(next.is_playing) &&
+        Boolean(next.now_playing) &&
+        next.now_playing?.id !== endedItemId
+
+      if (shouldAdvanceAndPlay && next.now_playing) {
         window.setTimeout(() => {
           const audio = audioRef.current
-          if (!audio || !next.now_playing) return
+          if (!audio || !next.now_playing || !next.is_playing) return
           currentItemIdRef.current = next.now_playing.id
           pendingRestoreRef.current = 0
           audio.src = streamUrl(next.now_playing.id)
@@ -173,6 +179,15 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
         }, 0)
       } else {
         continueAfterEndedRef.current = false
+        const audio = audioRef.current
+        if (audio) {
+          audio.pause()
+          if (!next.is_playing) {
+            audio.removeAttribute('src')
+            audio.load()
+          }
+        }
+        onLocalPlayingChange?.(false)
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Could not advance playback'

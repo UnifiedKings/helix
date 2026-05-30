@@ -125,13 +125,6 @@ def cover_url_release(rel_id: str, size: int = 250) -> str:
     return f"https://coverartarchive.org/release/{rel_id}/front-{int(size)}"
 
 
-def _proxy_url(settings: Dict[str, Any], remote_url: str) -> str:
-    if not remote_url:
-        return ""
-    if settings.get("image_proxy_enabled", True):
-        return "/api/img?u=" + urllib.parse.quote(remote_url, safe="")
-    return remote_url
-
 
 def _pick_representative_release(releases: List[Dict[str, Any]], settings: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not releases:

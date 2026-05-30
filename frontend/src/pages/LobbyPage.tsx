@@ -111,17 +111,6 @@ function SidebarLink({
   );
 }
 
-function SidebarPlaceholder({ label, icon }: { label: string; icon: string }) {
-  return (
-    <button className="side-link side-link-placeholder" type="button" disabled>
-      <span className="side-icon" aria-hidden="true">
-        {icon}
-      </span>
-      <span>{label}</span>
-    </button>
-  );
-}
-
 function activeMembers(members: LobbyMember[]) {
   return members.filter((member) => member.is_active);
 }
@@ -154,6 +143,7 @@ export function LobbyPage() {
     isPlaying: boolean;
   } | null>(null);
   const [state, setState] = useState<LobbyState | null>(null);
+  const [optimisticQueue, setOptimisticQueue] = useState<LobbyQueueItem[] | null>(null);
   const [error, setError] = useState("");
   const [audioError, setAudioError] = useState("");
   const [addMode, setAddMode] = useState<AddMode>("search");
@@ -163,6 +153,7 @@ export function LobbyPage() {
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<SearchSong[]>([]);
   const latestLobbyStateRequestRef = useRef(0);
+  const actionInFlightRef = useRef(false);
   const [volume, setVolume] = useState(readStoredVolume);
   const [needsManualSync, setNeedsManualSync] = useState(false);
   const [positionTick, setPositionTick] = useState(0);
@@ -172,7 +163,7 @@ export function LobbyPage() {
   const members = activeMembers(state?.members ?? []);
   const hosts = members.filter((member) => member.role === "host");
   const guests = members.filter((member) => member.role !== "host");
-  const queue = state?.queue ?? [];
+  const queue = optimisticQueue ?? state?.queue ?? [];
   const queueTotalMs = queue.reduce(
     (sum, item) => sum + (item.duration_ms || 0),
     0,
@@ -199,15 +190,16 @@ export function LobbyPage() {
   );
 
   async function load() {
-    if (!lobbyId) return;
+    if (!lobbyId || actionInFlightRef.current) return;
     const requestId = ++latestLobbyStateRequestRef.current;
     try {
       const next = await api.lobbyState(lobbyId);
-      if (requestId !== latestLobbyStateRequestRef.current) return;
+      if (requestId !== latestLobbyStateRequestRef.current || actionInFlightRef.current) return;
       setState(next);
+      setOptimisticQueue(null);
       setError("");
     } catch (err) {
-      if (requestId !== latestLobbyStateRequestRef.current) return;
+      if (requestId !== latestLobbyStateRequestRef.current || actionInFlightRef.current) return;
       setError(err instanceof Error ? err.message : "Could not load lobby");
     }
   }
@@ -376,17 +368,33 @@ export function LobbyPage() {
 
   async function run(action: () => Promise<LobbyState>) {
     const requestId = ++latestLobbyStateRequestRef.current;
+    actionInFlightRef.current = true;
     try {
       const next = await action();
       latestLobbyStateRequestRef.current = requestId;
       setState(next);
+      setOptimisticQueue(null);
       setError("");
       window.setTimeout(() => {
         void load();
       }, 150);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Lobby action failed");
+    } finally {
+      actionInFlightRef.current = false;
     }
+  }
+
+  async function reorderQueue(itemIds: string[]) {
+    if (!lobbyId) return;
+    const byId = new Map(queue.map((item) => [item.id, item]));
+    const nextQueue = itemIds
+      .map((itemId) => byId.get(itemId))
+      .filter((item): item is LobbyQueueItem => Boolean(item))
+      .map((item, index) => ({ ...item, position: index }));
+    const missing = queue.filter((item) => !itemIds.includes(item.id));
+    setOptimisticQueue([...nextQueue, ...missing.map((item, offset) => ({ ...item, position: nextQueue.length + offset }))]);
+    await run(() => api.lobbyReorderQueue(lobbyId, itemIds));
   }
 
   async function addYoutube(event: FormEvent) {
@@ -493,7 +501,26 @@ export function LobbyPage() {
   async function clearQueue() {
     if (!state || !window.confirm("Clear every track from this lobby queue?"))
       return;
+
+    // Clear should feel instant. Do not wait for the next poll to visually
+    // remove the rows, and do not let a stale action response briefly restore
+    // the old queue.
+    setOptimisticQueue([]);
     await run(() => api.lobbyClearQueue(state.id));
+    setOptimisticQueue(null);
+    setState((current) =>
+      current
+        ? {
+            ...current,
+            queue: [],
+            now_playing: null,
+            current_index: 0,
+            is_playing: false,
+            position_ms: 0,
+            effective_position_ms: 0,
+          }
+        : current,
+    );
   }
 
   async function kickMember(member: LobbyMember) {
@@ -561,22 +588,18 @@ export function LobbyPage() {
         </NavLink>
         <nav className="side-nav" aria-label="Main navigation">
           <SidebarLink to="/" label="Home" icon="⌂" />
-          <SidebarLink to="/" label="Search" icon="⌕" />
+          <SidebarLink to="/search" label="Search" icon="⌕" />
           <SidebarLink to="/stations" label="Stations" icon="◉" />
           <SidebarLink to="/playlists" label="Playlists" icon="♫" />
-          <SidebarPlaceholder label="Liked Songs" icon="♡" />
           <SidebarLink to="/history" label="History" icon="◷" />
           <SidebarLink to="/lobbies" label="Lobbies" icon="◎" />
           <SidebarLink to="/settings" label="Settings" icon="⚙" />
         </nav>
-      </aside>
 
-      <div className="lobby-dashboard-frame">
-        <header className="topbar topbar-redesigned topbar-minimal lobby-dashboard-topbar">
-          <div className="topbar-account">
-            <span className="topbar-username">{displayName}</span>
+        <div className="sidebar-account-panel">
+          <div className="sidebar-account-card">
             <button
-              className="profile-placeholder"
+              className="profile-placeholder sidebar-profile-avatar"
               type="button"
               title="Profile"
               aria-label="Profile"
@@ -585,18 +608,26 @@ export function LobbyPage() {
                 {(displayName || "H").slice(0, 1).toUpperCase()}
               </span>
             </button>
-            {auth.status === "authenticated" ? (
-              <button
-                className="logout-button"
-                type="button"
-                onClick={() => void logout()}
-              >
-                Log out
-              </button>
-            ) : null}
+            <div className="sidebar-account-copy">
+              <strong>{displayName}</strong>
+              <span>{isHost ? "Host" : auth.status === "authenticated" ? "User" : "Guest"}</span>
+            </div>
           </div>
-        </header>
+          {auth.status === "authenticated" ? (
+            <button className="sidebar-logout-button" type="button" onClick={() => void logout()}>
+              <span aria-hidden="true">↪</span>
+              Log out
+            </button>
+          ) : (
+            <button className="sidebar-logout-button" type="button" onClick={() => void leaveLobby()}>
+              <span aria-hidden="true">↩</span>
+              Leave lobby
+            </button>
+          )}
+        </div>
+      </aside>
 
+      <div className="lobby-dashboard-frame">
         <main className="lobby-dashboard-main">
           <section className="lobby-dashboard-hero">
             <div className="lobby-hero-copy">
@@ -729,9 +760,7 @@ export function LobbyPage() {
                 onJump={(item) =>
                   run(() => api.lobbyJumpToQueueItem(lobbyId, item.id))
                 }
-                onReorder={(itemIds) =>
-                  run(() => api.lobbyReorderQueue(lobbyId, itemIds))
-                }
+                onReorder={reorderQueue}
                 onRemove={(item) =>
                   run(() => api.lobbyRemoveQueueItem(lobbyId, item.id))
                 }

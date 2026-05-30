@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from typing import Any, Dict, List, Optional, Set
 
 import re
@@ -31,6 +32,28 @@ except Exception:
 router = APIRouter(prefix="/api/subsonic/add", tags=["subsonic"])
 
 
+def _load_settings_short() -> Dict[str, Any]:
+    db = SessionLocal()
+    try:
+        return dict(get_settings(db) or {})
+    finally:
+        db.close()
+
+
+def _can_import_to_library(user: User) -> bool:
+    return user.role == "admin" or os.getenv("HELIX_ALLOW_NON_ADMIN_IMPORT", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _require_import_permission(user: User) -> None:
+    if not _can_import_to_library(user):
+        raise HTTPException(status_code=403, detail="Only admins can import tracks into the Subsonic library")
+
+
+def _skip_existing_album_tracks_enabled() -> bool:
+    return os.getenv("HELIX_SUBSONIC_ADD_SKIP_EXISTING_ALBUM_TRACKS", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+
+
 def _norm_text(s: str) -> str:
     s = (s or "").strip().lower()
     s = s.replace("’", "'").replace("`", "'").replace("´", "'")
@@ -44,6 +67,55 @@ def _duration_close_ms(a: int, b: int, tolerance_ms: int = 3000) -> bool:
     if not a or not b:
         return False
     return abs(int(a) - int(b)) <= int(tolerance_ms)
+
+
+def _track_duration_ms(track: Dict[str, Any]) -> int:
+    for key in ("duration_ms", "lengthMs"):
+        try:
+            value = int(track.get(key) or 0)
+        except Exception:
+            value = 0
+        if value > 0:
+            return value
+    try:
+        seconds = int(track.get("duration_seconds") or 0)
+    except Exception:
+        seconds = 0
+    return seconds * 1000 if seconds > 0 else 0
+
+
+def _track_number(track: Dict[str, Any], fallback: int) -> int:
+    for key in ("track_no", "trackNumber", "track_number", "pos", "position"):
+        try:
+            value = int(track.get(key) or 0)
+        except Exception:
+            value = 0
+        if value > 0:
+            return value
+    return int(fallback or 0)
+
+
+def _resolve_album_track_video_id(track: Dict[str, Any], *, album_title: str, album_artist: str) -> str:
+    vid = str(track.get("videoId") or track.get("video_id") or "").strip()
+    if vid:
+        return vid
+
+    title = str(track.get("title") or "").strip()
+    artist = str(track.get("artist") or album_artist or "").strip()
+    if not title or not artist:
+        return ""
+
+    try:
+        found = ytmusic_integration.find_track(
+            title=title,
+            artist=artist,
+            album=album_title,
+            duration_seconds=int((_track_duration_ms(track) or 0) / 1000) or None,
+        )
+    except Exception:
+        found = None
+
+    return str(getattr(found, "video_id", "") or "").strip() if getattr(found, "found", False) else ""
 
 
 def _build_existing_album_track_keys(songs: List[Dict[str, Any]]) -> tuple[Set[str], Set[tuple[str, int]]]:
@@ -89,6 +161,7 @@ async def add_track(
     Enqueue a single YTMusic track for download/import, to end up in the Subsonic library.
     Body: { "yt_video_id": "...", "title": "...", "artist": "...", "album": "...", "art_url": "..." }
     """
+    _require_import_permission(user)
     ip = getattr(getattr(request, "client", None), "host", "") or ""
     if not RATE_LIMITER.allow(make_key(scope="subsonic_add_track", user_id=str(user.id), ip=ip), limit=20, window_s=10):
         raise HTTPException(status_code=429, detail="Too many requests")
@@ -145,6 +218,7 @@ async def add_album(
     incorrectly mark tracks as "already present" if the artist has another song
     with the same title elsewhere in the library.
     """
+    _require_import_permission(user)
     ip = getattr(getattr(request, "client", None), "host", "") or ""
     if not RATE_LIMITER.allow(make_key(scope="subsonic_add_album", user_id=str(user.id), ip=ip), limit=8, window_s=10):
         raise HTTPException(status_code=429, detail="Too many requests")
@@ -172,7 +246,7 @@ async def add_album(
     existing_timed_keys: Set[tuple[str, int]] = set()
 
     try:
-        if client is not None and album_title and album_artist:
+        if _skip_existing_album_tracks_enabled() and client is not None and album_title and album_artist:
             yt_title_keys: Set[str] = set()
             yt_timed_keys: Set[tuple[str, int]] = set()
             for track in tracks:
@@ -217,8 +291,12 @@ async def add_album(
                     best_overlap = overlap
                     existing_title_keys, existing_timed_keys = cand_title_keys, cand_timed_keys
 
-            # Do not trust a weak candidate. This avoids skipping tracks from the wrong album.
-            if best_overlap <= 0:
+            # Do not trust a weak candidate. A single common title can make
+            # the wrong Subsonic album look "existing" and cause most of a new
+            # album import to be skipped. Only skip existing tracks when the
+            # matched album overlaps strongly with the YTMusic tracklist.
+            required_overlap = max(2, int(len(yt_title_keys) * 0.65 + 0.999))
+            if best_overlap < required_overlap:
                 existing_title_keys = set()
                 existing_timed_keys = set()
     except Exception:
@@ -230,14 +308,17 @@ async def add_album(
     enqueued = 0
     skipped = 0
 
-    for t in tracks:
-        vid = (t.get("videoId") or t.get("video_id") or "").strip()
+    unresolved = 0
+    unresolved_tracks: List[str] = []
+    for index, t in enumerate(tracks, start=1):
         title = (t.get("title") or "").strip()
+        track_artist = (t.get("artist") or album_artist or "").strip()
         alb = (t.get("album") or album_title or album.get("title") or "").strip()
-        duration_ms = int(t.get("duration_ms") or t.get("lengthMs") or 0)
+        duration_ms = _track_duration_ms(t)
+        track_no = _track_number(t, index)
         title_key = _norm_text(title)
 
-        if not vid or not title or not album_artist:
+        if not title or not album_artist:
             continue
 
         exists = False
@@ -250,16 +331,22 @@ async def add_album(
             skipped += 1
             continue
 
+        vid = _resolve_album_track_video_id(t, album_title=alb or album_title, album_artist=album_artist)
+        if not vid:
+            unresolved += 1
+            unresolved_tracks.append(title)
+            continue
+
         job = DownloadJob(
             video_id=vid,
             url=f"https://music.youtube.com/watch?v={vid}",
             title=title,
-            artist=album_artist,
+            artist=track_artist or album_artist,
             album=alb,
             album_artist=album_artist,
             browse_id=browse_id,
             art_url=(t.get("art_url") or art_url or "").strip(),
-            track_no=int(t.get("track_no") or t.get("pos") or 0),
+            track_no=track_no,
             duration_ms=duration_ms,
             persist_to_subsonic=True,
             priority=40,
@@ -273,4 +360,12 @@ async def add_album(
     if client is not None:
         await client.close()
 
-    return {"ok": True, "total": len(tracks), "enqueued": enqueued, "skipped_existing": skipped}
+    return {
+        "ok": True,
+        "total": len(tracks),
+        "enqueued": enqueued,
+        "skipped_existing": skipped,
+        "unresolved": unresolved,
+        "unresolved_tracks": unresolved_tracks,
+        "skip_existing_enabled": _skip_existing_album_tracks_enabled(),
+    }

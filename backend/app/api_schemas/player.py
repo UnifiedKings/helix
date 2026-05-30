@@ -59,8 +59,11 @@ class PlayerPlayPlaylistRequest(BaseModel):
     shuffle: bool = False
 
 class PlayerPlayAlbumRequest(BaseModel):
-    # YT Music album identifier (browseId). MusicBrainz is no longer the primary source.
-    browse_id: str
+    # YT Music album identifier (browseId). Blank is allowed for Subsonic albums.
+    browse_id: str = ""
+    # Subsonic album id, used when playing library albums from search.
+    subsonic_album_id: Optional[str] = None
+    source: Optional[str] = None
     # Optional metadata for better UX/fallback.
     title: Optional[str] = None
     artist: Optional[str] = None
@@ -72,7 +75,9 @@ class PlayerJumpRequest(BaseModel):
 
 
 class PlayerQueueAppendAlbumRequest(BaseModel):
-    browse_id: str
+    browse_id: str = ""
+    subsonic_album_id: Optional[str] = None
+    source: Optional[str] = None
     title: Optional[str] = None
     artist: Optional[str] = None
     art_url: Optional[str] = None

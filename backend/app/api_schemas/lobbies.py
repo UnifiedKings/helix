@@ -44,12 +44,12 @@ class LobbyQueueAddRequest(BaseModel):
     mb_artist_id: Optional[str] = None
 
 
-class LobbySeekRequest(BaseModel):
-    position_ms: int = 0
-
-
 class LobbyQueueReorderRequest(BaseModel):
     item_ids: list[str] = []
+
+
+class LobbySeekRequest(BaseModel):
+    position_ms: int = 0
 
 
 class LobbyMemberUpdateRequest(BaseModel):

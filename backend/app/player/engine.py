@@ -1509,6 +1509,34 @@ async def queue_append_album(payload: PlayerQueueAppendAlbumRequest, user: User 
         db.close()
 
 
+
+def queue_clear(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """Clear the user's main queue and stop station playback/autoplay.
+
+    This is used by the queue panel Clear button. If a station is active, clearing
+    the queue must also leave station mode so prefetch does not immediately refill
+    the queue.
+    """
+    settings = get_settings(db)
+    sess = _get_or_create_session(db, user.id)
+    items = db.execute(
+        select(QueueItem)
+        .where(QueueItem.session_user_id == user.id)
+        .order_by(QueueItem.position.asc())
+    ).scalars().all()
+    cur = items[sess.current_index] if 0 <= int(sess.current_index or 0) < len(items) else None
+    if cur:
+        _push_history(db, user.id, cur, event="skipped", reason="cleared_queue", played_ms=0, settings=settings)
+
+    db.execute(delete(QueueItem).where(QueueItem.session_user_id == user.id))
+    sess.current_index = 0
+    sess.is_playing = False
+    sess.autoplay_enabled = False
+    sess.active_station_id = ""
+    db.commit()
+    return state(db=db, user=user)
+
+
 def queue_remove_item(queue_item_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     settings = get_settings(db)
     sess = _get_or_create_session(db, user.id)

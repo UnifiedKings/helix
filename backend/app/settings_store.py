@@ -51,26 +51,10 @@ DEFAULTS: dict[str, Any] = {
     # If False (default), the default country wins when available.
     "search_prefer_original_release": False,
 
-    # Track search preference: if True, hide track results that cannot be anchored to a release with a cover thumbnail.
-    # (Practically: if we can't pick any representative release for a recording, we drop it from search results.)
-    "search_hide_tracks_without_art": False,
-
     # --- Artist image enrichment ---
 
     # If True, and no Wikidata photo is available, fall back to representative album art for the artist.
     "artist_images_fallback_to_album_art": True,
-
-    # If True, Helix will proxy & cache remote thumbnails (Wikimedia / Cover Art Archive) to improve speed and stability.
-
-    # Maximum on-disk size (MB) for the thumbnail cache.
-
-    # Target thumbnail width for proxied images.
-    "image_cache_thumb_px": 256,
-
-    # How long (days) to keep cached thumbnails before they become eligible for eviction.
-
-    # Caching for search responses (seconds). Keep short so results stay responsive, but avoid hammering upstream services.
-    "search_cache_ttl_seconds": 300,
 
     # MusicBrainz request throttle (minimum interval between requests).
     "musicbrainz_min_interval_ms": 1000,

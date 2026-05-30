@@ -4248,3 +4248,568 @@ nav a.active {
   font-size: 1.35rem;
   font-weight: 900;
 }
+
+
+/* Admin users panel polish */
+.admin-users-panel {
+  display: grid;
+  gap: 1.1rem;
+}
+
+.admin-user-create-form {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.admin-user-create-actions {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.admin-user-list {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.admin-user-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(130px, 170px) auto;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.035);
+}
+
+.admin-user-row > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.admin-user-row strong {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-user-row .muted {
+  display: block;
+  font-size: 0.84rem;
+}
+
+.admin-user-row select {
+  width: 100%;
+  border: 1px solid var(--border-soft);
+  background: rgba(7, 10, 16, 0.82);
+  color: var(--text);
+  border-radius: 14px;
+  padding: 0.72rem 0.8rem;
+}
+
+.admin-user-row button {
+  white-space: nowrap;
+  min-width: 92px;
+}
+
+.admin-user-row .danger,
+.admin-user-row button.danger {
+  color: #ff6f91;
+  border-color: rgba(255,111,145,0.24);
+}
+
+@media (max-width: 760px) {
+  .admin-user-row {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .admin-user-row button {
+    width: 100%;
+  }
+}
+
+
+/* Concept pass: sidebar-owned account controls, no topbar chrome */
+.app-shell-with-sidebar {
+  grid-template-columns: 250px minmax(0, 1fr);
+  padding-bottom: 118px;
+  background:
+    radial-gradient(circle at 76% 6%, rgba(21, 141, 137, 0.12), transparent 34%),
+    radial-gradient(circle at 4% 6%, rgba(124, 92, 255, 0.14), transparent 30%),
+    var(--bg);
+}
+
+.app-sidebar {
+  padding: 1.35rem 1.05rem;
+  border-right: 1px solid rgba(117, 162, 255, 0.16);
+  background:
+    radial-gradient(circle at 18% 4%, rgba(124, 92, 255, 0.22), transparent 18%),
+    linear-gradient(180deg, rgba(8, 13, 24, 0.98), rgba(4, 8, 15, 0.98));
+  box-shadow: inset -1px 0 0 rgba(255,255,255,0.035), 24px 0 80px rgba(0,0,0,0.18);
+}
+
+.app-sidebar::after {
+  content: "";
+  position: absolute;
+  inset: 0.75rem 0.65rem 0.75rem 0.65rem;
+  border: 1px solid rgba(124, 92, 255, 0.12);
+  border-radius: 26px;
+  pointer-events: none;
+  box-shadow: inset 0 0 40px rgba(23, 120, 255, 0.035);
+}
+
+.sidebar-brand {
+  position: relative;
+  z-index: 1;
+  margin-bottom: 2.35rem;
+}
+
+.side-nav {
+  position: relative;
+  z-index: 1;
+  gap: 0.6rem;
+}
+
+.side-link {
+  min-height: 48px;
+  border-radius: 16px;
+  padding: 0.78rem 0.95rem;
+  color: rgba(232, 238, 255, 0.78);
+  border-color: rgba(255,255,255,0.035);
+  background: rgba(255,255,255,0.018);
+}
+
+.side-link:hover:not(:disabled),
+.side-link.active {
+  color: white;
+  border-color: rgba(124, 92, 255, 0.45);
+  background:
+    linear-gradient(90deg, rgba(124, 92, 255, 0.36), rgba(124, 92, 255, 0.12)),
+    rgba(255,255,255,0.035);
+  box-shadow:
+    inset 3px 0 0 rgba(198, 119, 255, 0.92),
+    inset 0 0 0 1px rgba(255,255,255,0.035),
+    0 16px 38px rgba(0,0,0,0.22),
+    0 0 30px rgba(124, 92, 255, 0.16);
+}
+
+.sidebar-account-panel {
+  position: relative;
+  z-index: 1;
+  margin-top: auto;
+  display: grid;
+  gap: 0.75rem;
+  padding-top: 1rem;
+}
+
+.sidebar-account-card,
+.sidebar-logout-button {
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.035);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+}
+
+.sidebar-account-card {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.78rem;
+}
+
+.sidebar-profile-avatar {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+}
+
+.sidebar-account-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.15rem;
+}
+
+.sidebar-account-copy strong,
+.sidebar-account-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-account-copy span {
+  color: var(--muted);
+  font-size: 0.84rem;
+}
+
+.sidebar-logout-button {
+  width: 100%;
+  min-height: 48px;
+  justify-content: flex-start;
+  gap: 0.65rem;
+  color: rgba(248, 251, 255, 0.9);
+  padding: 0.75rem 0.9rem;
+}
+
+.sidebar-logout-button:hover {
+  border-color: rgba(124, 92, 255, 0.35);
+  background: rgba(124, 92, 255, 0.10);
+}
+
+.app-main-area {
+  min-width: 0;
+}
+
+.app-main-area > .topbar,
+.lobby-dashboard-frame > .topbar {
+  display: none;
+}
+
+.dashboard-grid {
+  padding: 1.35rem 1.45rem 1.15rem;
+  max-width: 1740px;
+  align-items: start;
+}
+
+.dashboard-content-card {
+  min-height: calc(100vh - 150px);
+}
+
+.queue-panel-redesign {
+  height: calc(100vh - 150px);
+  top: 1.35rem;
+  padding: 1.1rem;
+  border-color: rgba(72, 157, 255, 0.18);
+  background:
+    radial-gradient(circle at 100% 0%, rgba(27, 190, 177, 0.10), transparent 30%),
+    linear-gradient(180deg, rgba(9, 17, 31, 0.94), rgba(5, 10, 18, 0.96));
+}
+
+.queue-panel-redesign .queue-header h2 {
+  letter-spacing: -0.04em;
+}
+
+.queue-panel-redesign .queue-header h2::before {
+  content: "↯";
+  display: inline-grid;
+  place-items: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  margin-right: 0.45rem;
+  border-radius: 10px;
+  color: #b9a6ff;
+  background: rgba(124, 92, 255, 0.14);
+  border: 1px solid rgba(124, 92, 255, 0.22);
+  font-size: 0.9rem;
+  vertical-align: middle;
+}
+
+.queue-row-redesign {
+  border: 1px solid rgba(255,255,255,0.055);
+  background: rgba(255,255,255,0.028);
+  border-radius: 16px;
+  margin-bottom: 0.55rem;
+  padding: 0.55rem 0.45rem;
+}
+
+.queue-row-redesign.active {
+  border-color: rgba(124, 92, 255, 0.62);
+  background:
+    linear-gradient(90deg, rgba(124, 92, 255, 0.24), rgba(18, 113, 142, 0.10)),
+    rgba(255,255,255,0.04);
+  box-shadow: 0 0 0 1px rgba(124, 92, 255, 0.18), 0 18px 38px rgba(0,0,0,0.20);
+}
+
+.queue-summary {
+  position: sticky;
+  bottom: -1.1rem;
+  margin: 1rem -1.1rem -1.1rem;
+  padding: 1rem 1.1rem;
+  border-top: 1px solid rgba(255,255,255,0.07);
+  background: linear-gradient(180deg, rgba(6, 11, 19, 0.72), rgba(6, 11, 19, 0.96));
+  backdrop-filter: blur(18px);
+}
+
+.lobby-dashboard-shell {
+  grid-template-columns: 250px minmax(0, 1fr);
+}
+
+.lobby-dashboard-main {
+  padding-top: 1.35rem;
+}
+
+.lobby-dashboard-sidebar .sidebar-account-panel {
+  padding-bottom: 0.3rem;
+}
+
+@media (max-width: 1080px) {
+  .app-shell-with-sidebar,
+  .lobby-dashboard-shell {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+
+  .sidebar-brand span,
+  .side-link span:not(.side-icon),
+  .sidebar-account-copy,
+  .sidebar-logout-button {
+    display: none;
+  }
+
+  .sidebar-account-card {
+    grid-template-columns: 1fr;
+    place-items: center;
+  }
+
+  .side-link {
+    justify-content: center;
+    padding-inline: 0.5rem;
+  }
+
+  .side-icon {
+    width: auto;
+  }
+}
+
+
+/* Sidebar concept correction: inactive nav items should not look boxed. */
+.app-sidebar .side-link {
+  min-height: 48px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.app-sidebar .side-link:hover:not(:disabled) {
+  color: white;
+  border-color: rgba(124, 92, 255, 0.22);
+  background: rgba(124, 92, 255, 0.08);
+  box-shadow: none;
+}
+
+.app-sidebar .side-link.active {
+  color: white;
+  border-color: rgba(124, 92, 255, 0.50);
+  background:
+    linear-gradient(90deg, rgba(124, 92, 255, 0.34), rgba(124, 92, 255, 0.10)),
+    rgba(255,255,255,0.025);
+  box-shadow:
+    inset 3px 0 0 rgba(198, 119, 255, 0.95),
+    0 0 28px rgba(124, 92, 255, 0.14);
+}
+
+.app-sidebar .sidebar-logout-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+
+/* Sidebar concept correction: account/logout area should be unboxed too. */
+.app-sidebar .sidebar-account-card,
+.app-sidebar .sidebar-logout-button {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.app-sidebar .sidebar-account-card {
+  padding-inline: 0.65rem;
+}
+
+.app-sidebar .sidebar-logout-button {
+  justify-content: flex-start;
+  padding-inline: 0.9rem;
+}
+
+.app-sidebar .sidebar-logout-button:hover {
+  border-color: rgba(124, 92, 255, 0.22);
+  background: rgba(124, 92, 255, 0.08);
+  box-shadow: none;
+}
+
+.app-sidebar .sidebar-account-panel {
+  border-top: 1px solid rgba(255,255,255,0.07);
+  padding-top: 1rem;
+}
+
+
+/* Queue station context banner */
+.queue-station-banner {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.72rem;
+  margin: 0.35rem 0 0.95rem;
+  padding: 0.72rem 0.78rem;
+  border-radius: 16px;
+  border: 1px solid rgba(53, 217, 149, 0.22);
+  background:
+    radial-gradient(circle at 12% 20%, rgba(53, 217, 149, 0.14), transparent 34%),
+    linear-gradient(135deg, rgba(53, 217, 149, 0.09), rgba(124, 92, 255, 0.07));
+}
+
+.queue-station-icon {
+  width: 38px;
+  height: 38px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 14px;
+  color: #8dffd0;
+  background: rgba(53, 217, 149, 0.12);
+  border: 1px solid rgba(53, 217, 149, 0.22);
+  box-shadow: 0 0 24px rgba(53, 217, 149, 0.10);
+  font-weight: 950;
+}
+
+.queue-station-banner strong,
+.queue-station-banner span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-station-banner strong {
+  color: var(--text);
+  font-weight: 900;
+}
+
+.queue-station-banner span {
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+
+/* Queue station banner polish: compact status strip instead of a large alert card. */
+.queue-station-banner {
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 0.62rem;
+  margin: 0.1rem 0 0.85rem;
+  padding: 0.56rem 0.62rem;
+  border-radius: 14px;
+  border: 1px solid rgba(124, 92, 255, 0.26);
+  background:
+    linear-gradient(90deg, rgba(124, 92, 255, 0.13), rgba(20, 156, 172, 0.07)),
+    rgba(255,255,255,0.022);
+  box-shadow: none;
+}
+
+.queue-station-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 11px;
+  color: #c9bcff;
+  background: rgba(124, 92, 255, 0.14);
+  border: 1px solid rgba(124, 92, 255, 0.22);
+  box-shadow: none;
+  font-size: 0.9rem;
+}
+
+.queue-station-label {
+  color: var(--faint);
+  font-size: 0.68rem;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.queue-station-banner strong {
+  color: rgba(248, 251, 255, 0.92);
+  font-size: 0.92rem;
+  line-height: 1.25;
+  font-weight: 850;
+}
+
+
+/* Queue station banner typography + spinning record icon */
+.queue-station-banner {
+  align-items: center;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 0.68rem;
+  padding-block: 0.62rem;
+}
+
+.queue-station-banner > div {
+  display: grid;
+  gap: 0.18rem;
+  align-content: center;
+  min-width: 0;
+}
+
+.queue-station-label {
+  line-height: 1.18;
+  letter-spacing: 0.16em;
+}
+
+.queue-station-banner strong {
+  line-height: 1.28;
+}
+
+.queue-station-icon.queue-station-record {
+  width: 34px;
+  height: 34px;
+  align-self: center;
+  justify-self: center;
+  display: grid;
+  place-items: center;
+  padding: 0;
+}
+
+.queue-station-record::before {
+  content: "";
+  width: 22px;
+  height: 22px;
+  display: block;
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(9, 14, 24, 1) 0 10%, rgba(213, 203, 255, 0.95) 11% 15%, rgba(9, 14, 24, 1) 16% 25%, transparent 26%),
+    conic-gradient(from 0deg, rgba(203, 189, 255, 0.98), rgba(124, 92, 255, 0.35), rgba(20, 156, 172, 0.55), rgba(203, 189, 255, 0.98));
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,0.14),
+    inset 0 0 12px rgba(0,0,0,0.32),
+    0 0 14px rgba(124, 92, 255, 0.18);
+  animation: helix-record-spin 1.6s linear infinite;
+}
+
+.queue-station-record > span {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: rgba(9, 14, 24, 0.94);
+  border: 1px solid rgba(213, 203, 255, 0.82);
+  box-shadow: 0 0 8px rgba(213, 203, 255, 0.25);
+}
+
+@keyframes helix-record-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue-station-record::before {
+    animation: none;
+  }
+}
+
+
+/* Logo transparency fix: the asset is transparent; keep CSS from painting a tile behind it. */
+.sidebar-brand img {
+  background: transparent !important;
+  mix-blend-mode: normal;
+  object-fit: contain;
+  display: block;
+}
+
+.sidebar-brand {
+  background: transparent;
+}

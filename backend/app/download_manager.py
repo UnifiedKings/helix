@@ -151,6 +151,11 @@ class DownloadManager:
         self.max_batch_tracks = int(os.getenv("HELIX_FINALIZE_BATCH_TRACKS", "20"))
         self.max_batch_age_s = int(os.getenv("HELIX_FINALIZE_BATCH_AGE_S", str(10 * 60)))
 
+        # YouTube can get flaky when an entire album is requested quickly. Keep
+        # explicit imports polite and retry transient yt-dlp failures.
+        self.download_retry_attempts = max(1, int(os.getenv("HELIX_YTDLP_DOWNLOAD_RETRIES", "4")))
+        self.import_download_delay_s = max(0.0, float(os.getenv("HELIX_YTDLP_IMPORT_DOWNLOAD_DELAY_S", "3.0")))
+
     def start(self) -> None:
         ensure_beets_config()
         if self._download_task is None:
@@ -549,6 +554,15 @@ class DownloadManager:
         self._jobs[job.video_id] = job
         await self._q.put((job.priority, job.created_at, job))
 
+    def _download_log(self, message: str) -> None:
+        try:
+            log_path = os.path.join(os.path.dirname(BEETS_CONFIG), "download.log")
+            os.makedirs(os.path.dirname(log_path), exist_ok=True)
+            with open(log_path, "a", encoding="utf-8") as f:
+                f.write(message.rstrip() + "\n")
+        except Exception:
+            pass
+
     async def _download_worker(self):
         ensure_dirs()
         while True:
@@ -557,6 +571,12 @@ class DownloadManager:
                 # Might have been downloaded while waiting.
                 if self.is_ready(job.video_id):
                     continue
+
+                # Explicit Subsonic imports are not latency-sensitive. Throttle
+                # them slightly so album imports do not look like a burst of
+                # automated YouTube downloads.
+                if getattr(job, "persist_to_subsonic", False) and self.import_download_delay_s > 0:
+                    await asyncio.sleep(self.import_download_delay_s)
 
                 # Download best audio without converting during the ASAP path.
                 # We prefer Opus streams, but keep container as provided by YouTube (often .webm).
@@ -569,6 +589,12 @@ class DownloadManager:
                     "--no-playlist",
                     "--no-progress",
                     "--newline",
+                    "--retries",
+                    "5",
+                    "--fragment-retries",
+                    "5",
+                    "--retry-sleep",
+                    "linear=2::8",
                     "-o",
                     outtmpl,
                     job.url,
@@ -607,10 +633,25 @@ class DownloadManager:
                 self._ready[job.video_id] = produced
                 if getattr(job, "persist_to_subsonic", False):
                     self._mark_for_subsonic_import(job)
+                self._download_log(f"[download-worker] OK video_id={job.video_id} title={job.title!r} track_no={job.track_no}")
             except Exception as e:
-                # Keep job record (for debugging) but don't block worker.
+                # Retry transient failures instead of silently dropping album tracks.
                 self._ready.pop(job.video_id, None)
-                print(f"[download-worker] FAILED video_id={job.video_id} url={job.url} err={e!r}")
+                attempt = int(getattr(job, "download_attempts", 0) or 0) + 1
+                setattr(job, "download_attempts", attempt)
+                self._download_log(
+                    f"[download-worker] FAILED attempt={attempt}/{self.download_retry_attempts} "
+                    f"video_id={job.video_id} title={job.title!r} track_no={job.track_no} url={job.url} err={e!r}"
+                )
+                print(f"[download-worker] FAILED attempt={attempt}/{self.download_retry_attempts} video_id={job.video_id} url={job.url} err={e!r}")
+                if attempt < self.download_retry_attempts:
+                    # Keep the same job metadata. Put it back behind nearby work
+                    # with a small backoff so one bad track does not block the
+                    # whole album forever.
+                    await asyncio.sleep(min(30.0, 2.0 * attempt))
+                    await self._q.put((prio + attempt, time.time(), job))
+                else:
+                    self._download_log(f"[download-worker] GAVE_UP video_id={job.video_id} title={job.title!r} track_no={job.track_no}")
             finally:
                 self._q.task_done()
 
@@ -758,14 +799,19 @@ class DownloadManager:
                                 job.title = t_title
                             if t_artist and (not job.artist or _looks_like_views(job.artist)):
                                 job.artist = t_artist
-                            if t.get('pos') and not job.track_no:
+                            for key in ('track_no', 'trackNumber', 'track_number', 'pos', 'position'):
+                                if t.get(key) and not job.track_no:
+                                    try:
+                                        job.track_no = int(t.get(key) or 0)
+                                        break
+                                    except Exception:
+                                        pass
+                            if not job.duration_ms:
                                 try:
-                                    job.track_no = int(t.get('pos') or 0)
-                                except Exception:
-                                    pass
-                            if t.get('lengthMs') and not job.duration_ms:
-                                try:
-                                    job.duration_ms = int(t.get('lengthMs') or 0)
+                                    if t.get('duration_ms') or t.get('lengthMs'):
+                                        job.duration_ms = int(t.get('duration_ms') or t.get('lengthMs') or 0)
+                                    elif t.get('duration_seconds'):
+                                        job.duration_ms = int(t.get('duration_seconds') or 0) * 1000
                                 except Exception:
                                     pass
                             break

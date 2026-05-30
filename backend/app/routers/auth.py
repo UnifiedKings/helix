@@ -1,18 +1,25 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from ..auth import SESSION_COOKIE, get_current_user
+from ..auth import SESSION_COOKIE, cookie_secure, get_current_user
 from ..db import get_db
-from ..models import User
+from ..models import User, SessionToken
 from ..api_schemas.auth import LoginRequest, MeResponse, SetupRequest
 from ..services.accounts import authenticate_user, create_initial_admin, setup_enabled as setup_is_enabled
+from ..rate_limit import RATE_LIMITER
 
 router = APIRouter(tags=["auth"])
 
 COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
+
+
+def _client_ip(request: Request) -> str:
+    forwarded = (request.headers.get("x-forwarded-for") or "").split(",", 1)[0].strip()
+    return forwarded or getattr(getattr(request, "client", None), "host", "") or ""
+
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
@@ -21,7 +28,7 @@ def _set_session_cookie(response: Response, token: str) -> None:
         value=token,
         httponly=True,
         samesite="lax",
-        secure=False,  # set True behind HTTPS
+        secure=cookie_secure(),
         path="/",
         max_age=COOKIE_MAX_AGE_SECONDS,
     )
@@ -47,7 +54,14 @@ def setup_enabled(db: Session = Depends(get_db)):
 
 
 @router.post("/auth/login", response_model=MeResponse)
-def login(payload: LoginRequest, response: Response, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, request: Request, response: Response, db: Session = Depends(get_db)):
+    username_key = (payload.username or "").strip().lower()
+    ip = _client_ip(request)
+    if not RATE_LIMITER.allow(f"auth-login-ip:{ip}", limit=30, window_s=60 * 10):
+        raise HTTPException(status_code=429, detail="Too many login attempts")
+    if not RATE_LIMITER.allow(f"auth-login-user:{username_key}:{ip}", limit=8, window_s=60 * 5):
+        raise HTTPException(status_code=429, detail="Too many login attempts")
+
     user, token = authenticate_user(db, username=payload.username, password=payload.password)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid credentials")
@@ -57,7 +71,13 @@ def login(payload: LoginRequest, response: Response, db: Session = Depends(get_d
 
 
 @router.post("/auth/logout")
-def logout(response: Response, user: User = Depends(get_current_user)):
+def logout(request: Request, response: Response, db: Session = Depends(get_db)):
+    token = request.cookies.get(SESSION_COOKIE)
+    if token:
+        row = db.execute(select(SessionToken).where(SessionToken.token == token)).scalar_one_or_none()
+        if row:
+            db.delete(row)
+            db.commit()
     response.delete_cookie(key=SESSION_COOKIE, path="/")
     return {"ok": True}
 

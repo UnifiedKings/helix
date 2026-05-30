@@ -13,15 +13,6 @@ function SidebarLink({ to, label, icon }: { to: string; label: string; icon: str
   )
 }
 
-function SidebarPlaceholder({ label, icon }: { label: string; icon: string }) {
-  return (
-    <button className="side-link side-link-placeholder" type="button" disabled title="Placeholder for future Helix functionality">
-      <span className="side-icon" aria-hidden="true">{icon}</span>
-      <span>{label}</span>
-    </button>
-  )
-}
-
 export function Layout() {
   const player = usePlayer()
   const auth = useAuth()
@@ -45,29 +36,29 @@ export function Layout() {
           <SidebarLink to="/search" label="Search" icon="⌕" />
           <SidebarLink to="/stations" label="Stations" icon="◉" />
           <SidebarLink to="/playlists" label="Playlists" icon="♫" />
-          <SidebarPlaceholder label="Liked Songs" icon="♡" />
           <SidebarLink to="/history" label="History" icon="◷" />
           <SidebarLink to="/lobbies" label="Lobbies" icon="◎" />
           <SidebarLink to="/settings" label="Settings" icon="⚙" />
         </nav>
 
-        <div className="sidebar-footer">
-          <strong>Feel the music.</strong>
-          <span>helix.local</span>
+        <div className="sidebar-account-panel">
+          <div className="sidebar-account-card">
+            <button className="profile-placeholder sidebar-profile-avatar" type="button" title="Profile" aria-label="Profile">
+              <span aria-hidden="true">{(auth.user?.username ?? 'H').slice(0, 1).toUpperCase()}</span>
+            </button>
+            <div className="sidebar-account-copy">
+              <strong>{auth.user?.username ?? 'Helix'}</strong>
+              <span>{auth.user?.is_admin ? 'Admin' : 'User'}</span>
+            </div>
+          </div>
+          <button className="sidebar-logout-button" type="button" onClick={() => void logout()}>
+            <span aria-hidden="true">↪</span>
+            Log out
+          </button>
         </div>
       </aside>
 
       <div className="app-main-area">
-        <header className="topbar topbar-redesigned topbar-minimal">
-          <div className="topbar-account">
-            <span className="topbar-username">{auth.user?.username ?? 'Helix'}</span>
-            <button className="profile-placeholder" type="button" title="Profile" aria-label="Profile">
-              <span aria-hidden="true">{(auth.user?.username ?? 'H').slice(0, 1).toUpperCase()}</span>
-            </button>
-            <button className="logout-button" type="button" onClick={() => void logout()}>Log out</button>
-          </div>
-        </header>
-
         <main className="main-grid dashboard-grid">
           <section className="content-card dashboard-content-card">
             {player.error ? <div className="error-banner">{player.error}</div> : null}
