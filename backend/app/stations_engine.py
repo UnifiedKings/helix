@@ -9,19 +9,16 @@ import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 import traceback
-import httpx
 
 from sqlalchemy import select, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .db import SessionLocal
-from .models import Station, StationTag, QueueItem, PlaybackSession, ListenHistoryItem, DislikedTrack
-from .integrations.listenbrainz import lb_radio_for_artist, lb_radio_for_tags, lb_similar_artists_for_artist, lb_top_recordings_for_artist
-from .integrations.musicbrainz import lookup_artist_mbid_by_name, lookup_recording, simplify_recording
+from .models import Station, QueueItem, PlaybackSession, ListenHistoryItem, DislikedTrack
 from .integrations.subsonic import SubsonicClient
 
-from .integrations.ytmusic import find_song, search_ytmusic
+from .integrations.ytmusic import find_song, search_ytmusic, get_album_full
 from .validators import is_valid_yt_video_id
 from .art_sources import yt_thumbnail_url, is_allowed_art_url
 from .station_providers import get_station_provider
@@ -32,13 +29,13 @@ LOG = logging.getLogger("helix.stations")
 
 
 class StationSeedArtistNotFound(Exception):
-    """Raised when a station's seed artist cannot be resolved to a MusicBrainz artist MBID."""
+    """Raised when a station provider cannot resolve its configured seed artist."""
 
     def __init__(self, seed_artist: str):
         seed_artist = (seed_artist or "").strip()
-        msg = "Seed artist not found on MusicBrainz."
+        msg = "Seed artist could not be resolved."
         if seed_artist:
-            msg = f"Seed artist not found on MusicBrainz: {seed_artist}"
+            msg = f"Seed artist could not be resolved: {seed_artist}"
         super().__init__(msg)
 
 
@@ -60,6 +57,20 @@ def _subsonic_cover_url(cover_id: str, *, size: int = 512) -> str:
 
 def _clean(s: str) -> str:
     return " ".join((s or "").strip().split())
+
+
+def _is_video_thumbnail(url: str) -> bool:
+    value = _clean(url).lower()
+    return (
+        "i.ytimg.com/vi/" in value
+        or "img.youtube.com/vi/" in value
+        or "/vi_webp/" in value
+    )
+
+
+def _usable_station_art(url: str) -> bool:
+    value = _clean(url)
+    return bool(value and is_allowed_art_url(value) and not _is_video_thumbnail(value))
 
 
 def _norm(s: str) -> str:
@@ -190,17 +201,6 @@ def _pick_station_artist(
         return random.choice(names)
 
 
-async def select_random_track_with_artist(artist_mbid: str, limit: int = 20) -> Dict[str, Any]:
-    """Select a random popular track for a given artist MBID via ListenBrainz."""
-    print(f"MBID: {artist_mbid}")
-    tracks = await lb_top_recordings_for_artist(artist_mbid, limit)
-    if not tracks:
-        raise RuntimeError("no top recordings returned")
-    choice = random.choice(tracks)
-    print(choice)
-    return choice
-
-
 def _clean_recording_name(it: Dict[str, Any]) -> str:
     return _clean(str(it.get("recording_name") or it.get("track_name") or it.get("title") or it.get("name") or ""))
 
@@ -313,169 +313,6 @@ def _recent_artists(db: Session, user_id: str, limit: int = 60) -> List[str]:
     return [_clean(r[0] or "") for r in rows if _clean(r[0] or "")]
 
 
-async def _mb_lookup_artist_id_by_name(name: str) -> str:
-    q = _clean(name)
-    if not q:
-        return ""
-    url = "https://musicbrainz.org/ws/2/artist"
-    # Use a conservative search, then validate the top hit so obviously-nonexistent artists
-    # don't silently resolve to an unrelated artist.
-    params = {"query": q, "limit": "1", "fmt": "json"}
-    headers = {"User-Agent": "Helix/0.0.13 (station-mbid-lookup)"}
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        r = await client.get(url, params=params, headers=headers)
-        r.raise_for_status()
-        data = r.json() or {}
-    artists = data.get("artists") or []
-    if not artists:
-        return ""
-
-    top = artists[0] or {}
-    top_id = str(top.get("id") or "").strip()
-    top_name = _clean(str(top.get("name") or ""))
-    # MusicBrainz search provides a score (0-100). Require a strong match OR an exact name match.
-    try:
-        score = int(top.get("score") or 0)
-    except Exception:
-        score = 0
-
-    q_norm = _clean(q).lower()
-    name_norm = top_name.lower()
-
-    # Accept exact match; otherwise require a high score.
-    if name_norm != q_norm and score < 90:
-        return ""
-    return top_id
-
-
-
-async def _mb_fetch_artist_tags(artist_id: str) -> List[Tuple[str, float]]:
-    aid = (artist_id or "").strip()
-    if not aid:
-        return []
-    url = f"https://musicbrainz.org/ws/2/artist/{aid}"
-    params = {"inc": "tags", "fmt": "json"}
-    headers = {"User-Agent": "Helix/0.0.13 (station-tags)"}
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        r = await client.get(url, params=params, headers=headers)
-        r.raise_for_status()
-        data = r.json() or {}
-    tags = data.get("tags") or []
-    out: List[Tuple[str, float]] = []
-    for t in tags:
-        name = _clean(str(t.get("name") or ""))
-        if not name:
-            continue
-        try:
-            cnt = float(t.get("count") or 0)
-        except Exception:
-            cnt = 0.0
-        out.append((name, cnt))
-    out.sort(key=lambda x: x[1], reverse=True)
-    return out
-
-
-async def ensure_station_tags(user_id: str, station_id: str) -> List[str]:
-    """Ensure station has some cached tags. Returns top tag strings.
-
-    IMPORTANT: Never holds a DB session across awaits.
-    """
-    # DB burst: load station + existing tags + seed fields
-    db = SessionLocal()
-    try:
-        station = db.get(Station, station_id)
-        if not station or station.user_id != user_id:
-            return []
-        existing = db.execute(
-            select(StationTag).where(StationTag.station_id == station.id).order_by(StationTag.weight.desc()).limit(50)
-        ).scalars().all()
-        if existing:
-            return [t.tag for t in existing if t.tag]
-        seed_artist = _clean(getattr(station, "seed_artist", "") or "")
-        mb_artist_id = _clean(getattr(station, "mb_artist_id", "") or "")
-    finally:
-        db.close()
-
-    # External I/O (bounded): MBID lookup + tag fetch
-    if not mb_artist_id and seed_artist:
-        try:
-            mb_artist_id = await asyncio.wait_for(
-                lookup_artist_mbid_by_name(seed_artist),
-                timeout=float(os.getenv("HELIX_MB_LOOKUP_TIMEOUT_S", "8")),
-            )
-        except asyncio.TimeoutError:
-            LOG.warning("mb artist lookup timed out for %r", seed_artist)
-            mb_artist_id = ""
-        except Exception as e:
-            LOG.warning("mb artist lookup failed for %r: %s", seed_artist, e)
-            mb_artist_id = ""
-
-        if mb_artist_id:
-            # DB burst: persist MBID
-            db = SessionLocal()
-            try:
-                station2 = db.get(Station, station_id)
-                if station2 and station2.user_id == user_id:
-                    station2.mb_artist_id = mb_artist_id
-                    station2.updated_at = datetime.utcnow()
-                    db.commit()
-            finally:
-                db.close()
-
-    if not mb_artist_id:
-        return []
-
-    try:
-        tags = await asyncio.wait_for(
-            _mb_fetch_artist_tags(mb_artist_id),
-            timeout=float(os.getenv("HELIX_MB_TAGS_TIMEOUT_S", "10")),
-        )
-    except asyncio.TimeoutError:
-        LOG.warning("mb artist tags fetch timed out for %s", mb_artist_id)
-        return []
-    except Exception as e:
-        LOG.warning("mb artist tags fetch failed for %s: %s", mb_artist_id, e)
-        return []
-
-    # DB burst: write station tags
-    db = SessionLocal()
-    try:
-        station3 = db.get(Station, station_id)
-        if not station3 or station3.user_id != user_id:
-            return []
-        # Seed tag weights into station_tags table.
-        now = datetime.utcnow()
-        inserted: List[StationTag] = []
-        seen_tags = set()
-        for t in (tags or [])[:50]:
-            if isinstance(t, tuple):
-                raw_tag = t[0] if len(t) > 0 else ""
-                raw_weight = t[1] if len(t) > 1 else 0.0
-                tag = _clean(str(raw_tag or ""))
-                try:
-                    w = float(raw_weight or 0.0)
-                except Exception:
-                    w = 0.0
-            else:
-                tag = _clean(str(t.get("tag") or t.get("name") or ""))
-                try:
-                    w = float(t.get("weight") or 0.0)
-                except Exception:
-                    w = 0.0
-            if not tag or tag in seen_tags:
-                continue
-            seen_tags.add(tag)
-            st = StationTag(station_id=station3.id, tag=tag, weight=w, updated_at=now)
-            db.add(st)
-            inserted.append(st)
-        db.commit()
-        # Return best tags by weight.
-        inserted.sort(key=lambda x: float(x.weight or 0.0), reverse=True)
-        return [t.tag for t in inserted if t.tag][:20]
-    finally:
-        db.close()
-
-
 async def _subsonic_client_from_settings(settings: Dict[str, Any]) -> SubsonicClient:
     base_url = str(settings.get("subsonic_base_url") or "").strip()
     username = str(settings.get("subsonic_username") or "").strip()
@@ -486,14 +323,6 @@ async def _subsonic_client_from_settings(settings: Dict[str, Any]) -> SubsonicCl
     api_version = str(settings.get("subsonic_api_version") or "1.16.1")
     timeout_s = int(settings.get("subsonic_timeout_s") or 20)
     return SubsonicClient(base_url=base_url, username=username, password=password, client_name=client_name, api_version=api_version, timeout_s=timeout_s)
-
-
-def _subsonic_configured(settings: Dict[str, Any]) -> bool:
-    return bool(
-        str(settings.get("subsonic_base_url") or "").strip()
-        and str(settings.get("subsonic_username") or "").strip()
-        and str(settings.get("subsonic_password") or "").strip()
-    )
 
 
 async def match_track_to_subsonic(*, settings: Dict[str, Any], title: str, artist: str, duration_ms: Optional[int]) -> Optional[Dict[str, Any]]:
@@ -555,19 +384,19 @@ def _station_config_from_model(station: Station) -> dict[str, Any]:
     cfg.setdefault("seed_artist", getattr(station, "seed_artist", "") or "")
     cfg.setdefault("mb_artist_id", getattr(station, "mb_artist_id", "") or "")
     cfg.setdefault("mb_recording_id", getattr(station, "mb_recording_id", "") or "")
-    cfg.setdefault("discovery", float(getattr(station, "discovery", 0.35) or 0.35))
-    cfg.setdefault("seed_influence", float(getattr(station, "seed_influence", 0.75) or 0.75))
-    cfg.setdefault("artist_cooldown", int(getattr(station, "artist_cooldown", 5) or 5))
-    cfg.setdefault("artist_variety", int(getattr(station, "artist_variety", 1) or 1))
+    cfg.setdefault("discovery", float(0.35 if getattr(station, "discovery", None) is None else getattr(station, "discovery")))
+    cfg.setdefault("seed_influence", float(0.75 if getattr(station, "seed_influence", None) is None else getattr(station, "seed_influence")))
+    cfg.setdefault("artist_cooldown", int(getattr(station, "artist_cooldown", 5) if getattr(station, "artist_cooldown", None) is not None else 5))
+    cfg.setdefault("artist_variety", int(1 if getattr(station, "artist_variety", None) is None else getattr(station, "artist_variety")))
     cfg.setdefault("allow_seed_alternates", bool(int(getattr(station, "allow_seed_alternates", 0) or 0)))
     cfg.setdefault("era_start", int(getattr(station, "era_start", 0) or 0))
     cfg.setdefault("era_end", int(getattr(station, "era_end", 0) or 0))
-    cfg.setdefault("popularity_bias", int(getattr(station, "popularity_bias", 50) or 50))
-    cfg.setdefault("tag_strictness", int(getattr(station, "tag_strictness", 70) or 70))
-    cfg.setdefault("popular_track_pool_size", int(getattr(station, "popular_track_pool_size", 10) or 10))
+    cfg.setdefault("popularity_bias", int(50 if getattr(station, "popularity_bias", None) is None else getattr(station, "popularity_bias")))
+    cfg.setdefault("tag_strictness", int(70 if getattr(station, "tag_strictness", None) is None else getattr(station, "tag_strictness")))
+    cfg.setdefault("popular_track_pool_size", int(10 if getattr(station, "popular_track_pool_size", None) is None else getattr(station, "popular_track_pool_size")))
     cfg.setdefault("artist_blacklist", str(getattr(station, "artist_blacklist", "") or ""))
     cfg.setdefault("artist_blacklist_items", _parse_artist_list(str(getattr(station, "artist_blacklist", "") or "")))
-    cfg.setdefault("temperature", float(getattr(station, "temperature", 0.9) or 0.9))
+    cfg.setdefault("temperature", float(0.9 if getattr(station, "temperature", None) is None else getattr(station, "temperature")))
     cfg.setdefault("source_mode", "prefer_library")
     return cfg
 
@@ -614,11 +443,182 @@ async def _resolve_station_result_to_queue_item(choice: StationResult, *, settin
         return None
 
     song_on_yt = None
-    if mode != "library_only" and not (subsonic_track and subsonic_track.get("id")):
-        try:
-            song_on_yt = _best_yt_song_result(cleaned_track_name, cleaned_artist_name)
-        except Exception:
-            song_on_yt = None
+    if mode != "library_only":
+        provider_meta = choice.provider_metadata if isinstance(choice.provider_metadata, dict) else {}
+        provider_video_id = _clean(str(provider_meta.get("video_id") or provider_meta.get("videoId") or ""))
+        if str(provider_meta.get("discovery_source") or "").strip().lower() == "ytmusic" and provider_video_id:
+            provider_duration_s = int(choice.duration_ms / 1000) if choice.duration_ms else 0
+            provider_album = _clean(choice.album)
+            provider_album_browse_id = _clean(str(
+                provider_meta.get("album_browse_id")
+                or provider_meta.get("albumBrowseId")
+                or provider_meta.get("album_id")
+                or ""
+            ))
+            provider_thumb = _clean(str(provider_meta.get("thumbnail_url") or ""))
+            if _is_video_thumbnail(provider_thumb):
+                provider_thumb = ""
+
+            # Artist-page recommendations often give us an exact video ID but
+            # incomplete metadata.  Previously we only enriched the result when
+            # duration was missing, which meant station tracks with a duration
+            # but no proper YTMusic artwork fell through to hqdefault.jpg.
+            #
+            # Keep the provider's exact video ID, but also enrich when artwork is
+            # absent (or is only a generic YouTube video thumbnail).  Matching by
+            # video ID avoids accidentally substituting a different recording.
+            provider_thumb_is_video = (
+                "i.ytimg.com/vi/" in provider_thumb.lower()
+                or "img.youtube.com/vi/" in provider_thumb.lower()
+            )
+            if provider_duration_s <= 0 or not provider_thumb or provider_thumb_is_video or not provider_album:
+                try:
+                    lookup = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            search_ytmusic,
+                            f"{cleaned_track_name} {cleaned_artist_name}",
+                            song_limit=10,
+                            album_limit=0,
+                        ),
+                        timeout=float(os.getenv("HELIX_YTMUSIC_METADATA_TIMEOUT_S", "8")),
+                    )
+
+                    exact_video_candidate = None
+                    for candidate in list((lookup or {}).get("songs") or []):
+                        if _clean(str(candidate.get("video_id") or "")) == provider_video_id:
+                            exact_video_candidate = candidate
+                            break
+
+                    # Keep the provider's exact video id for playback, but do
+                    # not require the metadata result to use that same id.
+                    # YTMusic stations frequently recommend a watch/video id
+                    # while normal Search resolves the canonical song entry.
+                    # Search has the album art we actually want, so metadata is
+                    # allowed to come from the best title+artist match.
+                    metadata_candidate = exact_video_candidate
+                    if not metadata_candidate:
+                        metadata_candidate = _best_yt_song_result(
+                            cleaned_track_name,
+                            cleaned_artist_name,
+                        )
+
+                    if metadata_candidate:
+                        candidate_duration_s = _infer_int(
+                            metadata_candidate.get("duration_seconds") or 0,
+                            0,
+                        )
+                        if provider_duration_s <= 0 and candidate_duration_s > 0:
+                            provider_duration_s = candidate_duration_s
+
+                        provider_album = (
+                            _clean(str(metadata_candidate.get("album") or ""))
+                            or provider_album
+                        )
+                        provider_album_browse_id = (
+                            _clean(str(metadata_candidate.get("album_browse_id") or ""))
+                            or provider_album_browse_id
+                        )
+                        candidate_thumb = _clean(
+                            str(metadata_candidate.get("thumbnail_url") or "")
+                        )
+                        if _usable_station_art(candidate_thumb):
+                            provider_thumb = candidate_thumb
+                except Exception:
+                    pass
+
+            # Even when the provider already supplied duration/album metadata,
+            # it may still have no usable artwork. In that case always consult
+            # the same title+artist search path used by the Search page.
+            if not _usable_station_art(provider_thumb):
+                try:
+                    metadata_candidate = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            _best_yt_song_result,
+                            cleaned_track_name,
+                            cleaned_artist_name,
+                        ),
+                        timeout=float(os.getenv("HELIX_YTMUSIC_METADATA_TIMEOUT_S", "8")),
+                    )
+                    if metadata_candidate:
+                        provider_album = (
+                            _clean(str(metadata_candidate.get("album") or ""))
+                            or provider_album
+                        )
+                        provider_album_browse_id = (
+                            _clean(str(metadata_candidate.get("album_browse_id") or ""))
+                            or provider_album_browse_id
+                        )
+                        candidate_thumb = _clean(
+                            str(metadata_candidate.get("thumbnail_url") or "")
+                        )
+                        if _usable_station_art(candidate_thumb):
+                            provider_thumb = candidate_thumb
+                except Exception:
+                    pass
+
+            # If exact song search did not include an album browse id, resolve
+            # the album by exact title + artist before giving up.
+            if provider_album and not provider_album_browse_id:
+                try:
+                    album_lookup = await asyncio.wait_for(
+                        asyncio.to_thread(
+                            search_ytmusic,
+                            f"{cleaned_artist_name} {provider_album}",
+                            song_limit=0,
+                            album_limit=12,
+                        ),
+                        timeout=float(os.getenv("HELIX_YTMUSIC_METADATA_TIMEOUT_S", "8")),
+                    )
+                    want_album = _norm(provider_album)
+                    want_artist = _norm(cleaned_artist_name)
+                    for album_candidate in list((album_lookup or {}).get("albums") or []):
+                        candidate_title = _norm(str(album_candidate.get("title") or ""))
+                        candidate_artist = _norm(str(album_candidate.get("artist") or ""))
+                        if candidate_title != want_album:
+                            continue
+                        if want_artist and candidate_artist and not (
+                            candidate_artist == want_artist
+                            or want_artist in candidate_artist
+                            or candidate_artist in want_artist
+                        ):
+                            continue
+                        provider_album_browse_id = _clean(str(album_candidate.get("browse_id") or ""))
+                        candidate_album_thumb = _clean(str(album_candidate.get("thumbnail_url") or ""))
+                        if _usable_station_art(candidate_album_thumb):
+                            provider_thumb = candidate_album_thumb
+                        break
+                except Exception:
+                    pass
+
+            # If the exact YTMusic song tells us which album it belongs to,
+            # resolve that album directly.
+            if provider_album_browse_id:
+                try:
+                    album_full = await asyncio.wait_for(
+                        asyncio.to_thread(get_album_full, provider_album_browse_id),
+                        timeout=float(os.getenv("HELIX_YTMUSIC_ALBUM_TIMEOUT_S", "8")),
+                    )
+                    album_thumb = _clean(str((album_full or {}).get("thumbnail_url") or ""))
+                    if _usable_station_art(album_thumb):
+                        provider_thumb = album_thumb
+                    provider_album = _clean(str((album_full or {}).get("title") or "")) or provider_album
+                except Exception:
+                    pass
+
+            song_on_yt = {
+                "video_id": provider_video_id,
+                "title": cleaned_track_name,
+                "artist": cleaned_artist_name,
+                "album": provider_album,
+                "album_browse_id": provider_album_browse_id,
+                "duration_seconds": provider_duration_s,
+                "thumbnail_url": provider_thumb,
+            }
+        else:
+            try:
+                song_on_yt = _best_yt_song_result(cleaned_track_name, cleaned_artist_name)
+            except Exception:
+                song_on_yt = None
 
     if not (subsonic_track and subsonic_track.get("id")) and not song_on_yt:
         return None
@@ -633,7 +633,7 @@ async def _resolve_station_result_to_queue_item(choice: StationResult, *, settin
         if yt_duration_s > 0:
             qitem.duration_ms = yt_duration_s * 1000
         thumb = str(song_on_yt.get("thumbnail_url") or "").strip()
-        if thumb and is_allowed_art_url(thumb):
+        if _usable_station_art(thumb):
             qitem.art_url = thumb
 
     if subsonic_track and subsonic_track.get("id"):
@@ -642,12 +642,6 @@ async def _resolve_station_result_to_queue_item(choice: StationResult, *, settin
         qitem.is_playable = True
         qitem.error = ""
         try:
-            sub_title = str(subsonic_track.get("title") or "").strip()
-            sub_artist = str(subsonic_track.get("artist") or "").strip()
-            if sub_title:
-                qitem.title = sub_title
-            if sub_artist:
-                qitem.artist = sub_artist
             alb = str(subsonic_track.get("album") or "").strip()
             if alb:
                 qitem.album = alb
@@ -659,6 +653,15 @@ async def _resolve_station_result_to_queue_item(choice: StationResult, *, settin
                 qitem.art_url = _subsonic_cover_url(cover_id)
         except Exception:
             pass
+
+        # Station discovery originates from YTMusic. If the exact YTMusic song
+        # resolved to an album, prefer that album artwork even when playback will
+        # come from the local Subsonic copy. This keeps Search and Station
+        # artwork visually consistent.
+        if song_on_yt:
+            station_thumb = _clean(str(song_on_yt.get("thumbnail_url") or ""))
+            if _usable_station_art(station_thumb):
+                qitem.art_url = station_thumb
     else:
         qitem.source = "ytmusic"
         qitem.subsonic_song_id = ""
@@ -669,9 +672,13 @@ async def _resolve_station_result_to_queue_item(choice: StationResult, *, settin
             if vid:
                 qitem.yt_video_id = vid
             try:
+                known_album_browse_id = _clean(str(song_on_yt.get("album_browse_id") or ""))
+                if known_album_browse_id:
+                    qitem.yt_browse_id = known_album_browse_id
+
                 alb = str(song_on_yt.get("album") or "").strip()
                 search_artist = qitem.artist or cleaned_artist_name
-                if alb:
+                if alb and not known_album_browse_id:
                     res = search_ytmusic(f"{search_artist} {alb}", song_limit=0, album_limit=10) or {}
                     albums = res.get("albums") or []
                     alb_n = _norm(alb)
@@ -685,15 +692,53 @@ async def _resolve_station_result_to_queue_item(choice: StationResult, *, settin
                                 if bid:
                                     qitem.yt_browse_id = bid
                                 athumb = str(a.get("thumbnail_url") or "").strip()
-                                if athumb and is_allowed_art_url(athumb):
+                                if bid:
+                                    try:
+                                        full_album = get_album_full(bid) or {}
+                                        full_thumb = _clean(str(full_album.get("thumbnail_url") or ""))
+                                        if _usable_station_art(full_thumb):
+                                            qitem.art_url = full_thumb
+                                        elif _usable_station_art(athumb):
+                                            qitem.art_url = athumb
+                                    except Exception:
+                                        if _usable_station_art(athumb):
+                                            qitem.art_url = athumb
+                                elif _usable_station_art(athumb):
                                     qitem.art_url = athumb
                                 break
             except Exception:
                 pass
-            if not (qitem.art_url or "").strip():
-                thumb = yt_thumbnail_url(vid) if vid else ""
-                if thumb and is_allowed_art_url(thumb):
-                    qitem.art_url = thumb
+            # Never use generic YouTube video frames for station artwork.
+            if _is_video_thumbnail(qitem.art_url):
+                qitem.art_url = ""
+
+    # Final station-only recovery: mirror the normal Search-page metadata lookup
+    # if every earlier provider/album path failed. Playback identity remains the
+    # provider's exact video id; only artwork/album metadata comes from Search.
+    if not _usable_station_art(qitem.art_url):
+        try:
+            fallback_meta = await asyncio.wait_for(
+                asyncio.to_thread(
+                    _best_yt_song_result,
+                    cleaned_track_name,
+                    cleaned_artist_name,
+                ),
+                timeout=float(os.getenv("HELIX_YTMUSIC_METADATA_TIMEOUT_S", "8")),
+            )
+            if fallback_meta:
+                fallback_thumb = _clean(str(fallback_meta.get("thumbnail_url") or ""))
+                if _usable_station_art(fallback_thumb):
+                    qitem.art_url = fallback_thumb
+                if not _clean(qitem.album):
+                    qitem.album = _clean(str(fallback_meta.get("album") or ""))
+                fallback_browse = _clean(str(fallback_meta.get("album_browse_id") or ""))
+                if fallback_browse and not _clean(qitem.yt_browse_id):
+                    qitem.yt_browse_id = fallback_browse
+        except Exception:
+            pass
+
+    if _is_video_thumbnail(qitem.art_url):
+        qitem.art_url = ""
     return qitem
 
 
@@ -703,7 +748,7 @@ def _build_station_context(user_id: str, station_id: str) -> tuple[StationContex
         station = db.get(Station, station_id)
         if not station or station.user_id != user_id:
             return None
-        station_type = str(getattr(station, "station_type", "") or "listenbrainz_similar_artist")
+        station_type = str(getattr(station, "station_type", "") or "similar_artist")
         config = _station_config_from_model(station)
         recent_rows = db.execute(
             select(ListenHistoryItem.title, ListenHistoryItem.artist, ListenHistoryItem.album, ListenHistoryItem.source)
@@ -799,11 +844,17 @@ async def generate_and_append_station_tracks(
     context, station_type = ctx_tuple
     provider = get_station_provider(station_type)
     source_mode = _station_source_mode(context.config)
-    if source_mode == "library_only" and not _subsonic_configured(settings):
-        source_mode = "prefer_library"
-    provider_count = count
+    # Providers return source-neutral recommendations. Resolving those candidates to
+    # playable queue items can fail (not in Subsonic, poor external-search match,
+    # missing source id, etc.). Do not ask for only the exact number we need; a
+    # single unresolvable candidate would make station start fail with 503.
+    #
+    # This does not bulk-download anything. We still append only `count` queue
+    # items, and fulfillment only happens later when a track reaches the front of
+    # the queue.
+    provider_count = max(count * 12, count + 24)
     if source_mode == "library_only":
-        provider_count = max(count * 10, min(100, count + 25))
+        provider_count = max(provider_count, count * 20, min(100, count + 40))
     try:
         results = await asyncio.wait_for(
             provider.next_tracks(context, provider_count),

@@ -1,0 +1,165 @@
+/* Global typography normalization.
+   This file intentionally loads last so old page-specific experiments do not
+   create inconsistent tracking or synthetic ultra-bold text. */
+
+html,
+body {
+  font-family: var(--font-ui);
+  font-weight: var(--weight-regular);
+  font-kerning: normal;
+  font-optical-sizing: auto;
+  font-variant-ligatures: common-ligatures contextual;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-ui);
+  font-kerning: normal;
+  font-optical-sizing: auto;
+  letter-spacing: 0;
+}
+
+/* Do not ask the browser to synthesize 800/850/900/950 weights.  The UI gets
+   clearer hierarchy from 600/700 than from making every important label black. */
+button,
+nav a {
+  font-weight: var(--weight-semibold);
+}
+
+button.primary,
+strong,
+b {
+  font-weight: var(--weight-bold);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  font-kerning: normal;
+  font-optical-sizing: auto;
+  text-wrap: balance;
+}
+
+h1 {
+  line-height: var(--leading-display);
+  letter-spacing: var(--tracking-display);
+}
+
+h2,
+h3 {
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-heading);
+}
+
+p,
+.muted {
+  line-height: var(--leading-body);
+}
+
+/* Large display titles had accumulated unusually aggressive negative tracking.
+   Normalize the main page/title surfaces to one display rhythm. */
+.home-session-title-row h1,
+.stations-hero h1,
+.playlist-editor-heading h1,
+.lobby-dashboard-title-row h1,
+.detail-copy h1,
+.lobby-room-header h1,
+.search-hero h1 {
+  font-family: var(--font-display);
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-display);
+  letter-spacing: var(--tracking-display);
+  font-kerning: normal;
+  font-optical-sizing: auto;
+}
+
+/* Secondary headings should feel distinct without becoming display text. */
+.home-section-heading h2,
+.section-heading h2,
+.history-list-heading h2,
+.station-builder-header h2,
+.detail-section h2,
+.settings-editor-page .panel h2,
+.lobby-create-panel h2,
+.queue-panel h2,
+.queue-panel-redesign .queue-header h2,
+.top-result-copy h2,
+.lobby-now-copy h2 {
+  font-weight: var(--weight-bold);
+  line-height: var(--leading-heading);
+  letter-spacing: var(--tracking-heading);
+}
+
+/* Small uppercase labels benefit from positive tracking; normal labels do not. */
+.eyebrow {
+  font-weight: var(--weight-bold);
+  letter-spacing: var(--tracking-eyebrow);
+  line-height: 1.25;
+}
+
+/* Repeated UI labels previously used 800-950 weights throughout the app. */
+.station-stat-card strong,
+.home-session-meta span,
+.station-card-body h3,
+.queue-panel-redesign .queue-title,
+.queue-panel-redesign .queue-track-title,
+.history-row strong,
+.home-activity-copy strong,
+.home-quick-action strong,
+.side-link,
+.sidebar-user strong,
+.playback-title,
+.now-playing strong,
+.lobby-card strong,
+.lobby-room-header strong {
+  font-weight: var(--weight-semibold);
+}
+
+/* Preserve stronger emphasis for the most important current-track labels. */
+.home-session-title-row h1,
+.playback-title,
+.queue-panel-redesign .queue-item.is-current .queue-track-title {
+  font-weight: var(--weight-bold);
+}
+
+/* Home hero titles are intentionally a touch calmer than generic display text.
+   Long track names wrap often, so give them slightly more breathing room and
+   less aggressive negative tracking without changing the rest of Helix. */
+.home-session-title-row h1 {
+  font-size: clamp(2.7rem, 4.5vw, 5rem);
+  line-height: 1.045;
+  letter-spacing: -0.024em;
+}
+
+/* Dense metadata reads better with normal spacing instead of display tracking. */
+.home-session-copy > .muted,
+.home-session-meta,
+.station-card-body,
+.queue-panel-redesign,
+.history-row,
+.home-activity-list,
+.playback-bar,
+.side-nav {
+  letter-spacing: 0;
+}
+
+@media (max-width: 700px) {
+  h1,
+  .home-session-title-row h1,
+  .stations-hero h1,
+  .playlist-editor-heading h1,
+  .lobby-dashboard-title-row h1 {
+    line-height: 1.05;
+    letter-spacing: -0.024em;
+  }
+}

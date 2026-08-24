@@ -1,0 +1,266 @@
+/* Station provider creation/editing UI */
+
+.station-builder-panel,
+.station-toolbar,
+.station-list-panel {
+  border: 1px solid var(--border-soft);
+  border-radius: 24px;
+  padding: 1rem;
+  background: linear-gradient(180deg, rgba(14, 20, 31, 0.92), rgba(8, 12, 20, 0.92));
+}
+
+.station-builder-header,
+.station-toolbar,
+.station-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.station-builder-header h2,
+.station-toolbar strong {
+  margin: 0;
+}
+
+.station-type-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 0.8rem;
+  margin: 1rem 0;
+}
+
+.station-type-card {
+  display: grid;
+  gap: 0.35rem;
+  align-content: start;
+  min-height: 108px;
+  padding: 0.95rem;
+  text-align: left;
+  border-radius: 18px;
+  border: 1px solid var(--border-soft);
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.station-type-card:hover,
+.station-type-card.active {
+  transform: translateY(-1px);
+  border-color: rgba(184, 106, 31, 0.52);
+  background: rgba(184, 106, 31, 0.12);
+}
+
+.station-type-card span {
+  font-weight: 900;
+}
+
+.station-type-card small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.station-type-card em {
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
+.station-config-form {
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.station-name-field {
+  max-width: none;
+}
+
+.station-config-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 0.95rem;
+  align-items: start;
+}
+
+.station-config-field {
+  display: grid;
+  gap: 0.45rem;
+  min-width: 0;
+  padding: 0.85rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.station-config-label {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  flex-wrap: wrap;
+  color: var(--text);
+  font-weight: 900;
+}
+
+.station-config-label strong {
+  border-radius: 999px;
+  padding: 0.12rem 0.45rem;
+  color: #fff1f3;
+  background: rgba(255, 101, 122, 0.18);
+  border: 1px solid rgba(255, 101, 122, 0.35);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.station-config-field small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.station-config-field input,
+.station-config-field textarea,
+.station-config-field select {
+  width: 100%;
+  min-width: 0;
+}
+
+.station-config-field textarea {
+  resize: vertical;
+  min-height: 112px;
+}
+
+.station-checkbox-field {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.station-checkbox-field input {
+  width: auto;
+  accent-color: var(--accent);
+}
+
+.station-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.7rem;
+}
+
+@media (max-width: 820px) {
+  .station-config-grid,
+  .station-type-picker {
+    grid-template-columns: 1fr;
+  }
+
+  .station-builder-header,
+  .station-toolbar,
+  .station-toolbar-actions {
+    align-items: stretch;
+  }
+}
+
+/* Queue context for station playback */
+
+.queue-station-context {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: center;
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(184, 106, 31, 0.26);
+  border-radius: 16px;
+  background: radial-gradient(circle at 100% 0%, rgba(53, 217, 149, 0.11), transparent 42%),
+    rgba(184, 106, 31, 0.08);
+}
+
+.queue-station-context strong,
+.queue-station-context span span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-station-context strong {
+  color: var(--text);
+  font-size: 0.82rem;
+}
+
+.queue-station-context span span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+/* Station start feedback */
+
+.station-start-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(3, 6, 12, 0.62);
+  backdrop-filter: blur(7px);
+}
+
+.station-start-modal {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  align-items: center;
+  width: min(420px, 100%);
+  padding: 1.15rem;
+  border: 1px solid rgba(184, 106, 31, 0.36);
+  border-radius: 24px;
+  background: radial-gradient(circle at 0% 0%, rgba(184, 106, 31, 0.28), transparent 42%),
+    linear-gradient(180deg, rgba(18, 24, 38, 0.98), rgba(8, 12, 20, 0.98));
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.5);
+}
+
+.station-start-modal strong,
+.station-start-modal span,
+.station-start-modal p {
+  display: block;
+}
+
+.station-start-modal strong {
+  font-size: 1.1rem;
+}
+
+.station-start-modal span {
+  color: var(--accent-strong);
+  font-weight: 900;
+  margin-top: 0.15rem;
+}
+
+.station-start-modal p {
+  margin: 0.45rem 0 0;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.station-start-spinner {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 999px;
+  border: 3px solid rgba(255, 255, 255, 0.12);
+  border-top-color: var(--accent);
+  border-right-color: var(--good);
+  animation: station-start-spin 850ms linear infinite;
+}
+
+@keyframes station-start-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

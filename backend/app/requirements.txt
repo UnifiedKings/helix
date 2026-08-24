@@ -6,5 +6,5 @@ bcrypt==4.3.0
 passlib[bcrypt]==1.7.4
 httpx>=0.25
 yt-dlp
-ytmusicapi==1.7.4
+ytmusicapi==1.12.1
 mutagen==1.47.0

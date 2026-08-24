@@ -116,6 +116,7 @@ class DownloadJob:
     track_no: int = 0
     duration_ms: int = 0
     persist_to_subsonic: bool = False
+    user_id: str = ""
     priority: int = 10  # lower = higher priority
     created_at: float = 0.0
 
@@ -407,6 +408,7 @@ class DownloadManager:
             job.created_at = time.time()
             self._jobs[job.video_id] = job
             await self._q.put((job.priority, job.created_at, job))
+        self._notify_job_status(job, "QUEUED")
 
         while True:
             p = self._ready.get(job.video_id)
@@ -442,6 +444,7 @@ class DownloadManager:
             job.created_at = time.time()
             self._jobs[job.video_id] = job
             await self._q.put((job.priority, job.created_at, job))
+        self._notify_job_status(job, "QUEUED")
 
         # Wait briefly for yt-dlp to create the `.part` file.
         prefix = os.path.basename(job.out_prefix()) + "."
@@ -553,6 +556,33 @@ class DownloadManager:
         job.created_at = time.time()
         self._jobs[job.video_id] = job
         await self._q.put((job.priority, job.created_at, job))
+        self._notify_job_status(job, "QUEUED")
+
+    def _notify_job_status(self, job: DownloadJob, status: str, error: str = "") -> None:
+        user_id = str(getattr(job, "user_id", "") or "")
+        if not user_id:
+            return
+        try:
+            from .db import SessionLocal
+            from .models import QueueItem
+            from sqlalchemy import select
+            db = SessionLocal()
+            try:
+                rows = db.execute(select(QueueItem).where(QueueItem.session_user_id == user_id, QueueItem.yt_video_id == job.video_id)).scalars().all()
+                for row in rows:
+                    row.download_status = status
+                    if error:
+                        row.error = error[:500]
+                    elif status in {"QUEUED", "DOWNLOADING", "DOWNLOADED"} and row.error not in {"NOT_IN_LIBRARY", ""}:
+                        row.error = ""
+                if rows:
+                    db.commit()
+            finally:
+                db.close()
+            from .realtime import schedule_player_state_broadcast
+            schedule_player_state_broadcast(user_id)
+        except Exception:
+            LOG.exception("Failed to publish download status user=%s video=%s status=%s", user_id, job.video_id, status)
 
     def _download_log(self, message: str) -> None:
         try:
@@ -577,6 +607,8 @@ class DownloadManager:
                 # automated YouTube downloads.
                 if getattr(job, "persist_to_subsonic", False) and self.import_download_delay_s > 0:
                     await asyncio.sleep(self.import_download_delay_s)
+
+                self._notify_job_status(job, "DOWNLOADING")
 
                 # Download best audio without converting during the ASAP path.
                 # We prefer Opus streams, but keep container as provided by YouTube (often .webm).
@@ -631,6 +663,7 @@ class DownloadManager:
                     raise RuntimeError("yt-dlp finished but output file not found")
 
                 self._ready[job.video_id] = produced
+                self._notify_job_status(job, "DOWNLOADED")
                 if getattr(job, "persist_to_subsonic", False):
                     self._mark_for_subsonic_import(job)
                 self._download_log(f"[download-worker] OK video_id={job.video_id} title={job.title!r} track_no={job.track_no}")
@@ -651,6 +684,7 @@ class DownloadManager:
                     await asyncio.sleep(min(30.0, 2.0 * attempt))
                     await self._q.put((prio + attempt, time.time(), job))
                 else:
+                    self._notify_job_status(job, "FAILED", str(e))
                     self._download_log(f"[download-worker] GAVE_UP video_id={job.video_id} title={job.title!r} track_no={job.track_no}")
             finally:
                 self._q.task_done()
@@ -790,6 +824,12 @@ class DownloadManager:
                         job.album = alb_title
                     if alb_artist and (not job.album_artist or _looks_like_views(job.album_artist)):
                         job.album_artist = alb_artist
+                    # Album-level YTMusic artwork is authoritative.  Search/video
+                    # thumbnails can be padded or widescreen even when the album
+                    # metadata exposes a proper square cover.
+                    album_thumb = (full.get("thumbnail_url") or full.get("thumbnail") or "").strip()
+                    if album_thumb:
+                        job.art_url = album_thumb
                     # Try to find the matching track entry by video_id and fill track artist/title/pos/duration.
                     for t in (full.get('tracks') or []):
                         if str(t.get('video_id') or '') == job.video_id:
@@ -1051,12 +1091,12 @@ async def finalize_video_ids(self, vids: List[str]) -> None:
                     full = get_album_full(getattr(job, "browse_id", "")) or {}
                     alb_title = (full.get("title") or "").strip()
                     alb_artist = (full.get("artist") or "").strip()
-                    thumb = (full.get("thumbnail") or "").strip()
+                    thumb = (full.get("thumbnail_url") or full.get("thumbnail") or "").strip()
                     if alb_title and not job.album:
                         job.album = alb_title
                     if alb_artist and ((not getattr(job, "album_artist", "").strip()) or _looks_like_views(getattr(job, "album_artist", ""))):
                         job.album_artist = alb_artist
-                    if thumb and not getattr(job, "art_url", ""):
+                    if thumb:
                         job.art_url = thumb
                     for t in (full.get("tracks") or []):
                         if str(t.get("video_id") or "") == job.video_id:

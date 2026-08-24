@@ -1,0 +1,396 @@
+/* Stations dashboard redesign inspired by the approved Helix concept. */
+
+.app-shell-with-sidebar {
+  display: grid;
+  min-height: 100vh;
+}
+
+.app-sidebar {
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+}
+
+.side-nav {
+  display: flex;
+  flex-direction: column;
+}
+
+.side-link {
+  width: 100%;
+  border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-weight: 750;
+  text-align: left;
+}
+
+.side-link:hover:not(:disabled),
+.side-link.active {
+  transform: none;
+}
+
+.side-link-placeholder {
+  opacity: 0.82;
+  cursor: default;
+}
+
+.side-icon {
+  text-align: center;
+  opacity: 0.95;
+}
+
+.sidebar-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  color: var(--muted);
+  padding: 1rem 0.7rem;
+}
+
+.sidebar-footer strong {
+  color: white;
+}
+
+.sidebar-footer span {
+  color: rgba(248, 251, 255, 0.42);
+}
+
+.topbar-redesigned {
+  height: 68px;
+  display: grid;
+  grid-template-columns: minmax(280px, 600px) auto auto;
+  gap: 1rem;
+  justify-content: end;
+  padding: 0 1.5rem;
+}
+
+.topbar-minimal {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0;
+  padding: 0 1.5rem;
+}
+
+.topbar-search {
+  display: none;
+}
+
+.top-nav {
+  display: none;
+}
+
+.profile-placeholder {
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  padding: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 30% 20%, #ffd1e8, #b86a1f 45%, #0d8b72 100%);
+  border-color: rgba(255, 255, 255, 0.15);
+  color: white;
+  font-weight: 950;
+}
+
+.stations-hero {
+  position: relative;
+}
+
+.stations-hero::after {
+  content: "";
+  position: absolute;
+  right: -6%;
+  top: 8%;
+  width: 68%;
+  height: 84%;
+  background: radial-gradient(ellipse at 50% 50%, rgba(184, 106, 31, 0.32), transparent 40%),
+    repeating-radial-gradient(ellipse at 50% 50%, rgba(160, 85, 255, 0.22) 0 1px, transparent 2px 16px);
+  filter: blur(0.2px);
+  opacity: 0.72;
+  transform: rotate(-8deg);
+  pointer-events: none;
+}
+
+.stations-hero-copy {
+  position: relative;
+  z-index: 1;
+}
+
+.station-stats {
+  position: relative;
+  z-index: 1;
+  flex-wrap: wrap;
+}
+
+.station-toolbar {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.station-toolbar > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.station-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.station-toolbar-actions label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--muted);
+}
+
+.station-toolbar select {
+  color: white;
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+.view-toggle {
+  min-width: 42px;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+}
+
+.view-toggle.active {
+  background: rgba(184, 106, 31, 0.20);
+  border-color: rgba(184, 106, 31, 0.44);
+}
+
+.station-grid-redesign {
+  display: grid;
+}
+
+.station-art-wrap {
+  position: relative;
+}
+
+.station-art-wrap .artwork-lg,
+.station-art-wrap .artwork {
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
+}
+
+.station-art-wrap::after {
+  content: "";
+  position: absolute;
+}
+
+.station-floating-play {
+  position: absolute;
+  z-index: 1;
+  padding: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+}
+
+.station-card-actions {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.9rem;
+}
+
+.station-play-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.55rem 0.85rem;
+  border-radius: 999px;
+}
+
+.station-edit-placeholder {
+  color: rgba(248,251,255,0.78);
+  padding: 0.5rem 0.65rem;
+  border-radius: 999px;
+}
+
+.station-more-placeholder {
+  justify-self: end;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  font-size: 1.25rem;
+}
+
+.queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.8rem;
+}
+
+.queue-header h2 {
+  margin: 0;
+}
+
+.queue-clear-placeholder {
+  padding: 0.45rem 0.65rem;
+  font-size: 0.8rem;
+  opacity: 0.55;
+}
+
+.queue-list-redesign {
+  display: flex;
+  flex-direction: column;
+}
+
+.queue-row-redesign {
+  margin: 0;
+}
+
+.queue-drag-placeholder {
+  color: rgba(248,251,255,0.38);
+  font-weight: 900;
+  letter-spacing: -0.12em;
+  padding-inline: 0.2rem;
+}
+
+.queue-duration {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.queue-remove-icon {
+  border-radius: 999px;
+  color: rgba(248,251,255,0.68);
+  font-size: 1.35rem;
+}
+
+.queue-summary {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.86rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+}
+
+/* Player bar update for the stations concept: compact, centered controls with placeholders where backend support is not present yet. */
+
+.transport {
+  gap: 1.55rem;
+}
+
+.transport-extra {
+  opacity: 0.64;
+  cursor: default;
+}
+
+.transport-extra:disabled {
+  opacity: 0.38;
+}
+
+.transport-main svg {
+  width: 25px;
+  height: 25px;
+}
+
+.transport-side svg {
+  width: 24px;
+  height: 24px;
+}
+
+.transport-stack {
+  justify-content: end;
+  align-self: end;
+  padding-top: 0.2rem;
+}
+
+.scrub-row {
+  align-self: start;
+  margin-top: -0.1rem;
+}
+
+.rating-controls {
+  gap: 0.7rem;
+}
+
+.rating-button {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+}
+
+@media (max-width: 1180px) {
+  .app-shell-with-sidebar {
+    grid-template-columns: 1fr;
+  }
+
+  .app-sidebar {
+    display: none;
+  }
+
+  .topbar-redesigned,
+  .topbar-minimal {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    height: 64px;
+    padding: 0.9rem 1rem;
+  }
+
+  .profile-placeholder {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 760px) {
+  .stations-hero {
+    padding: 1.4rem;
+  }
+
+  .station-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .station-toolbar-actions {
+    justify-content: space-between;
+    flex-wrap: wrap;
+  }
+
+  .station-grid-redesign {
+    grid-template-columns: 1fr;
+  }
+
+  .playback-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .volume-row {
+    transform: none;
+  }
+}

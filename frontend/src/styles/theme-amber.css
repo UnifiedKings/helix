@@ -1,0 +1,1214 @@
+/* --------------------------------------------------------------------------
+   Dark amber application pass — based on the approved Stations concept.
+   The palette is intentionally centralized so a future theme picker can swap
+   the accent without reworking component CSS.
+   -------------------------------------------------------------------------- */
+
+html,
+body {
+  background: var(--bg);
+}
+
+button {
+  border-radius: 10px;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent-border);
+  background: rgba(184, 106, 31, 0.10);
+}
+
+button.primary {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-color: rgba(226, 151, 70, 0.35);
+  box-shadow: 0 8px 20px rgba(96, 48, 10, 0.24);
+}
+
+button.primary:hover:not(:disabled) {
+  background: var(--accent-strong);
+  border-color: rgba(236, 171, 99, 0.50);
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid rgba(184, 106, 31, 0.20);
+  border-color: rgba(209, 132, 50, 0.70);
+}
+
+.app-shell-with-sidebar {
+  background: transparent;
+}
+
+.app-sidebar {
+  box-shadow: none;
+}
+
+.app-sidebar::after {
+  display: none;
+}
+
+.app-sidebar .side-link {
+  position: relative;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.app-sidebar .side-link:hover:not(:disabled) {
+  border: 0;
+  box-shadow: none;
+}
+
+.app-sidebar .side-link.active {
+  border: 0;
+  box-shadow: none;
+}
+
+.app-sidebar .side-link.active::before {
+  content: "";
+  position: absolute;
+}
+
+.sidebar-account-panel {
+  border-top-color: rgba(255,255,255,0.07) !important;
+}
+
+.dashboard-content-card {
+  min-height: calc(100vh - 145px);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.station-page-redesign > .error-banner,
+.station-page-redesign > .info-banner {
+  margin-right: 0.4rem;
+}
+
+.stations-hero {
+  min-height: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.stations-hero::after {
+  display: none;
+}
+
+.stations-heading-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.stations-hero-copy {
+  max-width: 660px;
+}
+
+.stations-hero p {
+  margin: 0;
+  max-width: 650px;
+  color: #a9aaa7;
+  line-height: 1.5;
+}
+
+.station-header-actions {
+  flex: 0 0 auto;
+  padding-bottom: 0.15rem;
+}
+
+.station-stats {
+  margin-top: 1.35rem;
+}
+
+.station-stat-card {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  backdrop-filter: none;
+}
+
+.station-toolbar {
+  justify-content: flex-end;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.station-toolbar .station-toolbar-actions label {
+  color: #969793;
+  font-size: 0.86rem;
+}
+
+.station-toolbar select {
+  border-radius: 9px;
+  border-color: rgba(255,255,255,0.10);
+}
+
+.station-grid-redesign {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.station-card-redesign {
+  position: relative;
+  overflow: visible;
+  border: 1px solid rgba(255,255,255,0.085);
+  box-shadow: none;
+  transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+
+.station-art-wrap {
+  margin: 0;
+  overflow: hidden;
+  background: var(--surface-soft);
+}
+
+.station-art-wrap .artwork-lg,
+.station-art-wrap .artwork {
+  border: 0;
+  box-shadow: none;
+}
+
+.station-art-wrap::after {
+  inset: 58% 0 0;
+  background: linear-gradient(180deg, transparent, rgba(9,11,14,0.60));
+}
+
+.station-floating-play {
+  border: 1px solid rgba(238, 170, 98, 0.35);
+  color: #fff9f0;
+  opacity: 0.94;
+}
+
+.station-card-redesign:hover .station-floating-play {
+  background: var(--accent-strong);
+}
+
+.station-card-body {
+  display: flex;
+  flex-direction: column;
+}
+
+.station-type-badge {
+  align-self: flex-start;
+  margin: 0 0 0.55rem;
+  border: 1px solid rgba(209, 132, 50, 0.28);
+  border-radius: 5px;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.035em;
+  text-transform: uppercase;
+}
+
+.station-card-body h3 {
+  margin: 0 0 0.32rem;
+  line-height: 1.25;
+  letter-spacing: -0.018em;
+}
+
+.station-card-body .muted {
+  min-height: 0;
+  margin-bottom: 0.75rem;
+  color: var(--muted);
+}
+
+.station-card-footer {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  color: var(--faint);
+}
+
+.station-card-menu {
+  position: relative;
+}
+
+.station-card-menu summary {
+  width: 34px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  color: var(--muted);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.station-card-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.station-card-menu summary:hover {
+  color: var(--accent-bright);
+  background: rgba(184, 106, 31, 0.09);
+}
+
+.station-card-menu-popover {
+  position: absolute;
+  right: 0;
+  bottom: 32px;
+  z-index: 8;
+  width: 150px;
+  padding: 0.35rem;
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 10px;
+  background: var(--surface-raised);
+  box-shadow: 0 16px 38px rgba(0,0,0,0.42);
+}
+
+.station-card-menu-popover button {
+  width: 100%;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font-size: 0.82rem;
+}
+
+.station-card-menu-popover button:hover:not(:disabled) {
+  transform: none;
+  background: rgba(255,255,255,0.055);
+}
+
+.queue-panel-redesign {
+  top: 1rem;
+  border: 1px solid rgba(255,255,255,0.085);
+  box-shadow: none;
+}
+
+.queue-panel-redesign .queue-header h2 {
+  letter-spacing: -0.02em;
+}
+
+.queue-panel-redesign .queue-header h2::before {
+  display: none;
+}
+
+.queue-clear-placeholder {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.queue-row-redesign {
+  position: relative;
+  border: 0;
+}
+
+.queue-row-redesign.active {
+  border: 0;
+  box-shadow: none;
+}
+
+.queue-row-redesign.active::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--accent-strong);
+}
+
+.queue-row-redesign.active .queue-main strong,
+.queue-row-redesign.active .queue-duration {
+  color: #e6a35c;
+}
+
+.queue-row-redesign .artwork-sm {
+  border: 0;
+  box-shadow: none;
+}
+
+.queue-main .muted {
+  font-size: 0.76rem;
+}
+
+.queue-drag-placeholder,
+.queue-duration,
+.queue-remove-icon {
+  color: var(--faint);
+}
+
+.queue-remove-icon {
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.queue-summary {
+  border-top-color: rgba(255,255,255,0.06) !important;
+  color: var(--faint) !important;
+}
+
+.playback-bar {
+  row-gap: 0.52rem;
+  border-top: 1px solid rgba(255,255,255,0.085);
+  box-shadow: 0 -14px 38px rgba(0,0,0,0.30);
+}
+
+.now-playing,
+.transport-stack,
+.scrub-row {
+  transform: translateY(0.08rem);
+}
+
+.volume-row {
+  transform: translate(-1.5rem, 0.08rem);
+}
+
+.now-playing .artwork-md,
+.now-playing .artwork {
+  border: 0;
+  box-shadow: none;
+}
+
+.rating-button[data-active="true"] {
+  color: #e7a35e;
+  background: rgba(184, 106, 31, 0.12);
+  border-color: rgba(209, 132, 50, 0.24);
+  box-shadow: none;
+}
+
+.transport-main {
+  border-color: rgba(234, 165, 94, 0.38);
+  box-shadow: 0 8px 24px rgba(103, 52, 9, 0.32);
+}
+
+.info-banner {
+  background: rgba(184, 106, 31, 0.10);
+  border-color: rgba(209, 132, 50, 0.28);
+  color: #e6c4a1;
+}
+
+.station-modal {
+  border-color: rgba(209, 132, 50, 0.18);
+  background: var(--surface);
+}
+
+.station-type-card.active {
+  border-color: rgba(209, 132, 50, 0.48);
+  background: rgba(184, 106, 31, 0.12);
+}
+
+@media (max-width: 1450px) {
+  .station-grid-redesign {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1200px) {
+  .app-shell-with-sidebar {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr) 300px;
+    padding-inline: 0.9rem;
+  }
+
+  .station-grid-redesign {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .stations-heading-row {
+    align-items: flex-start;
+  }
+
+  .station-header-actions {
+    padding-top: 0.3rem;
+  }
+}
+
+@media (max-width: 1100px) {
+  .app-shell-with-sidebar {
+    display: block;
+    padding-bottom: 260px;
+  }
+
+  .app-sidebar {
+    display: none;
+  }
+
+  .dashboard-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-content-card {
+    padding: 0.75rem;
+  }
+
+  .queue-panel-redesign {
+    height: auto;
+    max-height: 420px;
+    position: static;
+  }
+
+  .playback-bar {
+    min-height: 0;
+  }
+
+  .now-playing,
+  .transport-stack,
+  .scrub-row,
+  .volume-row {
+    transform: none;
+  }
+}
+
+@media (max-width: 720px) {
+  .stations-heading-row {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: stretch;
+  }
+
+  .station-header-actions button {
+    flex: 1;
+  }
+
+  .station-stats {
+    gap: 1.25rem;
+  }
+
+  .station-grid-redesign {
+    grid-template-columns: 1fr;
+    padding-right: 0;
+  }
+
+  .stations-hero {
+    padding-right: 0;
+  }
+
+  .station-toolbar {
+    padding-right: 0;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Stations concept-match pass v2
+   Tightens the implementation to the approved dark-amber concept while
+   preserving the existing application behavior and responsive structure.
+   -------------------------------------------------------------------------- */
+
+:root {
+  --accent: #a95f18;
+  --accent-strong: #c97822;
+  --accent-bright: #df922f;
+  --accent-soft: rgba(169, 95, 24, 0.13);
+  --accent-border: rgba(201, 120, 34, 0.34);
+  --accent-contrast: #fff8ef;
+}
+
+body {
+  background: #090b0d;
+}
+
+.app-shell-with-sidebar {
+  padding-bottom: 116px;
+}
+
+.sidebar-brand img {
+  box-shadow: none;
+}
+
+.dashboard-grid {
+  max-width: none;
+  grid-template-columns: minmax(0, 1fr) 326px;
+  gap: 1.25rem;
+  padding: 1.05rem 1.1rem 0.7rem 1.35rem;
+}
+
+.dashboard-content-card {
+  padding: 1.35rem 0.35rem 1.25rem 1.1rem;
+}
+
+.station-page-redesign {
+  gap: 0.62rem;
+}
+
+.stations-hero {
+  padding: 0.2rem 0.65rem 1.05rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+}
+
+.stations-hero h1 {
+  margin: 0 0 1.55rem;
+  font-size: clamp(2.55rem, 3.65vw, 3.35rem);
+  line-height: 0.95;
+  letter-spacing: -0.058em;
+  color: #f6f3ee;
+}
+
+.stations-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+}
+
+.station-stats {
+  margin: 0;
+  display: flex;
+  align-items: center;
+}
+
+.station-stat-card {
+  display: grid;
+  grid-template-areas: "icon value"
+    "icon label";
+  align-items: center;
+  padding: 0;
+}
+
+.station-stat-icon {
+  grid-area: icon;
+  color: var(--accent-bright);
+}
+
+.station-stat-card strong {
+  grid-area: value;
+}
+
+.station-stat-card span:last-child {
+  grid-area: label;
+  color: #92938f;
+}
+
+.station-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.72rem;
+  padding: 0;
+}
+
+.station-header-actions button {
+  min-height: 43px;
+  padding: 0.7rem 1rem;
+}
+
+.station-header-actions .primary {
+  padding-inline: 1.15rem;
+  background: linear-gradient(180deg, #c67620, #a95814);
+  border-color: rgba(229,156,72,0.3);
+}
+
+.station-toolbar {
+  min-height: 44px;
+  padding: 0.05rem 0.6rem 0.05rem 0;
+}
+
+.station-toolbar select {
+  min-width: 162px;
+  padding: 0.58rem 0.75rem;
+  background: #0e1013;
+}
+
+.station-grid-redesign {
+  gap: 0.82rem;
+  padding-right: 0.45rem;
+}
+
+.station-card-redesign {
+  border-radius: 11px;
+  background: #0e1115;
+  border-color: rgba(255,255,255,0.08);
+}
+
+.station-card-redesign:hover {
+  transform: translateY(-1px);
+  background: #101318;
+  border-color: rgba(201,120,34,0.27);
+}
+
+.station-art-wrap {
+  aspect-ratio: 1.46 / 1;
+  border-radius: 10px 10px 0 0;
+}
+
+.station-art-wrap .artwork-lg,
+.station-art-wrap .artwork {
+  border-radius: 10px 10px 0 0;
+}
+
+.station-floating-play {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  right: 0.62rem;
+  bottom: 0.62rem;
+  background: linear-gradient(180deg, #be741f, #9b5414);
+  border-color: rgba(236,171,99,0.26);
+  box-shadow: 0 7px 18px rgba(0,0,0,0.32);
+}
+
+.station-card-body {
+  min-height: 156px;
+  padding: 0.75rem 0.78rem 0.68rem;
+}
+
+.station-type-badge {
+  margin-bottom: 0.52rem;
+  padding: 0.17rem 0.4rem;
+  background: rgba(169,95,24,0.10);
+  border-color: rgba(201,120,34,0.25);
+  color: #d78931;
+}
+
+.station-card-body h3 {
+  font-size: 1rem;
+  margin-bottom: 0.3rem;
+}
+
+.station-card-body .muted {
+  font-size: 0.84rem;
+  line-height: 1.32;
+}
+
+.station-card-footer {
+  font-size: 0.74rem;
+}
+
+/* The concept keeps the queue focused on tracks instead of adding a second
+   station-status card above them. The station state still exists and Clear
+   continues to stop it; only the redundant banner is hidden. */
+
+.queue-station-banner {
+  display: none !important;
+}
+
+.queue-panel-redesign {
+  height: calc(100vh - 145px);
+  padding: 0.88rem 0.78rem 0.8rem;
+  border-radius: 15px;
+  background: var(--queue-bg, #0d1013);
+}
+
+.queue-panel-redesign .queue-header {
+  min-height: 42px;
+  margin-bottom: 0.2rem;
+  padding: 0.2rem 0.3rem 0.35rem;
+}
+
+.queue-panel-redesign .queue-header h2 {
+  font-size: 1.08rem;
+}
+
+.queue-list-redesign {
+  gap: 0;
+}
+
+.queue-row-redesign {
+  min-height: 73px;
+  grid-template-columns: 11px minmax(0, 1fr) auto auto;
+  padding: 0.45rem 0.28rem;
+  border-bottom: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.queue-row-redesign + .queue-row-redesign {
+  margin-top: 0.12rem;
+}
+
+.queue-row-redesign:hover {
+  background: rgba(255,255,255,0.025);
+}
+
+.queue-row-redesign.active {
+  background: linear-gradient(90deg, var(--accent-soft), transparent);
+}
+
+.queue-row-redesign.active::before {
+  top: 8px;
+  bottom: 8px;
+}
+
+.queue-row-redesign .artwork-sm {
+  width: 42px;
+  height: 42px;
+  border-radius: 7px;
+}
+
+.queue-main {
+  gap: 0.62rem;
+  padding: 0.18rem;
+}
+
+.queue-main strong {
+  font-size: 0.81rem;
+}
+
+.queue-main .muted,
+.queue-duration {
+  font-size: 0.73rem;
+}
+
+.queue-summary {
+  padding: 0.65rem 0.2rem 0.05rem !important;
+}
+
+.playback-bar {
+  min-height: 112px;
+  grid-template-columns: minmax(350px, 1fr) minmax(500px, 610px) minmax(260px, 1fr);
+  grid-template-rows: 54px 28px;
+  padding: 0.82rem 1.2rem 0.42rem;
+  background: var(--player-bg, #0b0d10);
+}
+
+.now-playing .artwork-md,
+.now-playing .artwork {
+  width: 64px;
+  height: 64px;
+  border-radius: 9px;
+}
+
+.now-playing-info .title {
+  font-size: 0.94rem;
+}
+
+.now-playing-info .muted {
+  font-size: 0.78rem;
+}
+
+.eyebrow {
+  color: var(--accent-bright);
+}
+
+.transport-main {
+  width: 52px;
+  min-width: 52px;
+  height: 52px;
+  background: var(--accent);
+}
+
+.scrub-input,
+.volume-input,
+.autoplay-toggle input {
+  accent-color: var(--accent);
+}
+
+@media (min-width: 1451px) {
+  .station-grid-redesign {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1200px) {
+  .stations-meta-row {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 720px) {
+  .stations-meta-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1rem;
+  }
+
+  .station-header-actions {
+    width: 100%;
+  }
+}
+
+/* Sidebar fidelity pass: bring the live navigation much closer to the approved concept. */
+
+.app-shell-with-sidebar {
+  grid-template-columns: 220px minmax(0, 1fr);
+}
+
+.app-sidebar {
+  padding: 22px 12px 14px;
+  background: var(--sidebar-bg, #0a0d10);
+  border-right: 1px solid rgba(255,255,255,0.075);
+}
+
+.sidebar-brand {
+  min-height: 44px;
+  margin: 0 10px 26px;
+  gap: 10px;
+  font-size: 1.58rem;
+  line-height: 1;
+  font-weight: 900;
+  letter-spacing: -0.045em;
+}
+
+.sidebar-brand img {
+  width: 37px;
+  height: 37px;
+  flex: 0 0 37px;
+  border-radius: 0;
+  object-fit: contain;
+  filter: grayscale(1) sepia(1) saturate(7.5) hue-rotate(350deg) brightness(1.02) contrast(1.04);
+}
+
+.side-nav {
+  gap: 3px;
+}
+
+.app-sidebar .side-link {
+  min-height: 48px;
+  padding: 0 14px;
+  gap: 13px;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: rgba(246,243,238,0.70);
+}
+
+.app-sidebar .side-link:hover:not(:disabled) {
+  color: rgba(255,255,255,0.94);
+  background: rgba(255,255,255,0.035);
+}
+
+.app-sidebar .side-link.active {
+  color: #fff;
+  background: linear-gradient(90deg, var(--accent-soft), transparent);
+}
+
+.app-sidebar .side-link.active::before {
+  /* Keep the amber indicator attached to the active nav item instead of
+     pulling it out to the very edge of the sidebar. */
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: 8px 0 0 8px;
+  background: var(--accent-bright);
+  box-shadow: 0 0 10px rgba(201,120,34,0.24);
+}
+
+.side-icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  display: grid;
+  place-items: center;
+  color: rgba(232,232,228,0.72);
+  font-size: 0;
+}
+
+.side-icon svg {
+  display: block;
+  width: 20px;
+  height: 20px;
+}
+
+.app-sidebar .side-link.active .side-icon {
+  color: var(--accent-bright);
+}
+
+.app-sidebar .sidebar-account-panel {
+  margin: auto -12px 0;
+  padding: 14px 12px 0;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+
+.app-sidebar .sidebar-account-card {
+  grid-template-columns: 42px minmax(0,1fr) 28px;
+  gap: 10px;
+  min-height: 60px;
+  padding: 5px 7px;
+  border: 0;
+  background: transparent;
+}
+
+.sidebar-profile-avatar {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  border: 1px solid rgba(201,120,34,0.42);
+  background: radial-gradient(circle at 30% 20%, #e3b36f, #9e5c24 52%, #2f3322 100%);
+  box-shadow: none;
+}
+
+.sidebar-account-copy {
+  gap: 1px;
+}
+
+.sidebar-account-copy strong {
+  color: rgba(255,255,255,0.94);
+  font-size: 0.92rem;
+  font-weight: 720;
+}
+
+.sidebar-account-copy span {
+  color: var(--accent-bright);
+  font-size: 0.78rem;
+}
+
+.sidebar-account-chevron {
+  width: 28px;
+  height: 38px;
+  min-width: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgba(255,255,255,0.58);
+  font-size: 1.65rem;
+  line-height: 1;
+  display: grid;
+  place-items: center;
+}
+
+.sidebar-account-chevron:hover:not(:disabled) {
+  transform: none;
+  border: 0;
+  color: var(--accent-bright);
+  background: rgba(255,255,255,0.04);
+}
+
+@media (max-width: 1200px) and (min-width: 1101px) {
+  .app-shell-with-sidebar {
+    grid-template-columns: 200px minmax(0,1fr);
+  }
+
+  .app-sidebar .side-link {
+    padding-inline: 12px;
+  }
+}
+
+/* Stations header stat sizing/spacing refinement */
+
+.stations-hero h1 {
+  margin-bottom: 1.35rem;
+}
+
+.station-stats {
+  gap: 3rem;
+}
+
+.station-stat-card {
+  grid-template-columns: 27px auto;
+  gap: 0.08rem 0.7rem;
+  min-width: 86px;
+}
+
+.station-stat-icon {
+  font-size: 1.2rem;
+}
+
+.station-stat-card strong {
+  font-size: 1.2rem;
+  line-height: 1.05;
+  font-weight: 800;
+}
+
+.station-stat-card span:last-child {
+  margin-top: 0.18rem;
+  font-size: 0.86rem;
+  line-height: 1.05;
+  font-weight: 700;
+}
+
+/* Stations summary row — larger, more deliberate spacing */
+
+.station-page-redesign .stations-hero h1 {
+  margin-bottom: 1.7rem;
+}
+
+.station-page-redesign .stations-meta-row {
+  align-items: center;
+}
+
+.station-page-redesign .station-stats {
+  display: flex;
+  align-items: center;
+  gap: 3.4rem;
+}
+
+.station-page-redesign .station-stat-card {
+  display: grid;
+  grid-template-columns: 30px auto;
+  grid-template-areas: "icon value"
+    "icon label";
+  align-items: center;
+  column-gap: 0.75rem;
+  row-gap: 0.16rem;
+  min-width: 112px;
+  padding: 0;
+}
+
+.station-page-redesign .station-stat-icon {
+  grid-area: icon;
+  width: 30px;
+  font-size: 1.4rem;
+  line-height: 1;
+  text-align: center;
+}
+
+.station-page-redesign .station-stat-card strong {
+  grid-area: value;
+  font-size: 1.35rem;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.station-page-redesign .station-stat-card span:last-child {
+  grid-area: label;
+  margin-top: 0.1rem;
+  font-size: 0.9rem;
+  line-height: 1.1;
+  font-weight: 700;
+}
+
+@media (max-width: 900px) {
+  .station-page-redesign .station-stats {
+    gap: 1.8rem;
+  }
+
+  .station-page-redesign .station-stat-card {
+    min-width: 94px;
+  }
+}
+
+/* Animated now-playing indicator in the queue. */
+.queue-playing-bars {
+  width: 11px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1.5px;
+  color: var(--accent-strong);
+}
+
+.queue-playing-bars > span {
+  width: 2px;
+  min-height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  transform-origin: center;
+}
+
+.queue-playing-bars.is-playing > span {
+  animation: queue-equalizer 0.72s ease-in-out infinite alternate;
+}
+
+.queue-playing-bars.is-playing > span:nth-child(2) {
+  animation-delay: -0.34s;
+  animation-duration: 0.58s;
+}
+
+.queue-playing-bars.is-playing > span:nth-child(3) {
+  animation-delay: -0.52s;
+  animation-duration: 0.83s;
+}
+
+.queue-playing-bars.is-paused > span:nth-child(1) { height: 5px; }
+.queue-playing-bars.is-paused > span:nth-child(2) { height: 10px; }
+.queue-playing-bars.is-paused > span:nth-child(3) { height: 7px; }
+
+@keyframes queue-equalizer {
+  0% { height: 4px; }
+  45% { height: 16px; }
+  100% { height: 9px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .queue-playing-bars.is-playing > span {
+    animation: none;
+  }
+  .queue-playing-bars.is-playing > span:nth-child(1) { height: 5px; }
+  .queue-playing-bars.is-playing > span:nth-child(2) { height: 11px; }
+  .queue-playing-bars.is-playing > span:nth-child(3) { height: 7px; }
+}
+
+
+/* Filled amber controls always use light foreground text.
+   This keeps theme contrast consistent across pages and prevents browser/default
+   button text colors from showing up as black on the amber surface. */
+button.primary,
+.station-floating-play,
+.transport-main {
+  color: var(--accent-contrast);
+}
+
+button.primary svg,
+.station-floating-play svg,
+.transport-main svg {
+  color: inherit;
+  fill: currentColor;
+}
+
+/* Queue footer placement only: preserve the existing queue visuals while
+   keeping the song/time summary at the bottom of the panel. */
+.queue-panel-redesign {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.queue-panel-redesign .queue-header {
+  flex: 0 0 auto;
+}
+
+.queue-panel-redesign .queue-list-redesign {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.queue-panel-redesign .queue-summary {
+  position: static;
+  flex: 0 0 auto;
+  margin-top: auto;
+  margin-bottom: 0;
+  bottom: auto;
+}
+
+/* Queue panel micro-polish: keep the existing look, only adjust spacing. */
+.queue-panel-redesign {
+  border-radius: 10px;
+}
+
+/* Give the animated now-playing bars a little more room from the panel edge. */
+.queue-row-redesign {
+  grid-template-columns: 16px minmax(0, 1fr) auto auto;
+}
+
+.queue-playing-bars {
+  margin-left: 3px;
+}
+
+/* Keep the footer labels comfortably inside the queue border. */
+.queue-panel-redesign .queue-summary {
+  padding-left: 0.65rem !important;
+  padding-right: 0.65rem !important;
+  padding-bottom: 0.18rem !important;
+}
+
+/* Queue summary geometry.
+   Keep the summary pinned to the panel floor without creating a tall footer
+   strip. The labels sit a few pixels above the lower border, with comfortable
+   horizontal inset. */
+.queue-panel-redesign .queue-summary {
+  box-sizing: border-box;
+  width: auto;
+  height: 26px;
+  min-height: 26px;
+  margin: 0 -0.78rem -0.80rem !important;
+  padding: 0 1.15rem 4px !important;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  line-height: 1;
+  background: var(--queue-bg, #0d1013);
+  border-top: 1px solid var(--border-soft, rgba(255,255,255,0.06)) !important;
+}

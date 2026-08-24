@@ -421,14 +421,25 @@ async def lb_top_recordings_for_artist(
                     body = resp.read().decode("utf-8", errors="replace")
                     return json.loads(body)
             except urllib.error.HTTPError as e:
-                # Retry some server-side errors and rate limiting.
+                try:
+                    err_body = e.read().decode("utf-8", errors="replace")
+                except Exception:
+                    err_body = ""
+
+                # ListenBrainz sometimes explicitly disables the popularity API
+                # during high load. Retrying that response only delays station
+                # startup; callers can immediately use their fallback instead.
+                popularity_disabled = (
+                    e.code == 500
+                    and "popularity api currently disabled" in err_body.lower()
+                )
+                if popularity_disabled:
+                    raise RuntimeError(f"HTTP {e.code} {e.reason} body={err_body} url={u}") from e
+
+                # Retry genuinely transient server-side errors and rate limiting.
                 if e.code in (429, 500, 502, 503, 504) and attempt < 4:
                     last_exc = e
                 else:
-                    try:
-                        err_body = e.read().decode("utf-8", errors="replace")
-                    except Exception:
-                        err_body = ""
                     raise RuntimeError(f"HTTP {e.code} {e.reason} body={err_body} url={u}") from e
             except (ConnectionResetError, socket.timeout, TimeoutError, OSError, urllib.error.URLError) as e:
                 last_exc = e

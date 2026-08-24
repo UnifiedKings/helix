@@ -108,3 +108,11 @@ export function RedirectIfAuthed({ children }: { children: ReactNode }) {
 
   return <>{children}</>
 }
+
+export function RequireAdmin({ children }: { children: ReactNode }) {
+  const auth = useAuth()
+  if (auth.status === 'loading') return <main className="login-page"><div className="login-card"><h1>Helix</h1><p className="muted">Checking permissions…</p></div></main>
+  if (auth.status !== 'authenticated') return <Navigate to="/login" replace />
+  if (auth.user?.role !== 'admin') return <Navigate to="/settings" replace />
+  return <>{children}</>
+}

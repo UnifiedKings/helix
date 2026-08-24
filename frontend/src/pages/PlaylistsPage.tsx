@@ -11,6 +11,7 @@ export function PlaylistsPage() {
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [creating, setCreating] = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
 
   async function load() {
     try {
@@ -22,6 +23,37 @@ export function PlaylistsPage() {
 
   useEffect(() => { void load() }, [])
 
+  useEffect(() => {
+    function closeOpenPlaylistMenus(event: PointerEvent) {
+      const target = event.target as Element | null
+      if (target?.closest('.playlist-library-menu')) return
+
+      document.querySelectorAll<HTMLDetailsElement>('details.playlist-library-menu[open]').forEach((menu) => {
+        menu.open = false
+      })
+    }
+
+    function closePlaylistMenusOnEscape(event: KeyboardEvent) {
+      if (event.key !== 'Escape') return
+      document.querySelectorAll<HTMLDetailsElement>('details.playlist-library-menu[open]').forEach((menu) => {
+        menu.open = false
+      })
+    }
+
+    document.addEventListener('pointerdown', closeOpenPlaylistMenus)
+    document.addEventListener('keydown', closePlaylistMenusOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOpenPlaylistMenus)
+      document.removeEventListener('keydown', closePlaylistMenusOnEscape)
+    }
+  }, [])
+
+  function closeOtherPlaylistMenus(current: HTMLDetailsElement) {
+    document.querySelectorAll<HTMLDetailsElement>('details.playlist-library-menu[open]').forEach((menu) => {
+      if (menu !== current) menu.open = false
+    })
+  }
+
   async function create(event: FormEvent) {
     event.preventDefault()
     const trimmedName = name.trim()
@@ -32,6 +64,7 @@ export function PlaylistsPage() {
     try {
       await api.createPlaylist(trimmedName)
       setName('')
+      setCreateOpen(false)
       await load()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create playlist')
@@ -53,59 +86,112 @@ export function PlaylistsPage() {
     }
   }
 
+  const orderedPlaylists = [...playlists].sort(
+    (left, right) => Number(Boolean(right.system_key)) - Number(Boolean(left.system_key)),
+  )
+
   return (
-    <div className="page-stack">
-      <div>
-        <h1>Playlists</h1>
-        <p className="muted">Create, play, and delete playlists. Track editing can be added once the core React structure is settled.</p>
-      </div>
+    <div className="playlists-library-page">
+      <header className="playlists-library-header">
+        <div>
+          <h1>Playlists</h1>
+          <p className="muted">Your playlists</p>
+        </div>
+        <div className="playlists-library-header-actions">
+          <span className="playlists-library-count">{playlists.length} {playlists.length === 1 ? 'playlist' : 'playlists'}</span>
+          <button
+            type="button"
+            className="playlists-new-button"
+            onClick={() => setCreateOpen((open) => !open)}
+            aria-expanded={createOpen}
+          >
+            <span aria-hidden="true">＋</span>
+            New playlist
+          </button>
+        </div>
+      </header>
+
       {error ? <div className="error-banner">{error}</div> : null}
 
-      <form className="inline-form" onSubmit={create}>
-        <input value={name} onChange={(event) => setName(event.target.value)} placeholder="New playlist name" />
-        <button type="submit" className="primary" disabled={creating || !name.trim()}>{creating ? 'Creating…' : 'Create'}</button>
-      </form>
+      {createOpen ? (
+        <form className="playlists-create-form" onSubmit={create}>
+          <input
+            autoFocus
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Playlist name"
+            aria-label="Playlist name"
+          />
+          <button type="submit" className="primary" disabled={creating || !name.trim()}>
+            {creating ? 'Creating…' : 'Create playlist'}
+          </button>
+          <button
+            type="button"
+            className="playlists-create-cancel"
+            onClick={() => {
+              setCreateOpen(false)
+              setName('')
+            }}
+          >
+            Cancel
+          </button>
+        </form>
+      ) : null}
 
-      <div className="grid-cards">
-        {playlists.map((playlist) => (
-          <article className="tile-card" key={playlist.id}>
-            <Link to={`/playlists/${encodeURIComponent(playlist.id)}`} aria-label={`Edit ${playlist.name}`}>
-              <Artwork src={playlist.cover_url} alt={`${playlist.name} cover`} size="lg" />
-            </Link>
-            <h3>{playlist.name}</h3>
-            <p className="muted">{playlist.track_count ?? 0} tracks</p>
-            <div className="card-actions playlist-card-actions">
-              <button
-                className="playlist-card-action playlist-card-action-primary"
-                aria-label={`Play ${playlist.name}`}
-                title="Play"
-                data-tooltip="Play"
-                onClick={() => player.run(() => api.playPlaylist(playlist.id), 'play')}
-              >
-                ▶
-              </button>
-              <button
-                className="playlist-card-action"
-                aria-label={`Shuffle ${playlist.name}`}
-                title="Shuffle"
-                data-tooltip="Shuffle"
-                onClick={() => player.run(() => api.playPlaylist(playlist.id, true), 'play')}
-              >
-                ⤨
-              </button>
-              <details className="album-card-menu playlist-card-menu">
-                <summary className="playlist-card-action playlist-more-button" aria-label={`More options for ${playlist.name}`} title="More options" data-tooltip="More options">⋯</summary>
-                <div className="album-card-menu-popover playlist-card-menu-popover">
-                  <Link className="menu-link" to={`/playlists/${encodeURIComponent(playlist.id)}`}>Edit playlist</Link>
-                  {!playlist.system_key ? (
-                    <button type="button" className="menu-danger" onClick={() => void deletePlaylist(playlist)}>Delete playlist</button>
-                  ) : null}
-                </div>
-              </details>
-            </div>
-          </article>
-        ))}
-      </div>
+      <section className="playlists-library-section" aria-label="Your playlists">
+        <div className="playlists-library-grid">
+          {orderedPlaylists.map((playlist) => (
+            <article className="playlist-library-card" key={playlist.id}>
+              <div className="playlist-library-art-wrap">
+                <Link
+                  className="playlist-library-art-link"
+                  to={`/playlists/${encodeURIComponent(playlist.id)}`}
+                  aria-label={`Open ${playlist.name}`}
+                >
+                  <Artwork src={playlist.cover_url} alt={`${playlist.name} cover`} size="lg" />
+                </Link>
+                <button
+                  type="button"
+                  className="playlist-library-play"
+                  aria-label={`Play ${playlist.name}`}
+                  title={`Play ${playlist.name}`}
+                  onClick={() => player.run(() => api.playPlaylist(playlist.id), 'play')}
+                >
+                  ▶
+                </button>
+              </div>
+
+              <div className="playlist-library-meta-row">
+                <Link className="playlist-library-title" to={`/playlists/${encodeURIComponent(playlist.id)}`}>
+                  {playlist.name}
+                </Link>
+                <details
+                  className="album-card-menu playlist-library-menu"
+                  onToggle={(event) => {
+                    if (event.currentTarget.open) closeOtherPlaylistMenus(event.currentTarget)
+                  }}
+                >
+                  <summary aria-label={`More options for ${playlist.name}`} title="More options">⋯</summary>
+                  <div className="album-card-menu-popover playlist-card-menu-popover">
+                    <button
+                      type="button"
+                      className="menu-link"
+                      onClick={() => player.run(() => api.playPlaylist(playlist.id, true), 'play')}
+                    >
+                      Shuffle
+                    </button>
+                    <Link className="menu-link" to={`/playlists/${encodeURIComponent(playlist.id)}`}>Edit playlist</Link>
+                    {!playlist.system_key ? (
+                      <button type="button" className="menu-danger" onClick={() => void deletePlaylist(playlist)}>Delete playlist</button>
+                    ) : null}
+                  </div>
+                </details>
+              </div>
+              <p className="playlist-library-track-count">{playlist.track_count ?? 0} tracks</p>
+            </article>
+          ))}
+        </div>
+      </section>
     </div>
   )
 }

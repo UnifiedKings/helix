@@ -35,6 +35,8 @@ from .routers.subsonic import router as subsonic_router
 from .routers.subsonic_add import router as subsonic_add_router
 from .routers.system import router as system_router
 from .routers.ytmusic import router as ytmusic_router
+from .routers.user_settings import router as user_settings_router
+from .routers.realtime import router as realtime_router
 
 logging.basicConfig(
     level=getattr(logging, os.getenv("HELIX_LOG_LEVEL", "INFO").upper(), logging.INFO),
@@ -56,7 +58,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "Content-Security-Policy",
             os.getenv(
                 "HELIX_CONTENT_SECURITY_POLICY",
-                "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' blob:; connect-src 'self'; script-src 'self' 'sha256-ieoeWczDHkReVBsRBqaal5AFMlBtNjMzgwKvLqi/tSU='; script-src-elem 'self' 'sha256-ieoeWczDHkReVBsRBqaal5AFMlBtNjMzgwKvLqi/tSU='; style-src 'self' 'unsafe-inline'; base-uri 'self'; frame-ancestors 'none'",
+                "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' blob:; connect-src 'self' ws: wss:; script-src 'self' 'sha256-ieoeWczDHkReVBsRBqaal5AFMlBtNjMzgwKvLqi/tSU='; script-src-elem 'self' 'sha256-ieoeWczDHkReVBsRBqaal5AFMlBtNjMzgwKvLqi/tSU='; style-src 'self' 'unsafe-inline'; base-uri 'self'; frame-ancestors 'none'",
             ),
         )
         return response
@@ -111,11 +113,29 @@ app.add_middleware(
 def _startup():
     init_db()
 
+    from .realtime import HUB
+    try:
+        HUB.bind_loop()
+    except RuntimeError:
+        pass
+
     # Detect long-held SQLite connections while the app is running.
     try:
         asyncio.get_event_loop().create_task(db_watchdog_loop())
     except Exception:
         logging.getLogger(__name__).exception("Failed to start db watchdog")
+
+    try:
+        from .lobby_cleanup import lobby_cleanup_loop
+        asyncio.get_event_loop().create_task(lobby_cleanup_loop())
+    except Exception:
+        logging.getLogger(__name__).exception("Failed to start lobby cleanup loop")
+
+    try:
+        from .lobby_station import lobby_station_monitor_loop
+        asyncio.get_event_loop().create_task(lobby_station_monitor_loop())
+    except Exception:
+        logging.getLogger(__name__).exception("Failed to start lobby station monitor loop")
 
     # Start background download/finalize workers (YouTube Music fulfillment).
     # The manager still owns the front-of-queue-only download enforcement.
@@ -131,6 +151,12 @@ def _startup():
 
     DOWNLOAD_MANAGER.set_settings_getter(_settings_getter)
     DOWNLOAD_MANAGER.start()
+
+
+@app.on_event("startup")
+async def _realtime_startup():
+    from .realtime import HUB
+    HUB.bind_loop()
 
 
 # API routers are grouped by OpenAPI domain for easier docs navigation.
@@ -155,6 +181,8 @@ app.include_router(dislikes_router)
 app.include_router(playlists_router)
 app.include_router(subsonic_router)
 app.include_router(subsonic_add_router)
+app.include_router(realtime_router)
+app.include_router(user_settings_router)
 
 
 # --- Serve frontend (single-container mode) ---

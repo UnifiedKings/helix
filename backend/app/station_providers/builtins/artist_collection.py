@@ -7,8 +7,7 @@ import random
 import re
 from typing import Any
 
-from ...integrations.listenbrainz import lb_top_recordings_for_artist
-from ...integrations.musicbrainz import lookup_artist_mbid_by_name
+from ...integrations.ytmusic import find_artist_by_name, get_artist_popular_songs
 from ..base import StationProvider
 from ..models import StationConfigOption, StationContext, StationResult
 
@@ -40,6 +39,27 @@ def _norm_artist(value: str) -> str:
 def _norm_pair(title: str, artist: str) -> str:
     return f"{_norm(title)}|{_norm_artist(artist)}"
 
+
+
+
+def _blocked_artists_for_cooldown(
+    context: StationContext,
+    selected: list[StationResult],
+    cooldown: int,
+) -> set[str]:
+    """Artists appearing in the N tracks immediately preceding the next pick."""
+    cooldown = max(0, int(cooldown or 0))
+    if cooldown <= 0:
+        return set()
+
+    sequence: list[str] = []
+    sequence.extend(result.artist for result in reversed(selected))
+    sequence.extend(result.artist for result in reversed(context.already_selected or []))
+    sequence.extend(item.artist for item in reversed(context.queued_tracks or []))
+    # recent_tracks is provided newest-first by the station engine.
+    sequence.extend(item.artist for item in context.recent_tracks or [])
+
+    return {_norm_artist(artist) for artist in sequence[:cooldown] if _norm_artist(artist)}
 
 def _parse_artists(raw: Any) -> list[str]:
     if isinstance(raw, list):
@@ -76,8 +96,8 @@ def _recording_artist(item: dict[str, Any], fallback: str) -> str:
 class ArtistCollectionProvider(StationProvider):
     station_type = "artist_collection"
     display_name = "Artist Collection"
-    description = "Only plays tracks from the selected seed artists, with simple rotation and repeat controls."
-    version = "1.0.0"
+    description = "Uses YouTube Music artist catalogs and only plays tracks from the selected seed artists, with simple rotation and repeat controls."
+    version = "1.2.0"
     builtin = True
 
     def config_options(self) -> list[StationConfigOption]:
@@ -102,24 +122,26 @@ class ArtistCollectionProvider(StationProvider):
                 ],
             ),
             StationConfigOption(
-                key="max_consecutive_same_artist",
-                label="Max consecutive same artist",
+                key="artist_cooldown",
+                label="No repeated artist within",
                 type="integer",
-                description="When multiple seed artists are configured, avoid playing more than this many songs by the same artist in a row.",
-                default=1,
-                min_value=1,
-                max_value=10,
+                description="Do not play an artist again until this many other tracks have passed. Set to 0 to disable. Ignored when this collection contains only one seed artist.",
+                default=5,
+                min_value=0,
+                max_value=50,
                 step=1,
             ),
             StationConfigOption(
-                key="popular_track_pool_size",
-                label="Popular track pool size",
-                type="integer",
-                description="How many ListenBrainz top recordings to sample for each seed artist. Smaller values favor hits; larger values allow more variety, especially for single-artist stations.",
-                default=25,
-                min_value=1,
-                max_value=1000,
-                step=1,
+                key="discovery_depth",
+                label="Discovery depth",
+                type="select",
+                description="Controls how far into each seed artist's YouTube Music catalog this station explores.",
+                default="balanced",
+                choices=[
+                    {"value": "safe", "label": "Safe - favor familiar songs"},
+                    {"value": "balanced", "label": "Balanced"},
+                    {"value": "deep", "label": "Deep - explore more of the catalog"},
+                ],
             ),
             StationConfigOption(
                 key="recent_track_window",
@@ -141,31 +163,32 @@ class ArtistCollectionProvider(StationProvider):
         if rotation_mode not in {"balanced", "random"}:
             raise ValueError("Artist rotation must be balanced or random")
 
-    async def _artist_mbid(self, artist: str) -> str:
+    async def _yt_artist(self, artist: str) -> dict[str, Any]:
         if not _clean(artist):
-            return ""
+            return {}
         try:
             return await asyncio.wait_for(
-                lookup_artist_mbid_by_name(artist),
-                timeout=float(os.getenv("HELIX_MB_LOOKUP_TIMEOUT_S", "8")),
-            ) or ""
+                asyncio.to_thread(find_artist_by_name, artist, artist_limit=8),
+                timeout=float(os.getenv("HELIX_YTMUSIC_LOOKUP_TIMEOUT_S", "8")),
+            ) or {}
         except Exception as exc:
-            LOG.warning("Artist Collection MBID lookup failed artist=%r err=%s", artist, exc)
-            return ""
+            LOG.warning("Artist Collection YouTube Music artist lookup failed artist=%r err=%s", artist, exc)
+            return {}
 
     async def _top_recordings(self, artist: str, limit: int) -> list[dict[str, Any]]:
-        mbid = await self._artist_mbid(artist)
-        if not mbid:
+        yt_artist = await self._yt_artist(artist)
+        browse_id = _clean(str(yt_artist.get("browse_id") or yt_artist.get("artist_id") or ""))
+        if not browse_id:
             return []
         try:
             recordings = await asyncio.wait_for(
-                lb_top_recordings_for_artist(mbid, max(1, int(limit))),
-                timeout=float(os.getenv("HELIX_LB_TOP_TRACK_TIMEOUT_S", "10")),
+                asyncio.to_thread(get_artist_popular_songs, browse_id, limit=max(1, int(limit))),
+                timeout=float(os.getenv("HELIX_YTMUSIC_ARTIST_SONGS_TIMEOUT_S", "12")),
             ) or []
         except Exception as exc:
-            LOG.warning("Artist Collection top recordings failed artist=%r mbid=%s err=%s", artist, mbid, exc)
+            LOG.warning("Artist Collection YouTube Music songs failed artist=%r browse_id=%s err=%s", artist, browse_id, exc)
             return []
-        return [dict(item, _helix_seed_artist=artist, _helix_artist_mbid=mbid) for item in recordings if isinstance(item, dict)]
+        return [dict(item, _helix_seed_artist=artist, _helix_yt_artist_id=browse_id) for item in recordings if isinstance(item, dict)]
 
     def _artist_counts(self, context: StationContext, seed_artists: list[str]) -> dict[str, int]:
         seed_keys = {_norm_artist(a) for a in seed_artists}
@@ -180,38 +203,19 @@ class ArtistCollectionProvider(StationProvider):
                 counts[key] += 1
         return counts
 
-    def _blocked_by_consecutive_limit(self, artist: str, context: StationContext, selected: list[StationResult], max_consecutive: int, artist_count: int) -> bool:
-        if artist_count <= 1:
-            return False
-        max_consecutive = max(1, int(max_consecutive or 1))
-        artist_key = _norm_artist(artist)
-        recent_sequence: list[str] = []
-        for result in reversed(selected):
-            recent_sequence.append(_norm_artist(result.artist))
-        for result in reversed(context.already_selected or []):
-            recent_sequence.append(_norm_artist(result.artist))
-        for item in reversed(context.queued_tracks or []):
-            recent_sequence.append(_norm_artist(item.artist))
-        streak = 0
-        for key in recent_sequence:
-            if not key:
-                continue
-            if key == artist_key:
-                streak += 1
-                if streak >= max_consecutive:
-                    return True
-            else:
-                break
-        return False
-
     async def next_tracks(self, context: StationContext, count: int) -> list[StationResult]:
         cfg = context.config or {}
         self.validate_config(cfg)
 
         seed_artists = _parse_artists(cfg.get("seed_artists"))
         rotation_mode = str(cfg.get("rotation_mode") or "balanced").strip().lower()
-        max_consecutive = max(1, min(10, _safe_int(cfg.get("max_consecutive_same_artist"), 1)))
-        pool_size = max(1, min(1000, _safe_int(cfg.get("popular_track_pool_size"), 25)))
+        artist_cooldown = max(0, min(50, _safe_int(cfg.get("artist_cooldown"), 5)))
+        depth = str(cfg.get("discovery_depth") or "").strip().lower()
+        if depth in {"safe", "balanced", "deep"}:
+            pool_size = {"safe": 10, "balanced": 25, "deep": 100}[depth]
+        else:
+            # Backward compatibility for stations saved before discovery_depth existed.
+            pool_size = max(1, min(1000, _safe_int(cfg.get("popular_track_pool_size"), 25)))
         recent_window = max(0, min(500, _safe_int(cfg.get("recent_track_window"), 75)))
         wanted = max(1, int(count or 1))
 
@@ -247,6 +251,9 @@ class ArtistCollectionProvider(StationProvider):
             if len(selected) >= wanted:
                 break
             available = [key for key in artist_keys if by_artist.get(key)]
+            if len(artist_keys) > 1 and artist_cooldown > 0:
+                blocked_artists = _blocked_artists_for_cooldown(context, selected, artist_cooldown)
+                available = [key for key in available if key not in blocked_artists]
             if not available:
                 break
             if rotation_mode == "balanced":
@@ -255,11 +262,6 @@ class ArtistCollectionProvider(StationProvider):
             else:
                 artist_key = random.choice(available)
 
-            if self._blocked_by_consecutive_limit(display_by_key.get(artist_key, artist_key), context, selected, max_consecutive, len(artist_keys)):
-                alternatives = [key for key in available if key != artist_key]
-                if alternatives:
-                    artist_key = random.choice(alternatives)
-
             recordings = by_artist.get(artist_key) or []
             while recordings:
                 recording = recordings.pop(0)
@@ -267,7 +269,7 @@ class ArtistCollectionProvider(StationProvider):
                 title = _recording_title(recording)
                 artist = _recording_artist(recording, seed_artist)
                 if _norm_artist(artist) != artist_key:
-                    # ListenBrainz occasionally returns credited collaborations or noisy rows.
+                    # YouTube Music can return collaboration credits on artist pages.
                     # This provider is intentionally strict: only seed artists are allowed.
                     artist = seed_artist
                 pair = _norm_pair(title, artist)
@@ -277,12 +279,15 @@ class ArtistCollectionProvider(StationProvider):
                 result = StationResult(
                     title=title,
                     artist=artist,
+                    album=_clean(str(recording.get("album") or "")),
                     duration_ms=duration_ms,
                     reason=f"Artist Collection seed artist: {seed_artist}",
                     provider_metadata={
                         "provider": self.station_type,
-                        "artist_mbid": str(recording.get("_helix_artist_mbid") or ""),
-                        "recording_mbid": str(recording.get("recording_mbid") or recording.get("recording_id") or ""),
+                        "yt_artist_id": str(recording.get("_helix_yt_artist_id") or ""),
+                        "video_id": str(recording.get("video_id") or recording.get("videoId") or ""),
+                        "thumbnail_url": str(recording.get("thumbnail_url") or ""),
+                        "discovery_source": "ytmusic",
                     },
                 )
                 selected.append(result)

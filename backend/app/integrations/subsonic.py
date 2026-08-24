@@ -10,6 +10,10 @@ from typing import Any, Dict, Optional, Tuple, List
 
 import httpx
 import re
+import unicodedata
+import logging
+
+logger = logging.getLogger("helix.integrations.subsonic")
 
 
 def _rand_salt(n: int = 12) -> str:
@@ -30,12 +34,72 @@ def _norm(s: str) -> str:
     - replace remaining punctuation with spaces
     - keep only [a-z0-9 ] after normalization
     """
-    s = (s or "").strip().lower()
+    # NFKC + casefold makes comparisons explicitly Unicode-aware and
+    # case-insensitive on both sides (e.g. "Frank Sinatra" == "frank sinatra").
+    s = unicodedata.normalize("NFKC", (s or "").strip()).casefold()
     s = s.replace("’", "'").replace("`", "'").replace("´", "'")
     s = s.replace("–", "-").replace("—", "-")
     s = s.replace("'", "")  # lion's -> lions
     s = re.sub(r"[^0-9a-z\s]+", " ", s)
     return " ".join(s.split())
+
+
+def _strip_common_edition_suffixes(title: str) -> str:
+    """Return a title with common release/edition qualifiers removed.
+
+    This is intentionally conservative: it strips qualifiers that commonly
+    differ between YT Music and Subsonic tags without collapsing meaningful
+    variants such as live, acoustic, remix, demo, or cover recordings.
+    """
+    value = (title or "").strip()
+    if not value:
+        return ""
+
+    # Examples:
+    #   My Way (2008 Remastered) -> My Way
+    #   Song - 2011 Remaster -> Song
+    #   Song (Remastered 2017) -> Song
+    patterns = [
+        r"\s*[\(\[]\s*(?:\d{4}\s+)?remaster(?:ed)?(?:\s+\d{4})?\s*[\)\]]\s*$",
+        r"\s*[-–—]\s*(?:\d{4}\s+)?remaster(?:ed)?(?:\s+\d{4})?\s*$",
+        r"\s*[\(\[]\s*(?:\d{4}\s+)?(?:album\s+)?version\s*[\)\]]\s*$",
+    ]
+    previous = None
+    while value and value != previous:
+        previous = value
+        for pattern in patterns:
+            value = re.sub(pattern, "", value, flags=re.IGNORECASE).strip()
+    return value
+
+
+def _title_match_quality(want_title: str, candidate_title: str) -> float:
+    """Score title identity while tolerating harmless edition-tag drift."""
+    want = _norm(want_title)
+    cand = _norm(candidate_title)
+    if not want or not cand:
+        return 0.0
+    if want == cand:
+        return 1.0
+
+    want_base = _norm(_strip_common_edition_suffixes(want_title))
+    cand_base = _norm(_strip_common_edition_suffixes(candidate_title))
+    if want_base and cand_base and want_base == cand_base:
+        return 0.95
+
+    # Preserve the previous containment behavior for minor punctuation/tag drift.
+    if want in cand or cand in want:
+        shorter = min(len(want), len(cand))
+        longer = max(len(want), len(cand))
+        if shorter >= 4 and (shorter / max(1, longer)) >= 0.65:
+            return 0.70
+
+    if want_base and cand_base and (want_base in cand_base or cand_base in want_base):
+        shorter = min(len(want_base), len(cand_base))
+        longer = max(len(want_base), len(cand_base))
+        if shorter >= 4 and (shorter / max(1, longer)) >= 0.72:
+            return 0.65
+    return 0.0
+
 def _contains_bad_variant(title: str) -> bool:
     t = _norm(title)
     bad = [" live", "(live", " session", "radio", "demo", "acoustic", "remix", "mix", "cover", "karaoke"]
@@ -111,13 +175,13 @@ class SubsonicClient:
     async def close(self):
         await self._http.aclose()
 
-    async def search3(self, query: str) -> Dict[str, Any]:
+    async def search3(self, query: str, song_count: int = 50) -> Dict[str, Any]:
         """Run Subsonic search3 and return the raw searchResult3 payload."""
         q = (query or "").strip()
         if not q:
             return {}
         url = f"{self.base_url}/rest/search3.view"
-        params = {"query": q, **self._auth_params()}
+        params = {"query": q, "songCount": max(1, int(song_count)), **self._auth_params()}
         r = await self._http.get(url, params=params)
         r.raise_for_status()
         data = (r.json() or {}).get("subsonic-response", {}) or {}
@@ -134,70 +198,109 @@ class SubsonicClient:
             "f": "json",
         }
 
-    async def search_song_best(self, title: str, artist: str, duration_ms: Optional[int] = None) -> Optional[Dict[str, Any]]:
-        """Search Subsonic for the best matching song. Returns song dict (Subsonic JSON) or None."""
-        q = f'{title} {artist}'.strip()
-        url = f"{self.base_url}/rest/search3.view"
-        params = {"query": q, **self._auth_params()}
-        r = await self._http.get(url, params=params)
-        r.raise_for_status()
-        data = (r.json() or {}).get("subsonic-response", {})
-        res = data.get("searchResult3", {}) or {}
-        songs: List[Dict[str, Any]] = res.get("song") or []
-        if not songs:
+    async def search_song_best(self, title: str, artist: str, duration_ms: Optional[int] = None, album: str = "") -> Optional[Dict[str, Any]]:
+        """Search Subsonic for the same artist + track title.
+
+        Library-presence checks should answer a simple question: does Subsonic
+        already contain this artist/title pair? Album and duration are deliberately
+        not part of the identity decision because they commonly drift between YT
+        Music and local tags.
+
+        Common non-musical edition suffixes (for example ``(2008 Remastered)`` or
+        ``- 2011 Remaster``) are ignored, while meaningful variants such as live,
+        acoustic, remix, demo, and cover remain distinct.
+        """
+        raw_title = (title or "").strip()
+        raw_artist = (artist or "").strip()
+        if not raw_title or not raw_artist:
             return None
 
-        # score candidates
-        nt = _norm(title)
-        na = _norm(artist)
-        best = None
-        best_score = -1e9
+        base_title = _strip_common_edition_suffixes(raw_title)
+        want_artist = _norm(raw_artist)
+        want_title = _norm(raw_title)
+        want_base_title = _norm(base_title)
 
-        for s in songs:
-            st_raw = (s.get("title") or "")
-            sa_raw = (s.get("artist") or "")
-            st = _norm(st_raw)
-            sa = _norm(sa_raw)
+        # Search3 implementations vary in tokenization. Try the precise combined
+        # forms first, then title-only forms so Helix can inspect the returned
+        # metadata itself instead of depending on the server's ranking.
+        queries: List[str] = []
+        # Include normalized lowercase/case-folded variants as well as the raw
+        # metadata. Some Subsonic-compatible servers tokenize/search differently,
+        # so this gives the resolver the best chance to retrieve the candidate
+        # before Helix applies its own strict artist+title comparison.
+        for q in (
+            f"{raw_title} {raw_artist}".strip(),
+            f"{base_title} {raw_artist}".strip(),
+            f"{want_title} {want_artist}".strip(),
+            f"{want_base_title} {want_artist}".strip(),
+            raw_title,
+            base_title,
+            want_title,
+            want_base_title,
+            raw_artist,
+            want_artist,
+        ):
+            if q and q not in queries:
+                queries.append(q)
 
-            title_match = (st == nt) or (nt in st) or (st in nt)
-            if not title_match:
+        songs: List[Dict[str, Any]] = []
+        seen_ids = set()
+        for q in queries:
+            res = await self.search3(q, song_count=100)
+            for song in (res.get("song") or []):
+                sid = str(song.get("id") or "").strip()
+                dedupe_key = sid or f"{_norm(str(song.get('title') or ''))}|{_norm(str(song.get('artist') or ''))}"
+                if dedupe_key in seen_ids:
+                    continue
+                seen_ids.add(dedupe_key)
+                songs.append(song)
+
+        if not songs:
+            logger.warning(
+                "Subsonic song resolve miss: no candidates title=%r artist=%r normalized_title=%r normalized_artist=%r queries=%r",
+                raw_title, raw_artist, want_base_title or want_title, want_artist, queries,
+            )
+            return None
+
+        # Artist identity is intentionally strict after punctuation/case
+        # normalization. Title identity is strict after additionally removing only
+        # harmless edition/remaster suffixes.
+        for song in songs:
+            candidate_artist = _norm(str(song.get("artist") or ""))
+            if candidate_artist != want_artist:
                 continue
 
-            score = 0.0
-            score += 100 if st == nt else 60
+            candidate_raw_title = str(song.get("title") or "")
+            candidate_title = _norm(candidate_raw_title)
+            candidate_base_title = _norm(_strip_common_edition_suffixes(candidate_raw_title))
 
-            artist_quality = _artist_match_quality(artist, sa_raw)
-            if artist_quality >= 0.98:
-                score += 80
-            elif artist_quality >= 0.55:
-                score += 40 * artist_quality
-            else:
-                # Title-only matches are dangerous for station fulfillment: they
-                # can make Helix label and play the wrong song.
-                continue
+            if candidate_title == want_title:
+                song["_helix_match_score"] = 200.0
+                return song
 
-            if _contains_bad_variant(st_raw):
-                score -= 25
+            if want_base_title and candidate_base_title and candidate_base_title == want_base_title:
+                song["_helix_match_score"] = 190.0
+                return song
 
-            if duration_ms and s.get("duration"):
-                ds = int(s.get("duration")) * 1000
-                diff = abs(ds - int(duration_ms))
-                if diff <= 3000:
-                    score += 25
-                elif diff <= 8000:
-                    score += 10
-                elif diff <= 15000:
-                    score += 0
-                else:
-                    score -= 25
-
-            if score > best_score:
-                best_score = score
-                best = s
-
-        if best is not None:
-            best["_helix_match_score"] = best_score
-        return best
+        logger.warning(
+            "Subsonic song resolve miss: candidates did not match title=%r artist=%r normalized_title=%r normalized_artist=%r queries=%r candidates=%r",
+            raw_title,
+            raw_artist,
+            want_base_title or want_title,
+            want_artist,
+            queries,
+            [
+                {
+                    "title": str(song.get("title") or ""),
+                    "artist": str(song.get("artist") or ""),
+                    "normalized_title": _norm(_strip_common_edition_suffixes(str(song.get("title") or ""))),
+                    "normalized_artist": _norm(str(song.get("artist") or "")),
+                    "id": str(song.get("id") or ""),
+                }
+                for song in songs[:25]
+            ],
+        )
+        return None
 
 
     async def search_album_candidates(self, album: str, artist: str, limit: int = 10) -> List[Dict[str, Any]]:
@@ -236,16 +339,23 @@ class SubsonicClient:
         return candidates[0] if candidates else None
 
 
-    async def get_album_songs(self, album_id: str) -> List[Dict[str, Any]]:
-        """Fetch album tracklist via getAlbum.view. Returns a list of song dicts."""
+    async def get_album(self, album_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a full album via getAlbum.view, including its track list."""
         if not album_id:
-            return []
+            return None
         url = f"{self.base_url}/rest/getAlbum.view"
         params = {"id": album_id, **self._auth_params()}
         r = await self._http.get(url, params=params)
         r.raise_for_status()
-        data = (r.json() or {}).get("subsonic-response", {})
-        album = data.get("album", {}) or {}
+        data = (r.json() or {}).get("subsonic-response", {}) or {}
+        album = data.get("album") or {}
+        return album if isinstance(album, dict) and album else None
+
+    async def get_album_songs(self, album_id: str) -> List[Dict[str, Any]]:
+        """Fetch album tracklist via getAlbum.view. Returns a list of song dicts."""
+        album = await self.get_album(album_id)
+        if not album:
+            return []
         songs = album.get("song") or []
         if isinstance(songs, list):
             return songs

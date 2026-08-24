@@ -40,8 +40,10 @@ ADMIN_SETTING_KEYS = {
     "subsonic_api_version",
     "subsonic_timeout_s",
     "player_max_queue_items",
+    "station_queue_ahead_max",
+    "download_prefetch_ahead",
     "player_omit_missing",
-    "listen_history_limit",
+    "listen_history_retention",
     "fulfillment_library_subfolder",
     "fulfillment_tag_comment",
     "fulfillment_first_play_timeout_seconds",
@@ -114,24 +116,37 @@ def _capabilities_payload(settings: dict[str, Any], user: User | None = None) ->
         },
     }
 
-@router.get("/settings")
+@router.get("/api/settings")
 def get_public_settings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """Read-only global settings for the authenticated UI."""
     return _redact_settings(get_settings(db), admin=False)
 
 
-@router.get("/admin/settings", tags=["admin", "settings"])
+@router.get("/api/admin/settings", tags=["admin", "settings"])
 def admin_get_settings(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     return _redact_settings(get_settings(db), admin=True)
 
 
-@router.patch("/admin/settings", tags=["admin", "settings"])
+@router.patch("/api/admin/settings", tags=["admin", "settings"])
 def admin_patch_settings(
     payload: dict[str, Any] = Body(...),
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    return _redact_settings(patch_settings(db, _strip_unchanged_secret_placeholders(payload)), admin=True)
+    clean = _strip_unchanged_secret_placeholders(payload)
+    if "station_queue_ahead_max" in clean:
+        try:
+            clean["station_queue_ahead_max"] = max(1, min(50, int(clean["station_queue_ahead_max"])))
+        except Exception as exc:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Maximum station tracks ahead must be between 1 and 50") from exc
+    if "download_prefetch_ahead" in clean:
+        try:
+            clean["download_prefetch_ahead"] = max(0, min(20, int(clean["download_prefetch_ahead"])))
+        except Exception as exc:
+            from fastapi import HTTPException
+            raise HTTPException(status_code=400, detail="Download tracks ahead must be between 0 and 20") from exc
+    return _redact_settings(patch_settings(db, clean), admin=True)
 
 
 @router.get("/capabilities")

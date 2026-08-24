@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
-import { NavLink, useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { api } from "../api/client";
 import type {
   LobbyMember,
@@ -8,15 +8,11 @@ import type {
   LobbyState,
   SearchMode,
   SearchSong,
+  Station,
 } from "../api/types";
-import { Artwork } from "../components/Artwork";
 import { useAuth } from "../auth";
-
-const SEARCH_MODES: Array<{ id: SearchMode; label: string }> = [
-  { id: "hybrid", label: "All" },
-  { id: "subsonic", label: "Library" },
-  { id: "ytmusic", label: "YTMusic" },
-];
+import { Sidebar } from "../components/navigation/Sidebar";
+import { ActivityCard, AddMusicCard, GuestPermissionsCard, LobbyHistoryCard, LobbyMiniPlayer, LobbyStationCard, MembersCard, NowPlayingCard, QueueCard, RoomInfoCard } from "../components/lobby";
 
 type AddMode = "search" | "youtube";
 
@@ -38,6 +34,17 @@ function formatTime(ms: number | undefined) {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function formatPlayedAt(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function VolumeIcon() {
@@ -92,25 +99,6 @@ function currentPositionMs(state: LobbyState | null) {
   return Math.max(0, (state.effective_position_ms || 0) + drift);
 }
 
-function SidebarLink({
-  to,
-  label,
-  icon,
-}: {
-  to: string;
-  label: string;
-  icon: string;
-}) {
-  return (
-    <NavLink to={to} className="side-link">
-      <span className="side-icon" aria-hidden="true">
-        {icon}
-      </span>
-      <span>{label}</span>
-    </NavLink>
-  );
-}
-
 function activeMembers(members: LobbyMember[]) {
   return members.filter((member) => member.is_active);
 }
@@ -157,6 +145,12 @@ export function LobbyPage() {
   const [volume, setVolume] = useState(readStoredVolume);
   const [needsManualSync, setNeedsManualSync] = useState(false);
   const [positionTick, setPositionTick] = useState(0);
+  const [editingLobbyName, setEditingLobbyName] = useState(false);
+  const [lobbyNameDraft, setLobbyNameDraft] = useState("");
+  const [savingLobbyName, setSavingLobbyName] = useState(false);
+  const [stations, setStations] = useState<Station[]>([]);
+  const [selectedStationId, setSelectedStationId] = useState("");
+  const [stationBusy, setStationBusy] = useState(false);
 
   const isHost = state?.self_role === "host";
   const now = state?.now_playing ?? null;
@@ -209,8 +203,73 @@ export function LobbyPage() {
   }, [lobbyId]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => void load(), 900);
-    return () => window.clearInterval(interval);
+    if (!isHost) return;
+    let cancelled = false;
+    void api.stations().then((items) => {
+      if (cancelled) return;
+      setStations(items);
+      setSelectedStationId((current) => current || state?.active_station_id || items[0]?.id || "");
+    }).catch(() => {
+      if (!cancelled) setStations([]);
+    });
+    return () => { cancelled = true; };
+  }, [isHost]);
+
+  useEffect(() => {
+    if (state?.active_station_id) setSelectedStationId(state.active_station_id);
+  }, [state?.active_station_id]);
+
+  useEffect(() => {
+    if (!lobbyId) return;
+    let socket: WebSocket | null = null;
+    let reconnectTimer = 0;
+    let pingTimer = 0;
+    let fallbackTimer = 0;
+    let stopped = false;
+    let connected = false;
+
+    const connect = () => {
+      if (stopped) return;
+      socket = new WebSocket(api.lobbySocketUrl(lobbyId));
+      socket.onopen = () => {
+        connected = true;
+        setError("");
+        pingTimer = window.setInterval(() => {
+          if (socket?.readyState === WebSocket.OPEN) socket.send("ping");
+        }, 20000);
+      };
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data) as { type?: string; state?: LobbyState };
+          if (message.type === "lobby.state" && message.state) {
+            setState(message.state);
+            setOptimisticQueue(null);
+            setError("");
+          }
+        } catch {
+          // Ignore malformed realtime messages and keep the fallback path alive.
+        }
+      };
+      socket.onclose = () => {
+        connected = false;
+        window.clearInterval(pingTimer);
+        if (!stopped) reconnectTimer = window.setTimeout(connect, 1500);
+      };
+      socket.onerror = () => socket?.close();
+    };
+
+    connect();
+    fallbackTimer = window.setInterval(() => {
+      if (!connected) void load();
+    }, 10000);
+
+    return () => {
+      stopped = true;
+      window.clearInterval(pingTimer);
+      window.clearInterval(fallbackTimer);
+      window.clearTimeout(reconnectTimer);
+      socket?.close();
+    };
   }, [lobbyId]);
 
   useEffect(() => {
@@ -472,6 +531,40 @@ export function LobbyPage() {
     }
   }
 
+  function beginLobbyRename() {
+    if (!state || !isHost) return;
+    setLobbyNameDraft(state.name ?? "");
+    setEditingLobbyName(true);
+  }
+
+  function cancelLobbyRename() {
+    setEditingLobbyName(false);
+    setLobbyNameDraft("");
+  }
+
+  async function saveLobbyName(event?: FormEvent) {
+    event?.preventDefault();
+    if (!state || !isHost || savingLobbyName) return;
+    const name = lobbyNameDraft.trim();
+    if (!name) {
+      setError("Lobby name cannot be empty");
+      return;
+    }
+    if (name === state.name) {
+      cancelLobbyRename();
+      return;
+    }
+
+    setSavingLobbyName(true);
+    try {
+      await run(() => api.updateLobby(state.id, { name }));
+      setEditingLobbyName(false);
+      setLobbyNameDraft("");
+    } finally {
+      setSavingLobbyName(false);
+    }
+  }
+
   async function updateGuestPermissions(nextPermissions: LobbyPermissions) {
     if (!state || !isHost) return;
     await run(() =>
@@ -496,6 +589,71 @@ export function LobbyPage() {
     }
 
     await updateGuestPermissions(nextPermissions);
+  }
+
+  async function setLobbyOpen(nextOpen: boolean) {
+    if (!state || !isHost) return;
+    await run(() => api.updateLobby(state.id, { is_open: nextOpen }));
+  }
+
+  async function setGuestQueueLimit(limit: number) {
+    if (!state || !isHost) return;
+    const normalized = Math.max(0, Math.min(100, Math.trunc(limit || 0)));
+    await run(() =>
+      api.updateLobby(state.id, { guest_queue_limit: normalized }),
+    );
+  }
+
+  async function setCleanupAfterDays(days: number) {
+    if (!state || !isHost) return;
+    const normalized = [0, 1, 7, 30].includes(days) ? days : 0;
+    await run(() =>
+      api.updateLobby(state.id, { cleanup_after_days: normalized }),
+    );
+  }
+
+  async function regenerateInvite() {
+    if (!state || !isHost) return;
+    if (!window.confirm("Regenerate this lobby invite? The old invite will stop accepting new guests.")) return;
+    await run(() => api.regenerateLobbyInvite(state.id));
+  }
+
+  async function renameSelf(nickname: string) {
+    if (!state) return;
+    const cleaned = nickname.trim();
+    if (!cleaned) {
+      setError("Nickname cannot be empty");
+      return;
+    }
+    await run(() => api.lobbyUpdateSelf(state.id, { nickname: cleaned }));
+  }
+
+  async function updateLobbyMember(
+    member: LobbyMember,
+    payload: { nickname?: string; permissions?: LobbyPermissions },
+  ) {
+    if (!state || !isHost || member.role === "host") return;
+    await run(() => api.lobbyUpdateMember(state.id, member.id, payload));
+  }
+
+  async function startLobbyStation() {
+    if (!state || !selectedStationId || stationBusy) return;
+    setStationBusy(true);
+    try {
+      await run(() => api.playLobbyStation(state.id, selectedStationId));
+    } finally {
+      setStationBusy(false);
+    }
+  }
+
+  async function stopLobbyStation() {
+    if (!state || stationBusy) return;
+    setStationBusy(true);
+    try {
+      await run(() => api.stopLobbyStation(state.id));
+    } finally {
+      setStationBusy(false);
+    }
   }
 
   async function clearQueue() {
@@ -577,55 +735,11 @@ export function LobbyPage() {
 
   return (
     <div className={`lobby-dashboard-shell ${isHost ? "owner" : "guest"}`}>
-      <aside className="app-sidebar lobby-dashboard-sidebar">
-        <NavLink
-          to={auth.status === "authenticated" ? "/" : "/login"}
-          className="sidebar-brand"
-          aria-label="Helix home"
-        >
-          <img src="/helix-logo.png" alt="" />
-          <span>Helix</span>
-        </NavLink>
-        <nav className="side-nav" aria-label="Main navigation">
-          <SidebarLink to="/" label="Home" icon="⌂" />
-          <SidebarLink to="/search" label="Search" icon="⌕" />
-          <SidebarLink to="/stations" label="Stations" icon="◉" />
-          <SidebarLink to="/playlists" label="Playlists" icon="♫" />
-          <SidebarLink to="/history" label="History" icon="◷" />
-          <SidebarLink to="/lobbies" label="Lobbies" icon="◎" />
-          <SidebarLink to="/settings" label="Settings" icon="⚙" />
-        </nav>
-
-        <div className="sidebar-account-panel">
-          <div className="sidebar-account-card">
-            <button
-              className="profile-placeholder sidebar-profile-avatar"
-              type="button"
-              title="Profile"
-              aria-label="Profile"
-            >
-              <span aria-hidden="true">
-                {(displayName || "H").slice(0, 1).toUpperCase()}
-              </span>
-            </button>
-            <div className="sidebar-account-copy">
-              <strong>{displayName}</strong>
-              <span>{isHost ? "Host" : auth.status === "authenticated" ? "User" : "Guest"}</span>
-            </div>
-          </div>
-          {auth.status === "authenticated" ? (
-            <button className="sidebar-logout-button" type="button" onClick={() => void logout()}>
-              <span aria-hidden="true">↪</span>
-              Log out
-            </button>
-          ) : (
-            <button className="sidebar-logout-button" type="button" onClick={() => void leaveLobby()}>
-              <span aria-hidden="true">↩</span>
-              Leave lobby
-            </button>
-          )}
+      {isHost ? (
+        <div className="lobby-dashboard-sidebar">
+          <Sidebar user={auth.user} onLogout={() => void logout()} />
         </div>
-      </aside>
+      ) : null}
 
       <div className="lobby-dashboard-frame">
         <main className="lobby-dashboard-main">
@@ -635,7 +749,51 @@ export function LobbyPage() {
                 {isHost ? "♛ Owner control" : "Joined as guest"}
               </span>
               <div className="lobby-dashboard-title-row">
-                <h1>{state?.name ?? "Shared Lobby"}</h1>
+                {editingLobbyName && isHost ? (
+                  <form
+                    onSubmit={(event) => void saveLobbyName(event)}
+                    style={{ display: "flex", alignItems: "center", gap: "0.55rem", flexWrap: "wrap" }}
+                  >
+                    <input
+                      autoFocus
+                      value={lobbyNameDraft}
+                      onChange={(event) => setLobbyNameDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") cancelLobbyRename();
+                      }}
+                      maxLength={120}
+                      aria-label="Lobby name"
+                      disabled={savingLobbyName}
+                      style={{
+                        fontSize: "clamp(1.65rem, 3vw, 3rem)",
+                        fontWeight: 900,
+                        minWidth: "min(28rem, 72vw)",
+                      }}
+                    />
+                    <button type="submit" disabled={savingLobbyName || !lobbyNameDraft.trim()}>
+                      {savingLobbyName ? "Saving…" : "Save"}
+                    </button>
+                    <button type="button" className="secondary" onClick={cancelLobbyRename} disabled={savingLobbyName}>
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <>
+                    <h1>{state?.name ?? "Shared Lobby"}</h1>
+                    {isHost ? (
+                      <button
+                        type="button"
+                        className="secondary"
+                        onClick={beginLobbyRename}
+                        title="Rename lobby"
+                        aria-label="Rename lobby"
+                        style={{ paddingInline: "0.7rem" }}
+                      >
+                        ✎ Rename
+                      </button>
+                    ) : null}
+                  </>
+                )}
                 <span className="lobby-role-pill">
                   {isHost ? "Host" : "Guest"}
                 </span>
@@ -672,6 +830,15 @@ export function LobbyPage() {
                   onClick={() => copyToClipboard(inviteLink)}
                 >
                   Copy invite
+                </button>
+              ) : null}
+              {isHost && inviteLink ? (
+                <button
+                  type="button"
+                  className="secondary"
+                  onClick={() => void regenerateInvite()}
+                >
+                  Regenerate invite
                 </button>
               ) : null}
               {isHost ? (
@@ -745,6 +912,18 @@ export function LobbyPage() {
                   run(() => api.lobbyAddQueueItem(lobbyId, song))
                 }
               />
+              {isHost ? (
+                <LobbyStationCard
+                  stations={stations}
+                  selectedStationId={selectedStationId}
+                  setSelectedStationId={setSelectedStationId}
+                  activeStationId={state?.active_station_id ?? ""}
+                  activeStationName={state?.active_station_name ?? ""}
+                  busy={stationBusy}
+                  onPlay={() => void startLobbyStation()}
+                  onStop={() => void stopLobbyStation()}
+                />
+              ) : null}
             </div>
 
             <div className="lobby-center-stack">
@@ -769,6 +948,9 @@ export function LobbyPage() {
                 <GuestPermissionsCard
                   state={state}
                   onToggle={(key) => void toggleGuestPermission(key)}
+                  onSetQueueLimit={(limit) => void setGuestQueueLimit(limit)}
+                  onSetLobbyOpen={(open) => void setLobbyOpen(open)}
+                  onSetCleanupAfterDays={(days) => void setCleanupAfterDays(days)}
                 />
               ) : (
                 <RoomInfoCard state={state} queueTotalMs={queueTotalMs} />
@@ -782,7 +964,12 @@ export function LobbyPage() {
                 guests={guests}
                 isHost={isHost}
                 onKickMember={(member) => void kickMember(member)}
+                onRenameSelf={(nickname) => void renameSelf(nickname)}
+                onUpdateMember={(member, payload) =>
+                  void updateLobbyMember(member, payload)
+                }
               />
+              <LobbyHistoryCard state={state} />
               {isHost ? (
                 <RoomInfoCard
                   state={state}
@@ -837,813 +1024,5 @@ export function LobbyPage() {
         }}
       />
     </div>
-  );
-}
-
-function NowPlayingCard({
-  state,
-  now,
-  position,
-  volume,
-  setVolume,
-  canControl,
-  canSkip,
-  canSeek,
-  syncLocalAudio,
-  needsManualSync,
-  run,
-  lobbyId,
-}: {
-  state: LobbyState | null;
-  now: LobbyQueueItem | null;
-  position: number;
-  volume: number;
-  setVolume: (volume: number) => void;
-  canControl: boolean;
-  canSkip: boolean;
-  canSeek: boolean;
-  syncLocalAudio: (options?: { automatic?: boolean; forceSeek?: boolean }) => Promise<void>;
-  needsManualSync: boolean;
-  run: (action: () => Promise<LobbyState>) => Promise<void>;
-  lobbyId: string;
-}) {
-  return (
-    <section className="panel lobby-control-card lobby-now-dashboard-card">
-      <div className="section-heading">
-        <h2>Now Playing</h2>
-        <span className="status-pill good">Synced playback</span>
-      </div>
-      <div className="lobby-now-dashboard-body">
-        <Artwork src={now?.art_url} alt={now?.title ?? "No track"} size="md" />
-        <div className="lobby-now-dashboard-copy">
-          <strong>{now?.title ?? "Nothing queued"}</strong>
-          <span className="muted">
-            {now
-              ? `${now.artist}${now.album ? ` • ${now.album}` : ""}`
-              : "Add something to start the room."}
-          </span>
-          <span className="muted">
-            {formatTime(position)} / {formatTime(now?.duration_ms)}
-          </span>
-        </div>
-      </div>
-      <div className="lobby-inline-controls">
-        <button
-          type="button"
-          className="icon-button"
-          disabled={!canSkip || !state}
-          onClick={() => run(() => api.lobbyPrevious(lobbyId))}
-        >
-          ‹
-        </button>
-        {state?.is_playing ? (
-          <button
-            type="button"
-            className="primary round-control"
-            disabled={!canControl || !state || !now}
-            onClick={() => run(() => api.lobbyPause(lobbyId))}
-          >
-            Ⅱ
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="primary round-control"
-            disabled={!canControl || !state || !now}
-            onClick={() => run(() => api.lobbyPlay(lobbyId))}
-          >
-            ▶
-          </button>
-        )}
-        <button
-          type="button"
-          className="icon-button"
-          disabled={!canSkip || !state}
-          onClick={() => run(() => api.lobbyNext(lobbyId))}
-        >
-          ›
-        </button>
-      </div>
-      {needsManualSync && state?.is_playing && now ? (
-        <button
-          type="button"
-          className="subtle-button lobby-sync-audio-button"
-          onClick={() => void syncLocalAudio()}
-        >
-          Sync audio
-        </button>
-      ) : null}
-      <div className="lobby-progress-row compact">
-        <input
-          type="range"
-          min="0"
-          max={now?.duration_ms || 0}
-          value={Math.min(position, now?.duration_ms || position)}
-          disabled={!canSeek || !now?.duration_ms}
-          onChange={(event) =>
-            run(() => api.lobbySeek(lobbyId, Number(event.target.value)))
-          }
-        />
-      </div>
-      <div className="lobby-volume-row">
-        <VolumeIcon />
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={volume}
-          onChange={(event) => setVolume(Number(event.target.value))}
-        />
-      </div>
-    </section>
-  );
-}
-
-function AddMusicCard({
-  addMode,
-  setAddMode,
-  canAdd,
-  searchMode,
-  setSearchMode,
-  searchQuery,
-  setSearchQuery,
-  searching,
-  searchResults,
-  search,
-  addYoutube,
-  youtubeUrl,
-  setYoutubeUrl,
-  addSearchSong,
-}: {
-  addMode: AddMode;
-  setAddMode: (mode: AddMode) => void;
-  canAdd: boolean;
-  searchMode: SearchMode;
-  setSearchMode: (mode: SearchMode) => void;
-  searchQuery: string;
-  setSearchQuery: (value: string) => void;
-  searching: boolean;
-  searchResults: SearchSong[];
-  search: (event: FormEvent) => Promise<void>;
-  addYoutube: (event: FormEvent) => Promise<void>;
-  youtubeUrl: string;
-  setYoutubeUrl: (value: string) => void;
-  addSearchSong: (song: SearchSong) => Promise<void>;
-}) {
-  return (
-    <section className="panel lobby-control-card lobby-add-panel-redesign">
-      <h2>Add Music</h2>
-      <div
-        className="lobby-add-tabs"
-        role="tablist"
-        aria-label="Add music method"
-      >
-        <button
-          type="button"
-          className={addMode === "search" ? "active" : ""}
-          onClick={() => setAddMode("search")}
-        >
-          Helix Search
-        </button>
-        <button
-          type="button"
-          className={addMode === "youtube" ? "active" : ""}
-          onClick={() => setAddMode("youtube")}
-        >
-          YT Link
-        </button>
-      </div>
-      {!canAdd ? (
-        <p className="muted">The host has paused guest additions.</p>
-      ) : null}
-      {addMode === "search" ? (
-        <>
-          <div className="search-tabs compact-tabs">
-            {SEARCH_MODES.map((mode) => (
-              <button
-                key={mode.id}
-                type="button"
-                className={`tab-button ${searchMode === mode.id ? "active" : ""}`}
-                onClick={() => setSearchMode(mode.id)}
-              >
-                {mode.label}
-              </button>
-            ))}
-          </div>
-          <form
-            className="lobby-search-form"
-            onSubmit={(event) => void search(event)}
-          >
-            <input
-              value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              placeholder="Search for songs, artists, albums…"
-              disabled={!canAdd}
-            />
-            <button disabled={!canAdd || searching || !searchQuery.trim()}>
-              {searching ? "Searching…" : "Search"}
-            </button>
-          </form>
-          <div className="lobby-search-results compact-results">
-            {searchResults.map((song, index) => (
-              <button
-                key={`${song.source}-${song.title}-${song.artist}-${index}`}
-                type="button"
-                disabled={!canAdd}
-                onClick={() => void addSearchSong(song)}
-              >
-                <img
-                  className="lobby-search-result-art"
-                  src={song.art_url || song.thumbnail_url || "/helix-subsonic-mark.svg"}
-                  alt=""
-                  loading="lazy"
-                />
-                <span className="lobby-search-result-copy">
-                  <strong>{song.title}</strong>
-                  <span>
-                    {song.artist}
-                    {song.album ? ` • ${song.album}` : ""}
-                  </span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </>
-      ) : (
-        <form
-          className="lobby-youtube-form"
-          onSubmit={(event) => void addYoutube(event)}
-        >
-          <label>
-            <span>YouTube / YouTube Music URL, playlist, or album</span>
-            <input
-              value={youtubeUrl}
-              onChange={(event) => setYoutubeUrl(event.target.value)}
-              placeholder="Track, playlist, or album URL…"
-              disabled={!canAdd}
-            />
-          </label>
-          <button className="primary" disabled={!canAdd || !youtubeUrl.trim()}>
-            Add YT link
-          </button>
-          <p className="muted">
-            Paste a link to add it to the shared queue for everyone.
-          </p>
-        </form>
-      )}
-    </section>
-  );
-}
-
-function QueueCard({
-  title,
-  state,
-  queue,
-  canClearQueue,
-  canJump,
-  canReorder,
-  isHost,
-  onClearQueue,
-  onJump,
-  onReorder,
-  onRemove,
-}: {
-  title: string;
-  state: LobbyState | null;
-  queue: LobbyQueueItem[];
-  canClearQueue: boolean;
-  canJump: boolean;
-  canReorder: boolean;
-  isHost: boolean;
-  onClearQueue: () => Promise<void>;
-  onJump: (item: LobbyQueueItem) => Promise<void>;
-  onReorder: (itemIds: string[]) => Promise<void>;
-  onRemove: (item: LobbyQueueItem) => Promise<void>;
-}) {
-  const [draggingItemId, setDraggingItemId] = useState("");
-  const [dragOverItemId, setDragOverItemId] = useState("");
-
-  function reorderAroundTarget(targetItemId: string) {
-    if (!draggingItemId || draggingItemId === targetItemId) {
-      setDraggingItemId("");
-      setDragOverItemId("");
-      return;
-    }
-
-    const itemIds = queue.map((item) => item.id);
-    const fromIndex = itemIds.indexOf(draggingItemId);
-    const toIndex = itemIds.indexOf(targetItemId);
-    if (fromIndex < 0 || toIndex < 0) {
-      setDraggingItemId("");
-      setDragOverItemId("");
-      return;
-    }
-
-    const [moved] = itemIds.splice(fromIndex, 1);
-    itemIds.splice(toIndex, 0, moved);
-    setDraggingItemId("");
-    setDragOverItemId("");
-    void onReorder(itemIds);
-  }
-
-  return (
-    <section className="panel lobby-control-card lobby-queue-dashboard-card">
-      <div className="section-heading">
-        <div>
-          <h2>{title}</h2>
-          <span className="muted">
-            {queue.length} song{queue.length === 1 ? "" : "s"} •{" "}
-            {formatTotal(
-              queue.reduce((sum, item) => sum + (item.duration_ms || 0), 0),
-            )}{" "}
-            total
-          </span>
-        </div>
-        {canClearQueue ? (
-          <button type="button" onClick={() => void onClearQueue()}>
-            Clear queue
-          </button>
-        ) : null}
-      </div>
-      <div className="lobby-queue-table" role="table" aria-label="Lobby queue">
-        <div className="lobby-queue-table-head" role="row">
-          <span>#</span>
-          <span>Track</span>
-          <span>Added by</span>
-          <span>Duration</span>
-          <span />
-        </div>
-        <div
-          className="lobby-queue-scroll"
-          onDragLeave={(event) => {
-            if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
-              setDragOverItemId("");
-            }
-          }}
-        >
-          {queue.length ? (
-            queue.map((item, index) => {
-              const canRemove = Boolean(
-                state?.self_permissions.can_remove_any_queue_item ||
-                (state?.self_permissions.can_remove_own_queue_items &&
-                  item.added_by_member_id === state?.self_member_id),
-              );
-              return (
-                <QueueTableRow
-                  key={item.id}
-                  item={item}
-                  index={index}
-                  active={item.id === state?.now_playing?.id}
-                  isHost={isHost}
-                  canJump={canJump}
-                  canReorder={canReorder}
-                  canRemove={canRemove}
-                  isDragging={draggingItemId === item.id}
-                  isDragOver={dragOverItemId === item.id && draggingItemId !== item.id}
-                  onJump={() => onJump(item)}
-                  onDragStart={() => setDraggingItemId(item.id)}
-                  onDragOver={() => setDragOverItemId(item.id)}
-                  onDragEnd={() => {
-                    setDraggingItemId("");
-                    setDragOverItemId("");
-                  }}
-                  onDrop={() => reorderAroundTarget(item.id)}
-                  onRemove={() => onRemove(item)}
-                />
-              );
-            })
-          ) : (
-            <p className="muted lobby-empty-state">
-              The queue is empty. Add a song from search or paste a YouTube
-              Music link.
-            </p>
-          )}
-        </div>
-      </div>
-    </section>
-  );
-}
-
-function QueueTableRow({
-  item,
-  index,
-  active,
-  isHost,
-  canJump,
-  canReorder,
-  canRemove,
-  isDragging,
-  isDragOver,
-  onJump,
-  onDragStart,
-  onDragOver,
-  onDragEnd,
-  onDrop,
-  onRemove,
-}: {
-  item: LobbyQueueItem;
-  index: number;
-  active: boolean;
-  isHost: boolean;
-  canJump: boolean;
-  canReorder: boolean;
-  canRemove: boolean;
-  isDragging: boolean;
-  isDragOver: boolean;
-  onJump: () => Promise<void>;
-  onDragStart: () => void;
-  onDragOver: () => void;
-  onDragEnd: () => void;
-  onDrop: () => void;
-  onRemove: () => Promise<void>;
-}) {
-  return (
-    <div
-      className={`lobby-queue-table-row ${active ? "active" : ""} ${canJump ? "interactive" : ""} ${isDragging ? "dragging" : ""} ${isDragOver ? "drag-over" : ""}`}
-      role={canJump ? "button" : "row"}
-      tabIndex={canJump ? 0 : undefined}
-      title={canJump ? `Skip to ${item.title}` : undefined}
-      onClick={() => {
-        if (canJump) void onJump();
-      }}
-      onKeyDown={(event) => {
-        if (!canJump) return;
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          void onJump();
-        }
-      }}
-      onDragOver={(event) => {
-        if (!canReorder) return;
-        event.preventDefault();
-        onDragOver();
-      }}
-      onDrop={(event) => {
-        if (!canReorder) return;
-        event.preventDefault();
-        onDrop();
-      }}
-    >
-      <span className="queue-index">{index + 1}</span>
-      <span className="queue-track-cell">
-        {isHost ? (
-          <span
-            className="queue-grip"
-            aria-label={`Drag ${item.title} to reorder`}
-            draggable={canReorder}
-            role="button"
-            tabIndex={-1}
-            onClick={(event) => event.stopPropagation()}
-            onDragStart={(event) => {
-              event.dataTransfer.effectAllowed = "move";
-              event.dataTransfer.setData("text/plain", item.id);
-              onDragStart();
-            }}
-            onDragEnd={onDragEnd}
-          >
-            ⋮⋮
-          </span>
-        ) : null}
-        <Artwork src={item.art_url} alt={item.title} size="sm" />
-        <span className="queue-track-copy">
-          <strong>{item.title}</strong>
-          <span className="muted">
-            {item.artist}
-            {item.album ? ` • ${item.album}` : ""}
-          </span>
-        </span>
-      </span>
-      <span className="queue-added-by">
-        {item.added_by_nickname ? `@${item.added_by_nickname}` : "—"}
-      </span>
-      <span className="queue-duration">{formatTime(item.duration_ms)}</span>
-      <span className="queue-row-action">
-        {canRemove ? (
-          <button
-            className="danger subtle-button"
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              void onRemove();
-            }}
-          >
-            ×
-          </button>
-        ) : null}
-      </span>
-    </div>
-  );
-}
-
-function GuestPermissionsCard({
-  state,
-  onToggle,
-}: {
-  state: LobbyState | null;
-  onToggle: (key: keyof LobbyPermissions) => void;
-}) {
-  const perms = state?.guest_permissions;
-  return (
-    <section className="panel lobby-control-card lobby-permissions-card">
-      <h2>Guest Permissions</h2>
-      <PermissionToggle
-        label="Guests can add to queue"
-        description="Allow friends to add music."
-        checked={Boolean(perms?.can_add_to_queue)}
-        onClick={() => onToggle("can_add_to_queue")}
-      />
-      <PermissionToggle
-        label="Guests can remove own songs"
-        description="Let guests clean up tracks they added."
-        checked={Boolean(perms?.can_remove_own_queue_items)}
-        onClick={() => onToggle("can_remove_own_queue_items")}
-      />
-      {perms?.can_remove_own_queue_items ? (
-        <div className="permission-subsetting">
-          <PermissionToggle
-            label="Guests can remove any song"
-            description="Let guests remove tracks added by anyone."
-            checked={Boolean(perms?.can_remove_any_queue_item)}
-            onClick={() => onToggle("can_remove_any_queue_item")}
-          />
-        </div>
-      ) : null}
-      <PermissionToggle
-        label="Guests can control playback"
-        description="Allow play and pause from guest screens."
-        checked={Boolean(perms?.can_control_playback)}
-        onClick={() => onToggle("can_control_playback")}
-      />
-      <PermissionToggle
-        label="Guests can skip"
-        description="Allow previous and next controls."
-        checked={Boolean(perms?.can_skip)}
-        onClick={() => onToggle("can_skip")}
-      />
-      <PermissionToggle
-        label="Guests can seek"
-        description="Allow scrubbing through the current track."
-        checked={Boolean(perms?.can_seek)}
-        onClick={() => onToggle("can_seek")}
-      />
-    </section>
-  );
-}
-
-function PermissionToggle({
-  label,
-  description,
-  checked,
-  onClick,
-}: {
-  label: string;
-  description: string;
-  checked: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button type="button" className="permission-row" onClick={onClick}>
-      <span>
-        <strong>{label}</strong>
-        <span>{description}</span>
-      </span>
-      <span className={`toggle-pill ${checked ? "on" : ""}`} aria-hidden="true">
-        <span />
-      </span>
-    </button>
-  );
-}
-
-function MembersCard({
-  state,
-  hosts,
-  guests,
-  isHost,
-  onKickMember,
-}: {
-  state: LobbyState | null;
-  hosts: LobbyMember[];
-  guests: LobbyMember[];
-  isHost: boolean;
-  onKickMember: (member: LobbyMember) => void;
-}) {
-  return (
-    <section className="panel lobby-control-card lobby-members-dashboard-card">
-      <div className="section-heading">
-        <h2>
-          {isHost ? "Members" : "Members in Lobby"} (
-          {hosts.length + guests.length})
-        </h2>
-      </div>
-      <div className="member-section">
-        <span className="member-section-title">Host</span>
-        {hosts.map((member) => (
-          <MemberRow
-            key={member.id}
-            member={member}
-            selfMemberId={state?.self_member_id ?? ""}
-          />
-        ))}
-      </div>
-      <div className="member-section">
-        <span className="member-section-title">Guests ({guests.length})</span>
-        {guests.length ? (
-          guests.map((member) => (
-            <MemberRow
-              key={member.id}
-              member={member}
-              selfMemberId={state?.self_member_id ?? ""}
-              onKick={isHost ? () => onKickMember(member) : undefined}
-            />
-          ))
-        ) : (
-          <p className="muted">No guests yet.</p>
-        )}
-      </div>
-    </section>
-  );
-}
-
-function MemberRow({
-  member,
-  selfMemberId,
-  onKick,
-}: {
-  member: LobbyMember;
-  selfMemberId: string;
-  onKick?: () => void;
-}) {
-  const canKick = Boolean(onKick && member.role !== "host" && member.id !== selfMemberId);
-  return (
-    <div className="member-dashboard-row">
-      <span className="member-avatar">
-        {member.nickname.slice(0, 1).toUpperCase()}
-      </span>
-      <span className="member-copy">
-        <strong>{memberLabel(member, selfMemberId)}</strong>
-        <span>{member.role === "host" ? "Host" : "Guest"}</span>
-      </span>
-      <span
-        className={`lobby-member-dot ${member.is_active ? "active" : ""}`}
-      />
-      {canKick ? (
-        <button
-          className="member-kick-button danger"
-          type="button"
-          onClick={onKick}
-          title={`Kick ${member.nickname} from this lobby`}
-        >
-          Kick
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function RoomInfoCard({
-  state,
-  queueTotalMs,
-  guestAddedCount,
-}: {
-  state: LobbyState | null;
-  queueTotalMs: number;
-  guestAddedCount?: number;
-}) {
-  return (
-    <section className="panel lobby-control-card lobby-room-info-card">
-      <h2>Room Info</h2>
-      <div className="room-stat-grid">
-        <span>
-          <strong>{state?.queue.length ?? 0}</strong>
-          <small>Songs in Queue</small>
-        </span>
-        <span>
-          <strong>{formatTotal(queueTotalMs)}</strong>
-          <small>Queue Length</small>
-        </span>
-        <span>
-          <strong>{activeMembers(state?.members ?? []).length}</strong>
-          <small>Members</small>
-        </span>
-        {guestAddedCount !== undefined ? (
-          <span>
-            <strong>{guestAddedCount}</strong>
-            <small>Queued by Guests</small>
-          </span>
-        ) : null}
-      </div>
-    </section>
-  );
-}
-
-function ActivityCard({ state }: { state: LobbyState | null }) {
-  const latest = (state?.queue ?? []).slice(-3).reverse();
-  return (
-    <section className="panel lobby-control-card lobby-activity-card">
-      <h2>Recent Adds</h2>
-      {latest.length ? (
-        latest.map((item) => (
-          <p key={item.id}>
-            <strong>{item.added_by_nickname || "Someone"}</strong> added{" "}
-            {item.title}
-          </p>
-        ))
-      ) : (
-        <p className="muted">No recent queue additions.</p>
-      )}
-    </section>
-  );
-}
-
-function LobbyMiniPlayer({
-  now,
-  state,
-  position,
-  volume,
-  setVolume,
-  canControl,
-  canSkip,
-  syncLocalAudio,
-  run,
-  lobbyId,
-}: {
-  now: LobbyQueueItem | null;
-  state: LobbyState | null;
-  position: number;
-  volume: number;
-  setVolume: (volume: number) => void;
-  canControl: boolean;
-  canSkip: boolean;
-  syncLocalAudio: (options?: { automatic?: boolean; forceSeek?: boolean }) => Promise<void>;
-  run: (action: () => Promise<LobbyState>) => Promise<void>;
-  lobbyId: string;
-}) {
-  return (
-    <footer className="lobby-mini-player">
-      <div className="lobby-mini-now">
-        <Artwork src={now?.art_url} alt={now?.title ?? "No track"} size="sm" />
-        <div>
-          <strong>{now?.title ?? "Nothing playing"}</strong>
-          <span>{now?.artist ?? "Shared lobby"}</span>
-        </div>
-      </div>
-      <div className="lobby-mini-transport">
-        <button
-          type="button"
-          className="icon-button"
-          disabled={!canSkip || !state}
-          onClick={() => run(() => api.lobbyPrevious(lobbyId))}
-        >
-          ‹
-        </button>
-        {state?.is_playing ? (
-          <button
-            type="button"
-            className="primary round-control small"
-            disabled={!canControl || !state || !now}
-            onClick={() => run(() => api.lobbyPause(lobbyId))}
-          >
-            Ⅱ
-          </button>
-        ) : (
-          <button
-            type="button"
-            className="primary round-control small"
-            disabled={!canControl || !state || !now}
-            onClick={() => run(() => api.lobbyPlay(lobbyId))}
-          >
-            ▶
-          </button>
-        )}
-        <button
-          type="button"
-          className="icon-button"
-          disabled={!canSkip || !state}
-          onClick={() => run(() => api.lobbyNext(lobbyId))}
-        >
-          ›
-        </button>
-      </div>
-      <div className="lobby-mini-progress">
-        <span>{formatTime(position)}</span>
-        <progress
-          value={Math.min(position, now?.duration_ms || position)}
-          max={now?.duration_ms || 1}
-        />
-        <span>{formatTime(now?.duration_ms)}</span>
-      </div>
-      <div className="lobby-mini-volume">
-        <VolumeIcon />
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={volume}
-          onChange={(event) => setVolume(Number(event.target.value))}
-        />
-      </div>
-    </footer>
   );
 }

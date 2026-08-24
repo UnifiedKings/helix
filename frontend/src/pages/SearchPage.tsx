@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { CSSProperties, KeyboardEvent } from 'react'
 import { Link, useLocation, useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Capabilities, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong } from '../api/types'
@@ -18,6 +18,8 @@ type SearchReturnState = {
 type SearchRouteState = {
   searchReturn?: SearchReturnState
 }
+
+type ResultSection = 'songs' | 'albums' | 'artists'
 
 const SEARCH_MODES: Array<{ id: SearchMode; label: string; description: string }> = [
   { id: 'hybrid', label: 'All', description: 'Local Subsonic matches first, then YTMusic discovery.' },
@@ -47,6 +49,13 @@ function albumBrowseId(album: SearchAlbum) {
   return album.yt_browse_id || album.browse_id || album.browseId || album.subsonic_album_id || ''
 }
 
+function albumDetailPath(album: SearchAlbum) {
+  const albumId = albumBrowseId(album)
+  if (!albumId) return ''
+  const path = `/albums/${encodeURIComponent(albumId)}`
+  return album.source === 'subsonic' ? `${path}?source=subsonic` : path
+}
+
 function artistBrowseId(artist: SearchArtist) {
   return artist.browse_id || artist.artist_id || ''
 }
@@ -64,10 +73,12 @@ function topResult(results: SearchResponse): { kind: 'song'; item: SearchSong } 
 function TopResultCard({ result, player, onStatus, searchReturn, canImportToSubsonic }: { result: NonNullable<ReturnType<typeof topResult>>; player: PlayerContext; onStatus: (message: string) => void; searchReturn: SearchReturnState; canImportToSubsonic: boolean }) {
   const item = result.item
   const title = item.title
+  const artwork = resultArtwork(item)
   const isYt = item.source === 'ytmusic' || (!item.source && result.kind === 'album')
   const subtitle = result.kind === 'album'
     ? `${result.item.artist ?? 'Unknown artist'}${result.item.year ? ` • ${result.item.year}` : ''}`
     : `${result.item.artist}${result.item.album ? ` • ${result.item.album}` : ''}`
+  const topResultStyle = artwork ? ({ '--search-feature-art': `url(${JSON.stringify(artwork)})` } as CSSProperties) : undefined
 
   async function addToSubsonic() {
     if (!isYt) return
@@ -83,25 +94,24 @@ function TopResultCard({ result, player, onStatus, searchReturn, canImportToSubs
   return (
     <section className="search-top-result">
       <div className="search-section-heading"><span>Top result</span></div>
-      <article className="top-result-card">
-        <Artwork src={resultArtwork(item)} alt={title} size="lg" />
+      <article className="top-result-card" style={topResultStyle}>
+        <Artwork src={artwork} alt={title} size="lg" />
         <div className="top-result-copy">
           <span className="result-kind">{result.kind}</span>
           <h2>{title}</h2>
           <p>{subtitle}</p>
-          <SourceBadge source={item.source} />
-        </div>
-        <div className="top-result-actions">
-          <button className="primary" onClick={() => result.kind === 'album' ? player.run(() => api.playAlbum(result.item), 'play') : player.run(() => api.playSong(result.item), 'play')}>▶ Play</button>
-          <button onClick={() => result.kind === 'album' ? player.run(() => api.queueAlbum(result.item)) : player.run(() => api.queueSong(result.item))}>Queue</button>
-          {result.kind === 'album' && albumBrowseId(result.item) ? <Link className="button-link" to={`/albums/${encodeURIComponent(albumBrowseId(result.item))}`} state={{ searchReturn }}>Open album</Link> : null}
-          {isYt && canImportToSubsonic ? <button className="compact-action library-add-action library-add-icon-action" aria-label={`Add ${title} to Subsonic`} data-tooltip="Add to Subsonic" title="Add to Subsonic" onClick={() => void addToSubsonic()}><span aria-hidden="true">S+</span></button> : null}
+          <div className="top-result-library-state"><SourceBadge source={item.source} /></div>
+          <div className="top-result-actions">
+            <button className="primary" onClick={() => result.kind === 'album' ? player.run(() => api.playAlbum(result.item), 'play') : player.run(() => api.playSong(result.item), 'play')}>▶ Play</button>
+            <button onClick={() => result.kind === 'album' ? player.run(() => api.queueAlbum(result.item)) : player.run(() => api.queueSong(result.item))}>＋ Add to Queue</button>
+            {isYt && canImportToSubsonic ? <button onClick={() => void addToSubsonic()}>S+ Add to Subsonic</button> : null}
+            {result.kind === 'album' && albumDetailPath(result.item) ? <Link className="button-link" to={albumDetailPath(result.item)} state={{ searchReturn }}>Open album</Link> : null}
+          </div>
         </div>
       </article>
     </section>
   )
 }
-
 function SongRow({ song, player, onStatus, canImportToSubsonic }: { song: SearchSong; player: PlayerContext; onStatus: (message: string) => void; canImportToSubsonic: boolean }) {
   const duration = durationLabel(song)
   const canAdd = song.source === 'ytmusic' || Boolean(song.yt_video_id || song.video_id || song.videoId)
@@ -118,18 +128,17 @@ function SongRow({ song, player, onStatus, canImportToSubsonic }: { song: Search
       <SourceBadge source={song.source} />
       <span className="song-duration">{duration}</span>
       <div className="search-row-actions">
-        <button className="icon-button compact-action" aria-label={`Play ${song.title}`} data-tooltip="Play" title="Play" onClick={() => player.run(() => api.playSong(song), 'play')}>▶</button>
-        <button className="icon-button compact-action" aria-label={`Add ${song.title} to queue`} data-tooltip="Add to queue" title="Add to queue" onClick={() => player.run(() => api.queueSong(song))}>＋</button>
-        {canAdd && canImportToSubsonic && song.source !== 'subsonic' ? <button className="compact-action library-add-action library-add-icon-action" aria-label={`Add ${song.title} to Subsonic`} data-tooltip="Add to Subsonic" title="Add to Subsonic" onClick={() => void addToSubsonic()}><span aria-hidden="true">S+</span></button> : null}
+        <button className="search-row-icon" aria-label={`Play ${song.title}`} data-tooltip="Play" title="Play" onClick={() => player.run(() => api.playSong(song), 'play')}>▶</button>
+        <button className="search-row-icon search-queue-icon" aria-label={`Add ${song.title} to queue`} data-tooltip="Add to queue" title="Add to queue" onClick={() => player.run(() => api.queueSong(song))}>＋</button>
+        {canAdd && canImportToSubsonic && song.source !== 'subsonic' ? <button className="search-row-icon search-library-icon" aria-label={`Add ${song.title} to Subsonic`} data-tooltip="Add to Subsonic" title="Add to Subsonic" onClick={() => void addToSubsonic()}>S+</button> : <span className="search-row-icon-spacer" aria-hidden="true" />}
       </div>
     </article>
   )
 }
-
 function AlbumCard({ album, player, onStatus, searchReturn, canImportToSubsonic }: { album: SearchAlbum; player: PlayerContext; onStatus: (message: string) => void; searchReturn: SearchReturnState; canImportToSubsonic: boolean }) {
   const navigate = useNavigate()
   const browseId = albumBrowseId(album)
-  const albumPath = browseId ? `/albums/${encodeURIComponent(browseId)}` : ''
+  const albumPath = browseId ? albumDetailPath(album) : ''
   const canAdd = album.source === 'ytmusic' || Boolean(browseId)
 
   function openAlbum() {
@@ -170,7 +179,7 @@ function AlbumCard({ album, player, onStatus, searchReturn, canImportToSubsonic 
           <summary className="icon-button compact-action album-more-button" aria-label={`More options for ${album.title}`} title="More options">⋯</summary>
           <div className="album-card-menu-popover">
             <button type="button" onClick={() => player.run(() => api.queueAlbum(album))}>Queue</button>
-            {canAdd && canImportToSubsonic && album.source !== 'subsonic' ? <button type="button" className="compact-action library-add-action library-add-icon-action" aria-label={`Add ${album.title} to Subsonic`} data-tooltip="Add to Subsonic" title="Add to Subsonic" onClick={() => void addToSubsonic()}><span aria-hidden="true">S+</span></button> : null}
+            {canAdd && canImportToSubsonic && album.source !== 'subsonic' ? <button type="button" className="compact-action library-add-action library-add-icon-action" aria-label={`Add ${album.title} to Subsonic`} data-tooltip="Add to Subsonic" title="Add to Subsonic" onClick={() => void addToSubsonic()}><span className="splus-mark" aria-hidden="true"><span className="splus-s">S</span><span className="splus-plus">+</span></span></button> : null}
           </div>
         </details>
       </div>
@@ -203,6 +212,18 @@ export function SearchPage() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
+  const [activeResultSection, setActiveResultSection] = useState<ResultSection>('songs')
+
+  useEffect(() => {
+    if (restoredSearch) return
+    let cancelled = false
+    void api.userSettings().then((prefs) => {
+      if (cancelled) return
+      setMode(prefs.settings.search_default_mode)
+      setActiveResultSection(prefs.settings.search_default_tab)
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [])
 
   const subsonicConfigured = capabilities?.subsonic_configured !== false
   const availableSearchModes = useMemo(() => subsonicConfigured ? SEARCH_MODES : SEARCH_MODES.filter((item) => item.id === 'ytmusic'), [subsonicConfigured])
@@ -260,11 +281,10 @@ export function SearchPage() {
 
   return (
     <div className="search-redesign">
-      <section className="search-hero">
+      <header className="search-page-header">
         <h1>Search</h1>
-        <p>{subsonicConfigured ? 'Find music across your Subsonic library and YTMusic discovery without exposing either service to the browser.' : 'Subsonic is not configured, so Helix is running in YTMusic/discovery-only mode.'}</p>
         <form className="search-command" onSubmit={search}>
-          <span aria-hidden="true">⌕</span>
+          <span aria-hidden="true" className="search-command-icon">⌕</span>
           <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search songs, albums, artists..." autoFocus />
           {query ? <button type="button" className="search-clear" onClick={clearSearch} aria-label="Clear search">×</button> : null}
           <button className="primary" disabled={loading || !query.trim()}>{loading ? 'Searching...' : 'Search'}</button>
@@ -275,35 +295,40 @@ export function SearchPage() {
           </div>
           <p>{selectedMode.description}</p>
         </div>
-      </section>
+      </header>
 
       {error ? <div className="error-banner">{error}</div> : null}
       {status ? <div className="info-banner">{status}</div> : null}
       {featuredResult ? <TopResultCard result={featuredResult} player={player} onStatus={setStatus} searchReturn={currentSearchReturn} canImportToSubsonic={Boolean(capabilities?.features.subsonic_import)} /> : null}
 
       {hasResults ? (
-        <div className="search-result-counts" aria-label="Search result counts">
-          <div><strong>{results.songs.length}</strong><span>Songs</span></div>
-          <div><strong>{results.albums.length}</strong><span>Albums</span></div>
-          <div><strong>{artists.length}</strong><span>Artists</span></div>
-          <div><strong>{results.songs.filter((song) => song.source === 'subsonic').length + results.albums.filter((album) => album.source === 'subsonic').length}</strong><span>Library matches</span></div>
-        </div>
+        <nav className="search-result-nav" aria-label="Search result sections" role="tablist">
+          <button type="button" role="tab" aria-selected={activeResultSection === 'songs'} className={activeResultSection === 'songs' ? 'active' : ''} onClick={() => setActiveResultSection('songs')}>Songs <span>{results.songs.length}</span></button>
+          <button type="button" role="tab" aria-selected={activeResultSection === 'albums'} className={activeResultSection === 'albums' ? 'active' : ''} onClick={() => setActiveResultSection('albums')}>Albums <span>{results.albums.length}</span></button>
+          <button type="button" role="tab" aria-selected={activeResultSection === 'artists'} className={activeResultSection === 'artists' ? 'active' : ''} onClick={() => setActiveResultSection('artists')}>Artists <span>{artists.length}</span></button>
+        </nav>
       ) : null}
 
-      <section className="search-section">
-        <div className="search-section-heading"><span>Artists</span>{artists.length ? <small>{artists.length} results</small> : null}</div>
-        {artists.length ? <div className="artist-result-grid">{artists.map((artist) => <ArtistCard key={artist.browse_id} artist={artist} searchReturn={currentSearchReturn} />)}</div> : <p className="muted search-empty">{loading ? 'Searching artists…' : query && mode !== 'subsonic' ? 'No artist results.' : 'YTMusic artist results appear here.'}</p>}
-      </section>
+      {activeResultSection === 'songs' ? (
+        <section className="search-section search-songs-section" id="search-songs" role="tabpanel">
+          <div className="search-section-heading"><span>Songs</span>{results.songs.length ? <small>{results.songs.length} results</small> : null}</div>
+          {results.songs.length ? <div className="search-song-grid">{results.songs.map((song, index) => <SongRow key={`${song.source}-${song.title}-${song.artist}-${index}`} song={song} player={player} onStatus={setStatus} canImportToSubsonic={Boolean(capabilities?.features.subsonic_import)} />)}</div> : <p className="muted search-empty">{loading ? 'Searching songs…' : query ? 'No song results.' : 'Search to see songs here.'}</p>}
+        </section>
+      ) : null}
 
-      <section className="search-section">
-        <div className="search-section-heading"><span>Songs</span>{results.songs.length ? <small>{results.songs.length} results</small> : null}</div>
-        {results.songs.length ? <div className="search-song-grid">{results.songs.map((song, index) => <SongRow key={`${song.source}-${song.title}-${song.artist}-${index}`} song={song} player={player} onStatus={setStatus} canImportToSubsonic={Boolean(capabilities?.features.subsonic_import)} />)}</div> : <p className="muted search-empty">{loading ? 'Searching songs…' : query ? 'No song results.' : 'Search to see songs here.'}</p>}
-      </section>
+      {activeResultSection === 'artists' ? (
+        <section className="search-section" id="search-artists" role="tabpanel">
+          <div className="search-section-heading"><span>Artists</span>{artists.length ? <small>{artists.length} results</small> : null}</div>
+          {artists.length ? <div className="artist-result-grid">{artists.map((artist) => <ArtistCard key={artist.browse_id} artist={artist} searchReturn={currentSearchReturn} />)}</div> : <p className="muted search-empty">{loading ? 'Searching artists…' : query && mode !== 'subsonic' ? 'No artist results.' : 'YTMusic artist results appear here.'}</p>}
+        </section>
+      ) : null}
 
-      <section className="search-section">
-        <div className="search-section-heading"><span>Albums</span>{results.albums.length ? <small>{results.albums.length} results</small> : null}</div>
-        {results.albums.length ? <div className="search-album-strip">{results.albums.map((album, index) => <AlbumCard key={`${album.source}-${album.title}-${album.artist}-${index}`} album={album} player={player} onStatus={setStatus} searchReturn={currentSearchReturn} canImportToSubsonic={Boolean(capabilities?.features.subsonic_import)} />)}</div> : <p className="muted search-empty">{loading ? 'Searching albums…' : query ? 'No album results.' : 'Search to see albums here.'}</p>}
-      </section>
+      {activeResultSection === 'albums' ? (
+        <section className="search-section" id="search-albums" role="tabpanel">
+          <div className="search-section-heading"><span>Albums</span>{results.albums.length ? <small>{results.albums.length} results</small> : null}</div>
+          {results.albums.length ? <div className="search-album-strip">{results.albums.map((album, index) => <AlbumCard key={`${album.source}-${album.title}-${album.artist}-${index}`} album={album} player={player} onStatus={setStatus} searchReturn={currentSearchReturn} canImportToSubsonic={Boolean(capabilities?.features.subsonic_import)} />)}</div> : <p className="muted search-empty">{loading ? 'Searching albums…' : query ? 'No album results.' : 'Search to see albums here.'}</p>}
+        </section>
+      ) : null}
     </div>
   )
 }

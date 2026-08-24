@@ -17,12 +17,11 @@ from ..integrations.ytmusic import (
     get_artist_albums,
     get_artist_overview,
     get_artist_popular_songs,
+    get_artist_related_artists,
     search_artists,
     search_ytmusic,
 )
-from ..integrations.listenbrainz import lb_similar_artists_for_artist, lb_top_recordings_for_artist
 from ..integrations.subsonic import SubsonicClient
-from ..integrations.musicbrainz import resolve_artist_mbid_from_yt
 from ..rate_limit import RATE_LIMITER, make_key
 
 
@@ -227,25 +226,23 @@ def _artist_detail_cache_key(browse_id: str) -> str:
     return f"artist_detail|{browse_id}"
 
 
-def _artist_resolution_cache_key(browse_id: str) -> str:
-    return f"artist_resolution|{browse_id}"
+def _resolved_like_payload(overview: Dict[str, Any]) -> Dict[str, Any]:
+    """Return the artist payload without requiring an external identity service.
 
-
-def _resolved_like_payload(overview: Dict[str, Any], resolution: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    Legacy MusicBrainz fields remain in the response for frontend compatibility,
+    but normal YouTube Music browsing no longer resolves an MBID in the background.
+    """
     base = dict(overview or {})
-    res = dict(resolution or {})
-    if not res:
-        res = {
-            "mb_artist_id": "",
-            "mb_resolution_status": "unresolved",
-            "mb_resolution_confidence": 0.0,
-            "canonical_name": "",
-            "artist_type": "",
-            "country": "",
-            "disambiguation": "",
-            "matched_albums": [],
-        }
-    base.update(res)
+    base.update({
+        "mb_artist_id": "",
+        "mb_resolution_status": "not_required",
+        "mb_resolution_confidence": 0.0,
+        "canonical_name": str(base.get("name") or ""),
+        "artist_type": "",
+        "country": "",
+        "disambiguation": "",
+        "matched_albums": [],
+    })
     base["source"] = "ytmusic"
     return base
 
@@ -261,87 +258,11 @@ def _yt_artist_overview_cached(browse_id: str) -> Dict[str, Any]:
     return overview
 
 
-def _artist_resolution_cached(browse_id: str) -> Optional[Dict[str, Any]]:
-    return _CACHE.get(_artist_resolution_cache_key(browse_id))
-
-
-async def _resolve_artist_and_cache(browse_id: str, overview: Dict[str, Any]) -> None:
-    try:
-        resolution = await resolve_artist_mbid_from_yt(
-            artist_name=str(overview.get("name") or ""),
-            album_titles=list(overview.get("top_albums_hint") or []),
-            song_titles=list(overview.get("top_tracks_hint") or []),
-        )
-        if not isinstance(resolution, dict):
-            resolution = {}
-    except Exception:
-        resolution = {
-            "mb_artist_id": "",
-            "mb_resolution_status": "failed",
-            "mb_resolution_confidence": 0.0,
-            "canonical_name": "",
-            "artist_type": "",
-            "country": "",
-            "disambiguation": "",
-            "matched_albums": [],
-        }
-    _CACHE.set(_artist_resolution_cache_key(browse_id), resolution, ttl_seconds=_RESOLUTION_TTL_S)
-
-
-async def _ensure_artist_resolution_started(browse_id: str, overview: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    cached = _artist_resolution_cached(browse_id)
-    if cached is not None:
-        return cached
-
-    bid = (browse_id or "").strip()
-    if not bid or not overview:
-        return None
-
-    async with _RESOLUTION_LOCK:
-        cached = _artist_resolution_cached(bid)
-        if cached is not None:
-            return cached
-        if bid in _RESOLUTION_IN_FLIGHT:
-            return {
-                "mb_artist_id": "",
-                "mb_resolution_status": "resolving",
-                "mb_resolution_confidence": 0.0,
-                "canonical_name": "",
-                "artist_type": "",
-                "country": "",
-                "disambiguation": "",
-                "matched_albums": [],
-            }
-        _RESOLUTION_IN_FLIGHT.add(bid)
-
-    async def _runner() -> None:
-        try:
-            await _resolve_artist_and_cache(bid, overview)
-        finally:
-            async with _RESOLUTION_LOCK:
-                _RESOLUTION_IN_FLIGHT.discard(bid)
-
-    asyncio.create_task(_runner())
-    return {
-        "mb_artist_id": "",
-        "mb_resolution_status": "resolving",
-        "mb_resolution_confidence": 0.0,
-        "canonical_name": "",
-        "artist_type": "",
-        "country": "",
-        "disambiguation": "",
-        "matched_albums": [],
-    }
-
-
 async def _artist_payload_nonblocking(browse_id: str) -> Dict[str, Any]:
     overview = _yt_artist_overview_cached(browse_id)
     if not overview:
         return {}
-    resolution = _artist_resolution_cached(browse_id)
-    if resolution is None:
-        resolution = await _ensure_artist_resolution_started(browse_id, overview)
-    return _resolved_like_payload(overview, resolution)
+    return _resolved_like_payload(overview)
 
 
 def _norm_artist_name(value: str) -> str:
@@ -654,31 +575,13 @@ async def ytmusic_artist_similar(
     if not overview:
         raise HTTPException(status_code=404, detail="Artist not found")
 
-    resolution = _artist_resolution_cached(browse_id)
-    if resolution is None:
-        resolution = await _ensure_artist_resolution_started(browse_id, overview)
-
-    mbid = str((resolution or {}).get("mb_artist_id") or "")
-    status = str((resolution or {}).get("mb_resolution_status") or "unresolved")
-    if not mbid or status not in {"resolved", "ambiguous"}:
-        payload = {
-            "artist_name": overview.get("name") or "",
-            "yt_browse_id": browse_id,
-            "mb_artist_id": mbid,
-            "mb_resolution_status": status,
-            "similar_artists": [],
-        }
-        _CACHE.set(cache_key, payload, ttl_seconds=15 if status == "resolving" else 60)
-        return payload
-
-    rows = await lb_similar_artists_for_artist(mbid, limit=limit)
-    enriched_rows = await _enrich_similar_artist_rows(rows, limit=limit)
+    rows = get_artist_related_artists(browse_id, limit=limit)
     payload = {
         "artist_name": overview.get("name") or "",
         "yt_browse_id": browse_id,
-        "mb_artist_id": mbid,
-        "mb_resolution_status": status,
-        "similar_artists": enriched_rows,
+        "mb_artist_id": "",
+        "mb_resolution_status": "not_required",
+        "similar_artists": rows,
     }
     _CACHE.set(cache_key, payload, ttl_seconds=60 * 60 * 6)
     return payload
@@ -704,29 +607,12 @@ async def ytmusic_artist_station_seeds(
     if not overview:
         raise HTTPException(status_code=404, detail="Artist not found")
 
-    resolution = _artist_resolution_cached(browse_id)
-    if resolution is None:
-        resolution = await _ensure_artist_resolution_started(browse_id, overview)
-
-    mbid = str((resolution or {}).get("mb_artist_id") or "")
-    status = str((resolution or {}).get("mb_resolution_status") or "unresolved")
-    if not mbid or status not in {"resolved", "ambiguous"}:
-        payload = {
-            "artist_name": overview.get("name") or "",
-            "yt_browse_id": browse_id,
-            "mb_artist_id": mbid,
-            "mb_resolution_status": status,
-            "tracks": [],
-        }
-        _CACHE.set(cache_key, payload, ttl_seconds=15 if status == "resolving" else 60)
-        return payload
-
-    tracks = await lb_top_recordings_for_artist(mbid, limit=limit)
+    tracks = get_artist_popular_songs(browse_id, limit=limit)
     payload = {
         "artist_name": overview.get("name") or "",
         "yt_browse_id": browse_id,
-        "mb_artist_id": mbid,
-        "mb_resolution_status": status,
+        "mb_artist_id": "",
+        "mb_resolution_status": "not_required",
         "tracks": tracks,
     }
     _CACHE.set(cache_key, payload, ttl_seconds=60 * 60)

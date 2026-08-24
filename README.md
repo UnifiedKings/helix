@@ -65,7 +65,7 @@ Create a `docker-compose.yml`:
 ```yaml
 services:
   helix:
-    image: ghcr.io/YOUR_USERNAME/helix:latest
+    image: ghcr.io/unifiedkings/helix:latest
     container_name: helix
     ports:
       - "10011:8000"

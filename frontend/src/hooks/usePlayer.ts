@@ -11,12 +11,10 @@ export function usePlayer() {
   const [audioIntent, setAudioIntent] = useState<AudioIntent>({ id: 0, action: 'pause' })
   const latestRequestRef = useRef(0)
   const actionInFlightRef = useRef(false)
+  const socketOpenRef = useRef(false)
 
   const refresh = useCallback(async () => {
-    // Do not let the polling request race against a transport action. This was
-    // causing older playback state snapshots to overwrite skip/previous results.
     if (actionInFlightRef.current) return
-
     const requestId = ++latestRequestRef.current
     try {
       setError('')
@@ -37,16 +35,13 @@ export function usePlayer() {
     try {
       setError('')
       const next = await action()
-      if (requestId !== latestRequestRef.current) return next
-      setPlayer(next)
+      if (requestId === latestRequestRef.current) setPlayer(next)
       if (audioMode === 'play' || audioMode === 'pause') {
         setAudioIntent((current) => ({ id: current.id + 1, action: audioMode }))
       }
       return next
     } catch (err) {
-      if (requestId === latestRequestRef.current) {
-        setError(err instanceof Error ? err.message : 'Playback action failed')
-      }
+      if (requestId === latestRequestRef.current) setError(err instanceof Error ? err.message : 'Playback action failed')
       throw err
     } finally {
       if (requestId === latestRequestRef.current) {
@@ -58,8 +53,52 @@ export function usePlayer() {
 
   useEffect(() => {
     void refresh()
-    const interval = window.setInterval(refresh, 3000)
-    return () => window.clearInterval(interval)
+    let socket: WebSocket | null = null
+    let reconnectTimer = 0
+    let pingTimer = 0
+    let stopped = false
+
+    const connect = () => {
+      if (stopped) return
+      socket = new WebSocket(api.playerSocketUrl())
+      socket.onopen = () => {
+        socketOpenRef.current = true
+        setError('')
+        pingTimer = window.setInterval(() => {
+          if (socket?.readyState === WebSocket.OPEN) socket.send('ping')
+        }, 20000)
+      }
+      socket.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data) as { type?: string; state?: PlayerState }
+          if (message.type === 'player.state' && message.state) {
+            setPlayer(message.state)
+            setLoading(false)
+          }
+        } catch { /* ignore malformed realtime messages */ }
+      }
+      socket.onclose = () => {
+        socketOpenRef.current = false
+        window.clearInterval(pingTimer)
+        if (!stopped) reconnectTimer = window.setTimeout(connect, 1500)
+      }
+      socket.onerror = () => socket?.close()
+    }
+    connect()
+
+    // WebSocket is primary. This slow fallback only matters while disconnected.
+    const fallback = window.setInterval(() => {
+      if (!socketOpenRef.current) void refresh()
+    }, 15000)
+
+    return () => {
+      stopped = true
+      socketOpenRef.current = false
+      window.clearInterval(fallback)
+      window.clearInterval(pingTimer)
+      window.clearTimeout(reconnectTimer)
+      socket?.close()
+    }
   }, [refresh])
 
   return { player, loading, error, refresh, run, setPlayer, setError, audioIntent }

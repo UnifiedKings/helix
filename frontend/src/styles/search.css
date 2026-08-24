@@ -1,0 +1,691 @@
+/* Search page redesign: code-only implementation from approved concept. */
+
+.search-redesign {
+  display: flex;
+  flex-direction: column;
+  gap: 1.6rem;
+}
+
+.search-hero {
+  padding: clamp(1.35rem, 2.4vw, 2.2rem);
+  border: 1px solid var(--border-soft);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 20% 0%, var(--accent-soft), transparent 32%),
+    radial-gradient(circle at 92% 10%, color-mix(in srgb, var(--good) 8%, transparent), transparent 30%),
+    var(--surface);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
+}
+
+.search-hero h1 {
+  margin-bottom: 0.35rem;
+}
+
+.search-hero p {
+  color: var(--muted);
+  max-width: 760px;
+  margin-bottom: 1.35rem;
+}
+
+.search-command {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 64px;
+  padding: 0.45rem 0.45rem 0.45rem 1.15rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--control-bg) 92%, transparent);
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 28%, transparent);
+}
+
+.search-command > span {
+  color: var(--faint);
+  font-size: 1.2rem;
+}
+
+.search-command input {
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: transparent;
+  font-size: 1.08rem;
+  color: var(--text);
+}
+
+.search-command input:focus {
+  outline: 0;
+  border: 0;
+}
+
+.search-command .primary {
+  height: 48px;
+  padding: 0 1.3rem;
+  border-radius: 8px;
+}
+
+.search-clear {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  padding: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  background: var(--surface-raised);
+}
+
+.search-mode-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1.15rem;
+}
+
+.search-mode-row .search-tabs {
+  margin: 0;
+  padding: 0.25rem;
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--control-bg) 76%, transparent);
+  border-radius: 999px;
+}
+
+.search-mode-row .tab-button {
+  padding: 0.58rem 1rem;
+  border-color: transparent;
+}
+
+.search-mode-row .tab-button.active {
+  color: var(--text);
+  background: var(--accent);
+  border-color: var(--accent-border);
+  box-shadow: 0 10px 24px var(--accent-shadow);
+}
+
+.search-mode-row p {
+  margin: 0;
+  max-width: 500px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.search-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.95rem;
+}
+
+.search-section-heading span {
+  font-size: 1.08rem;
+  font-weight: 950;
+  letter-spacing: -0.03em;
+}
+
+.search-section-heading small {
+  color: var(--faint);
+  font-weight: 750;
+}
+
+.search-top-result {
+  margin-top: 0.15rem;
+}
+
+.top-result-card {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr) auto;
+  gap: 1.2rem;
+  align-items: center;
+  min-height: 170px;
+  padding: 1rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 26px;
+  background:
+    radial-gradient(circle at 30% 0%, var(--accent-soft), transparent 38%),
+    var(--surface);
+}
+
+.top-result-card .artwork-lg {
+  width: 132px;
+  height: 132px;
+  aspect-ratio: 1;
+  border-radius: 20px;
+}
+
+.result-kind {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 0.55rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-bright);
+  font-size: 0.75rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.top-result-copy h2 {
+  font-size: clamp(1.5rem, 2vw, 2.05rem);
+  margin-bottom: 0.25rem;
+}
+
+.top-result-copy p {
+  color: var(--muted);
+  margin-bottom: 0.25rem;
+}
+
+.top-result-actions {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+}
+
+.search-result-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 0.8rem;
+}
+
+.search-result-counts > div {
+  min-height: 86px;
+  padding: 1rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 20px;
+  background: var(--surface-soft);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.search-result-counts strong {
+  font-size: 1.8rem;
+  line-height: 1;
+}
+
+.search-result-counts span {
+  margin-top: 0.35rem;
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.search-section {
+  min-width: 0;
+}
+
+.search-song-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+}
+
+.search-song-row {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto auto auto;
+  align-items: center;
+  gap: 0.85rem;
+  min-height: 76px;
+  padding: 0.68rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 18px;
+  background: var(--surface-soft);
+}
+
+.search-song-row:hover {
+  border-color: var(--accent-border);
+  background: color-mix(in srgb, var(--surface-raised) 80%, var(--accent) 20%);
+}
+
+.song-title-cell {
+  min-width: 0;
+}
+
+.song-title-cell strong,
+.song-title-cell span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.song-title-cell span {
+  color: var(--muted);
+  margin-top: 0.12rem;
+}
+
+.song-duration {
+  color: var(--muted);
+  font-size: 0.9rem;
+  min-width: 2.6rem;
+  text-align: right;
+}
+
+.search-row-actions {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: flex-end;
+}
+
+.compact-action {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  border-radius: 999px;
+  background: var(--control-bg);
+  border-color: var(--border-soft);
+}
+
+.search-album-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(158px, 1fr));
+  gap: 0.85rem;
+}
+
+.search-album-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0.75rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 20px;
+  background: var(--surface-soft);
+}
+
+.search-album-card:hover {
+  border-color: var(--accent-border);
+  background: color-mix(in srgb, var(--surface-raised) 80%, var(--accent) 20%);
+}
+
+.search-album-card-clickable {
+  cursor: pointer;
+}
+
+.search-album-card-clickable:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.search-album-card .artwork-lg {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 16px;
+}
+
+.album-card-body {
+  min-width: 0;
+  padding: 0.75rem 0.1rem 0.65rem;
+}
+
+.album-card-body strong,
+.album-card-body span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.album-card-body strong {
+  white-space: nowrap;
+}
+
+.album-card-body span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  color: var(--muted);
+  font-size: 0.9rem;
+  min-height: 2.35em;
+}
+
+.album-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-top: auto;
+}
+
+.album-card-actions .primary {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  padding: 0;
+  border-radius: 999px;
+}
+
+.album-card-actions button:not(.primary) {
+  flex: 1;
+  padding: 0.62rem 0.65rem;
+}
+
+.album-card-actions--compact {
+  gap: 0.7rem;
+}
+
+.album-card-actions--compact .primary {
+  width: 50px;
+  height: 50px;
+  min-width: 50px;
+}
+
+.album-card-menu {
+  position: relative;
+}
+
+.album-card-menu summary {
+  list-style: none;
+}
+
+.album-card-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.album-more-button {
+  width: 50px;
+  min-width: 50px;
+  height: 50px;
+  border-radius: 16px;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.album-card-menu[open] .album-more-button {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.album-card-menu-popover {
+  position: absolute;
+  bottom: calc(100% + 0.7rem);
+  z-index: 20;
+  min-width: 190px;
+  padding: 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  box-shadow: 0 18px 40px rgba(0,0,0,0.38);
+}
+
+.album-card-menu-popover button,
+.album-card-menu-popover .menu-link {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0.8rem 0.9rem;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--text);
+  font-weight: 700;
+  text-align: left;
+}
+
+.album-card-menu-popover button:hover,
+.album-card-menu-popover .menu-link:hover {
+  background: var(--accent-soft);
+  color: var(--text);
+  transform: none;
+}
+
+.search-empty {
+  padding: 1rem;
+  border: 1px dashed var(--border);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--surface-soft) 70%, transparent);
+}
+
+.album-card-menu-popover {
+  right: 0;
+}
+
+@media (max-width: 1240px) {
+  .search-song-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .top-result-card {
+    grid-template-columns: 110px minmax(0, 1fr);
+  }
+
+  .top-result-card .artwork-lg {
+    width: 110px;
+    height: 110px;
+  }
+
+  .top-result-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
+  .search-result-counts {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .search-command {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .search-command .primary,
+  .search-clear {
+    grid-column: span 1;
+  }
+
+  .search-mode-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .search-mode-row .search-tabs {
+    width: 100%;
+  }
+
+  .search-mode-row .tab-button {
+    flex: 1;
+  }
+
+  .top-result-card {
+    grid-template-columns: 1fr;
+  }
+
+  .top-result-card .artwork-lg {
+    width: 100%;
+    height: auto;
+  }
+
+  .search-song-row {
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+  }
+
+  .search-song-row .badge,
+  .song-duration {
+    display: none;
+  }
+
+  .search-row-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
+  .search-result-counts {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+/* ========================================================================
+   USER PALETTE AUDIT
+   Search was one of the oldest amber-specific pages. Keep this block last so
+   generic/shared component rules cannot re-introduce literal amber or blue.
+   ======================================================================== */
+
+.search-redesign {
+  color: var(--text);
+}
+
+.search-hero,
+.top-result-card {
+  border-color: var(--border-soft);
+}
+
+.search-command {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--control-bg) 92%, transparent);
+}
+
+.search-command:focus-within {
+  border-color: var(--accent-border);
+  box-shadow: 0 0 0 1px var(--accent-border);
+}
+
+.search-command input,
+.search-command input::placeholder {
+  color: var(--text);
+}
+
+.search-command input::placeholder {
+  color: var(--faint);
+}
+
+.search-clear,
+.compact-action,
+.album-more-button {
+  background: var(--control-bg);
+  color: var(--muted);
+  border-color: var(--border-soft);
+}
+
+.search-clear:hover,
+.compact-action:hover,
+.album-more-button:hover {
+  color: var(--text);
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.search-mode-row .search-tabs {
+  border-color: var(--border-soft);
+  background: var(--control-bg);
+}
+
+.search-mode-row .tab-button {
+  color: var(--muted);
+}
+
+.search-mode-row .tab-button.active {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-color: var(--accent-border);
+  box-shadow: 0 8px 20px var(--accent-shadow);
+}
+
+/* Main Songs / Albums / Artists section tabs. */
+.search-result-tabs,
+.search-results-tabs {
+  border-color: var(--border-soft);
+}
+
+.search-result-tabs .tab-button,
+.search-results-tabs .tab-button,
+.search-section-tabs .tab-button {
+  color: var(--muted);
+  border-color: transparent;
+  background: transparent;
+}
+
+.search-result-tabs .tab-button.active,
+.search-results-tabs .tab-button.active,
+.search-section-tabs .tab-button.active {
+  color: var(--text);
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+/* Some revisions use buttons directly rather than .tab-button. */
+.search-result-tabs button.active,
+.search-results-tabs button.active,
+.search-section-tabs button.active {
+  color: var(--text);
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+
+.search-song-row,
+.search-album-card,
+.search-result-counts > div {
+  background: var(--surface-soft);
+  border-color: var(--border-soft);
+}
+
+.search-song-row:hover,
+.search-album-card:hover {
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--accent) 18%);
+  border-color: var(--accent-border);
+}
+
+.result-kind {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+}
+
+.search-album-card-clickable:focus-visible {
+  outline-color: var(--accent);
+}
+
+.album-card-menu[open] .album-more-button {
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.album-card-menu-popover {
+  background: var(--surface-raised);
+  border-color: var(--border);
+}
+
+.album-card-menu-popover button:hover,
+.album-card-menu-popover .menu-link:hover {
+  background: var(--accent-soft);
+}
+
+.search-empty {
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
+  border-color: var(--border);
+}
+
+
+/* Search shape + spacing refinement */
+.search-command {
+  border-radius: 10px;
+}
+
+.search-command .primary {
+  border-radius: 8px;
+}
+
+.search-redesign {
+  gap: 1.6rem;
+}
+
+.search-mode-row {
+  margin-top: 1.15rem;
+}
+
+.search-section-heading {
+  margin-bottom: 0.95rem;
+}
+
+.search-section + .search-section,
+.search-results-section + .search-results-section {
+  margin-top: 0.35rem;
+}

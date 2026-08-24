@@ -8,14 +8,14 @@ import os
 import random
 import logging
 from types import SimpleNamespace
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 from fastapi import Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func, or_, update
 from sqlalchemy.exc import IntegrityError, OperationalError
 
 from ..auth import get_current_user
@@ -23,6 +23,7 @@ from ..db import get_db, SessionLocal
 from ..models import User, PlaybackSession, QueueItem, ListenHistoryItem, Station, Playlist, PlaylistTrack, LikedTrack
 from ..api_schemas.player import PlayerPlayAlbumRequest, PlayerPlayPlaylistRequest, PlayerPlayTrackRequest, PlayerJumpRequest, PlayerQueueItem, PlayerStateResponse, PlayerQueueAppendTrackRequest, PlayerQueueAppendAlbumRequest, PlayerQueueReorderRequest, PlayerRemoveQueueItemResponse, PlayerHistoryItem, PlayerHistoryResponse, PlayerActionRequest, PlayerReplayRequest, AutoplaySetRequest
 from ..settings_store import get_settings
+from ..user_settings_store import station_queue_ahead_for_user, queue_add_position_for_user
 from ..integrations.subsonic import SubsonicClient
 from ..integrations.ytmusic import get_album_full, find_track
 from ..download_manager import DOWNLOAD_MANAGER, DownloadJob
@@ -35,6 +36,7 @@ from ..validators import is_valid_yt_video_id
 LOG = logging.getLogger("helix.player")
 
 HELIX_PROGRESSIVE_MIN_BYTES = int(os.getenv("HELIX_PROGRESSIVE_MIN_BYTES", "262144"))
+HELIX_PROGRESSIVE_STREAMING = str(os.getenv("HELIX_PROGRESSIVE_STREAMING", "false") or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
 def _browser_audio_media_type(path: str) -> str:
@@ -61,6 +63,27 @@ def _browser_audio_media_type(path: str) -> str:
         return "audio/mp4"
     return mimetypes.guess_type(guess_path)[0] or "audio/webm"
 
+
+
+def _is_video_thumbnail_art(url: str) -> bool:
+    value = _clean(url).lower()
+    return "i.ytimg.com/vi/" in value or "img.youtube.com/vi/" in value
+
+
+def _prefer_album_art(payload_art: str, resolved_art: str) -> str:
+    """Never replace known music artwork with a YouTube video frame.
+
+    The frontend may already have the correct yt3.googleusercontent.com cover
+    from search. Keep that artwork when get_album_full() falls back to
+    hqdefault.jpg.
+    """
+    payload_clean = _clean(payload_art)
+    resolved_clean = _clean(resolved_art)
+    if payload_clean and not _is_video_thumbnail_art(payload_clean):
+        return payload_clean
+    if resolved_clean and not _is_video_thumbnail_art(resolved_clean):
+        return resolved_clean
+    return payload_clean or resolved_clean
 
 def _load_settings_short() -> dict:
     db = SessionLocal()
@@ -147,6 +170,85 @@ def _append_queue_items_with_sqlite_lock(db: Session, user_id: str, items: list[
             time.sleep(0.03 * (attempt + 1))
         except OperationalError as exc:
             db.rollback()
+
+
+
+def _insert_queue_items_after_current_with_sqlite_lock(
+    db: Session,
+    user_id: str,
+    items: list[QueueItem],
+    max_attempts: int = 6,
+) -> None:
+    """Insert items directly after the currently playing item.
+
+    Queue positions have a per-user UNIQUE constraint. Shift the tail out of the
+    way one row at a time while holding SQLite's write lock, then place the new
+    items and compact the shifted tail back down. The current item itself never
+    moves, so PlaybackSession.current_index remains valid.
+    """
+    if not items:
+        return
+
+    for attempt in range(max_attempts):
+        try:
+            db.rollback()
+            db.connection().exec_driver_sql("BEGIN IMMEDIATE")
+
+            existing = db.execute(
+                select(QueueItem)
+                .where(QueueItem.session_user_id == user_id)
+                .order_by(QueueItem.position.asc())
+            ).scalars().all()
+
+            if not existing:
+                insert_at = 0
+                tail: list[QueueItem] = []
+            else:
+                sess = db.execute(
+                    select(PlaybackSession).where(PlaybackSession.user_id == user_id)
+                ).scalar_one_or_none()
+                current_index = int(getattr(sess, "current_index", 0) or 0)
+                current_index = max(0, min(current_index, len(existing) - 1))
+                insert_at = current_index + 1
+                tail = existing[insert_at:]
+
+            # Move the tail to collision-free temporary positions. Explicit
+            # descending UPDATEs avoid SQLite's row-by-row UNIQUE collisions.
+            temporary_offset = max(1_000_000, len(existing) + len(items) + 1024)
+            for row in reversed(tail):
+                db.execute(
+                    update(QueueItem)
+                    .where(QueueItem.id == row.id)
+                    .values(position=int(row.position) + temporary_offset)
+                )
+
+            for offset, item in enumerate(items):
+                item.position = insert_at + offset
+                item.session_user_id = user_id
+                db.add(item)
+            db.flush()
+
+            tail_start = insert_at + len(items)
+            for offset, row in enumerate(tail):
+                db.execute(
+                    update(QueueItem)
+                    .where(QueueItem.id == row.id)
+                    .values(position=tail_start + offset)
+                )
+
+            db.commit()
+            return
+        except IntegrityError as exc:
+            db.rollback()
+            if attempt >= max_attempts - 1 or not _is_queue_position_conflict(exc):
+                raise
+            time.sleep(0.03 * (attempt + 1))
+        except OperationalError:
+            db.rollback()
+            if attempt >= max_attempts - 1:
+                raise
+            time.sleep(0.03 * (attempt + 1))
+
             if attempt >= max_attempts - 1 or "database is locked" not in str(exc).lower():
                 raise
             time.sleep(0.03 * (attempt + 1))
@@ -177,7 +279,10 @@ async def _prefetch_next_downloads(user_id: str) -> None:
                 .order_by(QueueItem.position.asc())
             ).scalars().all()
 
-            ahead = _prefetch_ahead_count()
+            try:
+                ahead = max(0, min(20, int(settings.get("download_prefetch_ahead", _prefetch_ahead_count()) or 0)))
+            except Exception:
+                ahead = _prefetch_ahead_count()
             if ahead <= 0 or not all_items:
                 return
 
@@ -255,6 +360,8 @@ async def _prefetch_next_downloads(user_id: str) -> None:
                         current.is_playable = True
                         current.error = ""
                         db.commit()
+                        from ..realtime import schedule_player_state_broadcast
+                        schedule_player_state_broadcast(user_id)
                 finally:
                     db.close()
                 continue
@@ -277,6 +384,7 @@ async def _prefetch_next_downloads(user_id: str) -> None:
                 art_url=qi["art_url"],
                 track_no=0,
                 duration_ms=int(qi["duration_ms"] or 0),
+                user_id=user_id,
                 priority=prio,
             ))
     except Exception as e:
@@ -328,7 +436,7 @@ async def _prefetch_next_station_item(user_id: str, station_id: str) -> None:
             if not sess or not sess.is_playing or sess.active_station_id != station_id:
                 return
 
-            ahead = _prefetch_ahead_count()
+            ahead = station_queue_ahead_for_user(db, user_id)
             if ahead <= 0:
                 return
 
@@ -362,6 +470,8 @@ async def _prefetch_next_station_item(user_id: str, station_id: str) -> None:
                 advance_to_new_item=False,
                 position=pos,
             )
+            from ..realtime import schedule_player_state_broadcast
+            schedule_player_state_broadcast(user_id)
     except Exception as e:
         LOG.warning("[station-prefetch] failed user=%s station=%s err=%r", user_id, station_id, e)
     finally:
@@ -803,11 +913,28 @@ def _can_play(it: QueueItem) -> bool:
 
 
 
-def _history_limit(settings: Dict[str, Any]) -> int:
+def _history_retention(settings: Dict[str, Any]) -> int:
     try:
-        return int(settings.get("listen_history_limit") or 50)
+        return max(0, min(50000, int(settings.get("listen_history_retention") or 10000)))
     except Exception:
-        return 50
+        return 10000
+
+
+def _parse_history_datetime(value: str | None, *, end_of_day: bool = False) -> datetime | None:
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        # HTML date inputs arrive as YYYY-MM-DD. Make the upper bound inclusive.
+        if len(raw) == 10:
+            parsed = datetime.fromisoformat(raw)
+            return parsed + timedelta(days=1) if end_of_day else parsed
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+        if parsed.tzinfo is not None:
+            parsed = parsed.astimezone().replace(tzinfo=None)
+        return parsed
+    except Exception:
+        return None
 
 
 def _to_history(h: ListenHistoryItem) -> PlayerHistoryItem:
@@ -836,7 +963,7 @@ def _to_history(h: ListenHistoryItem) -> PlayerHistoryItem:
 def _push_history(db: Session, user_id: str, item: Optional[QueueItem], event: str, reason: str, played_ms: int, settings: Dict[str, Any]):
     if not item:
         return
-    lim = max(0, _history_limit(settings))
+    lim = _history_retention(settings)
     if lim <= 0:
         return
 
@@ -876,11 +1003,11 @@ def _push_history(db: Session, user_id: str, item: Optional[QueueItem], event: s
     db.add(h)
     db.commit()
 
-    # enforce limit PER STATION
+    # Retention is per user, not per station, so one busy station cannot keep an
+    # unbounded global history while other station histories are preserved.
     ids = db.execute(
         select(ListenHistoryItem.id)
         .where(ListenHistoryItem.user_id == user_id)
-        .where(ListenHistoryItem.station_id == station_id)
         .order_by(ListenHistoryItem.created_at.desc())
         .offset(lim)
     ).scalars().all()
@@ -1025,11 +1152,18 @@ def state(db: Session = Depends(get_db), user: User = Depends(get_current_user))
     )
 
 
+def _changed_state(db: Session, user: User):
+    from ..realtime import schedule_player_state_broadcast
+    snapshot = state(db=db, user=user)
+    schedule_player_state_broadcast(user.id)
+    return snapshot
+
+
 def set_autoplay(payload: AutoplaySetRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     sess = _get_or_create_session(db, user.id)
     sess.autoplay_enabled = bool(payload.enabled)
     db.commit()
-    return state(db=db, user=user)
+    return _changed_state(db=db, user=user)
 
 
 def _clear_queue(db: Session, user_id: str, *, settings: Dict[str, Any], log_current: bool = False, played_ms: int = 0):
@@ -1100,7 +1234,7 @@ async def play_track(payload: PlayerPlayTrackRequest, user: User = Depends(get_c
         sess.is_playing = True
         db.commit()
 
-        return state(db=db, user=user)
+        return _changed_state(db=db, user=user)
     finally:
         db.close()
 
@@ -1122,8 +1256,18 @@ async def play_album(payload: PlayerPlayAlbumRequest, user: User = Depends(get_c
         timeout_s=float(os.getenv("HELIX_YTMUSIC_ALBUM_TIMEOUT_S", "12")),
     )
     album_title = _clean(full.get("title") or "") or "(YouTube Music Album)"
-    album_art = _clean((full.get("thumbnail_url") or "") if isinstance(full, dict) else "") or _clean(payload.art_url or "")
+    payload_album_art = _clean(payload.art_url or "")
+    resolved_album_art = _clean((full.get("thumbnail_url") or "") if isinstance(full, dict) else "")
+    album_art = _prefer_album_art(payload_album_art, resolved_album_art)
     tracks = full.get("tracks") or []
+    LOG.warning(
+        "[album-art-debug] play_album browse_id=%s payload_art=%r resolved_art=%r chosen_art=%r first_track_video_id=%r",
+        browse_id,
+        payload_album_art,
+        resolved_album_art,
+        album_art,
+        _clean((tracks[0].get("video_id") or tracks[0].get("videoId") or "") if tracks else ""),
+    )
     album_artist = _album_artist_default(full.get("artist") or "", getattr(payload, "artist", "") or "", (tracks[0].get("artist") or "") if tracks else "")
     if not tracks:
         raise HTTPException(status_code=404, detail="No tracks found for this album on YouTube Music.")
@@ -1216,7 +1360,7 @@ async def play_album(payload: PlayerPlayAlbumRequest, user: User = Depends(get_c
         except Exception:
             LOG.exception("[album] failed to schedule background fill")
 
-        return state(db=db, user=user)
+        return _changed_state(db=db, user=user)
     finally:
         db.close()
 
@@ -1408,7 +1552,7 @@ async def play_playlist(payload: PlayerPlayPlaylistRequest, user: User = Depends
         sess.is_playing = True
 
         db.commit()
-        return state(db=db, user=user)
+        return _changed_state(db=db, user=user)
     finally:
         db.close()
 
@@ -1449,8 +1593,11 @@ async def queue_append_track(payload: PlayerQueueAppendTrackRequest, user: User 
             item.is_playable = False
             item.error = "NOT_IN_LIBRARY"
 
-        _append_queue_items_with_sqlite_lock(db, user.id, [item])
-        return state(db=db, user=user)
+        if queue_add_position_for_user(db, user.id) == "next":
+            _insert_queue_items_after_current_with_sqlite_lock(db, user.id, [item])
+        else:
+            _append_queue_items_with_sqlite_lock(db, user.id, [item])
+        return _changed_state(db=db, user=user)
     finally:
         db.close()
 
@@ -1466,7 +1613,7 @@ async def queue_append_album(payload: PlayerQueueAppendAlbumRequest, user: User 
         timeout_s=float(os.getenv("HELIX_YTMUSIC_ALBUM_TIMEOUT_S", "12")),
     )
     album_title = _clean(full.get("title") or "") or "(YouTube Music Album)"
-    album_art = _clean((full.get("thumbnail_url") or "") if isinstance(full, dict) else "") or _clean(payload.art_url or "")
+    album_art = _prefer_album_art(_clean(payload.art_url or ""), _clean((full.get("thumbnail_url") or "") if isinstance(full, dict) else ""))
     tracks = full.get("tracks") or []
     album_artist = _album_artist_default(full.get("artist") or "", getattr(payload, "artist", "") or "", (tracks[0].get("artist") or "") if tracks else "")
     if not tracks:
@@ -1503,8 +1650,11 @@ async def queue_append_album(payload: PlayerQueueAppendAlbumRequest, user: User 
         if not items_to_add:
             raise HTTPException(status_code=404, detail="No playable tracks found for this album on YouTube Music.")
 
-        _append_queue_items_with_sqlite_lock(db, user.id, items_to_add)
-        return state(db=db, user=user)
+        if queue_add_position_for_user(db, user.id) == "next":
+            _insert_queue_items_after_current_with_sqlite_lock(db, user.id, items_to_add)
+        else:
+            _append_queue_items_with_sqlite_lock(db, user.id, items_to_add)
+        return _changed_state(db=db, user=user)
     finally:
         db.close()
 
@@ -1534,7 +1684,7 @@ def queue_clear(db: Session = Depends(get_db), user: User = Depends(get_current_
     sess.autoplay_enabled = False
     sess.active_station_id = ""
     db.commit()
-    return state(db=db, user=user)
+    return _changed_state(db=db, user=user)
 
 
 def queue_remove_item(queue_item_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -1566,6 +1716,8 @@ def queue_remove_item(queue_item_id: str, db: Session = Depends(get_db), user: U
             sess.current_index = max(0, len(items2) - 1)
             sess.is_playing = False
     db.commit()
+    from ..realtime import schedule_player_state_broadcast
+    schedule_player_state_broadcast(user.id)
     return PlayerRemoveQueueItemResponse(ok=True)
 
 
@@ -1606,7 +1758,7 @@ def queue_reorder(payload: PlayerQueueReorderRequest, db: Session = Depends(get_
 
         if not rows:
             db.rollback()
-            return state(db=db, user=user)
+            return _changed_state(db=db, user=user)
 
         by_id = {row.id: row for row in rows}
         for item_id in requested_ids:
@@ -1650,33 +1802,96 @@ def queue_reorder(payload: PlayerQueueReorderRequest, db: Session = Depends(get_
             raise HTTPException(status_code=503, detail="Queue is busy. Please try again.") from exc
         raise
 
-    return state(db=db, user=user)
+    return _changed_state(db=db, user=user)
 
-def history(station_id: str | None = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    settings = get_settings(db)
-    lim = _history_limit(settings)
+def history(
+    station_id: str | None = None,
+    q: str | None = None,
+    artist: str | None = None,
+    album: str | None = None,
+    source: str | None = None,
+    event: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    limit = max(1, min(250, int(limit or 100)))
+    offset = max(0, int(offset or 0))
 
-    q = select(ListenHistoryItem).where(ListenHistoryItem.user_id == user.id)
+    filters = [ListenHistoryItem.user_id == user.id]
     if station_id is not None:
-        q = q.where(ListenHistoryItem.station_id == station_id)
+        station_value = str(station_id).strip()
+        if station_value == "__none__":
+            filters.append(ListenHistoryItem.station_id == "")
+        else:
+            filters.append(ListenHistoryItem.station_id == station_value)
 
+    search = str(q or "").strip()
+    if search:
+        pattern = f"%{search}%"
+        filters.append(or_(
+            ListenHistoryItem.title.ilike(pattern),
+            ListenHistoryItem.artist.ilike(pattern),
+            ListenHistoryItem.album.ilike(pattern),
+        ))
+
+    artist_value = str(artist or "").strip()
+    if artist_value:
+        filters.append(ListenHistoryItem.artist.ilike(f"%{artist_value}%"))
+
+    album_value = str(album or "").strip()
+    if album_value:
+        filters.append(ListenHistoryItem.album.ilike(f"%{album_value}%"))
+
+    source_value = str(source or "").strip().lower()
+    if source_value:
+        if source_value == "ytmusic":
+            filters.append(func.lower(ListenHistoryItem.source).in_(["ytmusic", "youtube"]))
+        else:
+            filters.append(func.lower(ListenHistoryItem.source) == source_value)
+
+    event_value = str(event or "").strip().lower()
+    if event_value:
+        filters.append(func.lower(ListenHistoryItem.event) == event_value)
+
+    start = _parse_history_datetime(date_from)
+    end = _parse_history_datetime(date_to, end_of_day=True)
+    if start is not None:
+        filters.append(ListenHistoryItem.created_at >= start)
+    if end is not None:
+        filters.append(ListenHistoryItem.created_at < end)
+
+    total = int(db.execute(select(func.count(ListenHistoryItem.id)).where(*filters)).scalar_one() or 0)
     items = db.execute(
-        q.order_by(ListenHistoryItem.created_at.desc()).limit(lim)
+        select(ListenHistoryItem)
+        .where(*filters)
+        .order_by(ListenHistoryItem.created_at.desc())
+        .offset(offset)
+        .limit(limit)
     ).scalars().all()
-    return PlayerHistoryResponse(limit=lim, items=[_to_history(h) for h in items])
+    return PlayerHistoryResponse(
+        limit=limit,
+        offset=offset,
+        total=total,
+        has_more=(offset + len(items)) < total,
+        items=[_to_history(h) for h in items],
+    )
 
 
 def history_set_limit(payload: Dict[str, Any], db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # Admin UI can call settings patch too; this is a convenience for the frontend.
+    # Backward-compatible endpoint: old clients used this to control both display
+    # length and retention. It now controls retention only; API display is paginated.
     try:
-        lim = int(payload.get("limit") or 50)
+        retention = int(payload.get("limit") or payload.get("retention") or 10000)
     except Exception:
-        lim = 50
-    lim = max(0, min(500, lim))
+        retention = 10000
+    retention = max(0, min(50000, retention))
     from ..settings_store import patch_settings
-    patch_settings(db, {"listen_history_limit": lim})
-    settings = get_settings(db)
-    return history(db=db, user=user)
+    patch_settings(db, {"listen_history_retention": retention})
+    return history(limit=100, offset=0, db=db, user=user)
 
 
 async def ended(payload: Optional[PlayerActionRequest] = None, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -1694,7 +1909,7 @@ async def ended(payload: Optional[PlayerActionRequest] = None, db: Session = Dep
         sess.current_index += 1
         sess.is_playing = True
         db.commit()
-        return state(db=db, user=user)
+        return _changed_state(db=db, user=user)
 
     # End of queue: optionally autoplay from the active station.
     sess.is_playing = False
@@ -1711,7 +1926,7 @@ async def ended(payload: Optional[PlayerActionRequest] = None, db: Session = Dep
             )
         except Exception as e:
             LOG.warning("autoplay append failed: %s", e)
-    return state(db=db, user=user)
+    return _changed_state(db=db, user=user)
 
 
 def jump_to(payload: PlayerJumpRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -1729,7 +1944,7 @@ def jump_to(payload: PlayerJumpRequest, db: Session = Depends(get_db), user: Use
     sess.current_index = idx
     sess.is_playing = _can_play(items[idx])
     db.commit()
-    return state(db=db, user=user)
+    return _changed_state(db=db, user=user)
 
 
 async def replay_from_history(payload: PlayerReplayRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -1788,7 +2003,7 @@ async def replay_from_history(payload: PlayerReplayRequest, db: Session = Depend
     sess.is_playing = _can_play(qi)
 
     db.commit()
-    return state(db=db, user=user)
+    return _changed_state(db=db, user=user)
 
 async def next_track(payload: Optional[PlayerActionRequest] = None, user: User = Depends(get_current_user)):
     # DB burst: advance index, snapshot autoplay inputs
@@ -1805,7 +2020,7 @@ async def next_track(payload: Optional[PlayerActionRequest] = None, user: User =
             sess.is_playing = False
             sess.current_index = 0
             db.commit()
-            return state(db=db, user=user)
+            return _changed_state(db=db, user=user)
 
         active_station_id = str(getattr(sess, "active_station_id", "") or "")
         autoplay_enabled = bool(getattr(sess, "autoplay_enabled", True))
@@ -1814,7 +2029,7 @@ async def next_track(payload: Optional[PlayerActionRequest] = None, user: User =
             sess.current_index += 1
             sess.is_playing = _can_play(items[sess.current_index])
             db.commit()
-            return state(db=db, user=user)
+            return _changed_state(db=db, user=user)
 
         # End of queue
         sess.is_playing = False
@@ -1836,7 +2051,7 @@ async def next_track(payload: Optional[PlayerActionRequest] = None, user: User =
 
     db = SessionLocal()
     try:
-        return state(db=db, user=user)
+        return _changed_state(db=db, user=user)
     finally:
         db.close()
 
@@ -1852,20 +2067,20 @@ def prev_track(payload: Optional[PlayerActionRequest] = None, db: Session = Depe
         sess.is_playing = False
         sess.current_index = 0
         db.commit()
-        return state(db=db, user=user)
+        return _changed_state(db=db, user=user)
 
     if sess.current_index > 0:
         sess.current_index -= 1
     sess.is_playing = _can_play(items[sess.current_index])
     db.commit()
-    return state(db=db, user=user)
+    return _changed_state(db=db, user=user)
 
 
 def pause(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     sess = _get_or_create_session(db, user.id)
     sess.is_playing = False
     db.commit()
-    return state(db=db, user=user)
+    return _changed_state(db=db, user=user)
 
 
 def resume(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -1877,7 +2092,7 @@ def resume(db: Session = Depends(get_db), user: User = Depends(get_current_user)
         raise HTTPException(status_code=400, detail="Current queue item is not playable.")
     sess.is_playing = True
     db.commit()
-    return state(db=db, user=user)
+    return _changed_state(db=db, user=user)
 
 
 def _stream_queue_item_snapshot(cur: QueueItem) -> SimpleNamespace:
@@ -1914,14 +2129,19 @@ async def stream_item(
 ):
     """Stream audio for a queue item.
 
-    We proxy Subsonic through Helix so clients don't need Subsonic credentials.
-
-    IMPORTANT: Support HTTP Range for both inbound and proxied Subsonic streams so
-    Media3/ExoPlayer can seek and determine duration.
+    Keep database work short-lived. Audio responses and upstream Subsonic
+    requests can stay open for a long time, so this endpoint snapshots the queue
+    item and closes the SQLAlchemy session before returning/creating a streaming
+    response. If a stale Subsonic item needs fallback recovery, a fresh short
+    session is opened only for that recovery work.
     """
+    settings: dict = {}
+    cur_snapshot: SimpleNamespace | None = None
+    source = ""
+
     db = SessionLocal()
     try:
-        settings = get_settings(db)
+        settings = dict(get_settings(db) or {})
 
         cur = db.execute(
             select(QueueItem)
@@ -1940,7 +2160,7 @@ async def stream_item(
         # Ensure the item is playable (Subsonic id or inbound file) *before* streaming.
         # For stream requests, do not block on Subsonic scanning/polling. If not found quickly,
         # start inbound download and stream progressively.
-        await _ensure_playable_for_stream(db, cur, settings=settings, allow_subsonic_wait=False, progressive_inbound=True)
+        await _ensure_playable_for_stream(db, cur, settings=settings, allow_subsonic_wait=False, progressive_inbound=HELIX_PROGRESSIVE_STREAMING)
 
         inbound_exists = bool((cur.inbound_path or "").strip()) and os.path.exists(cur.inbound_path)
         LOG.warning(
@@ -1956,33 +2176,55 @@ async def stream_item(
             cur.error,
         )
 
-        if cur.source != "subsonic":
-            # If the file is still downloading (often endswith .part) use progressive streaming.
-            if (cur.inbound_path or "").endswith('.part'):
-                return await _stream_inbound_progressive(request, _stream_queue_item_snapshot(cur))
-            return await _stream_inbound_with_range(request, _stream_queue_item_snapshot(cur))
+        source = cur.source or ""
+        cur_snapshot = _stream_queue_item_snapshot(cur)
+    finally:
+        db.close()
 
+    if cur_snapshot is None:
+        raise HTTPException(status_code=404, detail="Queue item not found.")
+
+    if source != "subsonic":
+        # If the file is still downloading (often endswith .part) use progressive streaming.
+        if (cur_snapshot.inbound_path or "").endswith('.part'):
+            return _stream_inbound_progressive(request, cur_snapshot)
+        return await _stream_inbound_with_range(request, cur_snapshot)
+
+    try:
+        return await _stream_subsonic_with_range(request, cur_snapshot, settings=settings)
+    except HTTPException as exc:
+        # Liked songs can point at Subsonic items that existed when they were liked
+        # but were later deleted from Navidrome/the filesystem. Treat that as a stale
+        # Subsonic reference, recover/persist a YTMusic id on the liked row, then
+        # fulfill this playback as a temporary download. Keep this recovery DB session
+        # short too, then stream from a plain snapshot.
+        if exc.status_code not in {404, 409, 410, 415, 422, 502, 503}:
+            raise
+
+        db = SessionLocal()
         try:
-            return await _stream_subsonic_with_range(request, _stream_queue_item_snapshot(cur), settings=settings)
-        except HTTPException as exc:
-            # Liked songs can point at Subsonic items that existed when they were liked
-            # but were later deleted from Navidrome/the filesystem. Treat that as a stale
-            # Subsonic reference, recover/persist a YTMusic id on the liked row, then
-            # fulfill this playback as a temporary YT download.
-            if exc.status_code not in {404, 409, 410, 415, 422, 502, 503}:
-                raise
+            cur = db.execute(
+                select(QueueItem)
+                .where(QueueItem.session_user_id == user.id, QueueItem.id == queue_item_id)
+            ).scalar_one_or_none()
+            if not cur:
+                raise HTTPException(status_code=404, detail="Queue item not found.")
+
             recovered = await _recover_stale_subsonic_liked_track(db, user.id, cur)
             if not recovered:
                 recovered = await _recover_stale_subsonic_playlist_track(db, user.id, cur)
             if not recovered:
-                raise
-            await _ensure_playable_for_stream(db, cur, settings=settings, allow_subsonic_wait=False, progressive_inbound=True)
-            if (cur.inbound_path or "").endswith('.part'):
-                return await _stream_inbound_progressive(request, _stream_queue_item_snapshot(cur))
-            return await _stream_inbound_with_range(request, _stream_queue_item_snapshot(cur))
+                raise exc
 
-    finally:
-        db.close()
+            await _ensure_playable_for_stream(db, cur, settings=settings, allow_subsonic_wait=False, progressive_inbound=HELIX_PROGRESSIVE_STREAMING)
+            cur_snapshot = _stream_queue_item_snapshot(cur)
+        finally:
+            db.close()
+
+        if (cur_snapshot.inbound_path or "").endswith('.part'):
+            return _stream_inbound_progressive(request, cur_snapshot)
+        return await _stream_inbound_with_range(request, cur_snapshot)
+
 
 
 
@@ -2149,6 +2391,8 @@ async def _ensure_playable_for_stream(db: Session, cur: QueueItem, *, settings: 
         cur.is_playable = True
         cur.error = ""
         db.commit()
+        from ..realtime import schedule_player_state_broadcast
+        schedule_player_state_broadcast(cur.session_user_id)
         return
 
     # If the queue item came from an old liked-song row without a stored YT id,
@@ -2202,6 +2446,7 @@ async def _ensure_playable_for_stream(db: Session, cur: QueueItem, *, settings: 
         art_url=cur.art_url or "",
         track_no=_infer_int(getattr(cur, "position", 0), 0) + 1,
         duration_ms=int(cur.duration_ms or 0),
+        user_id=cur.session_user_id,
         priority=0,
     )
 
@@ -2512,6 +2757,7 @@ async def request_fulfillment(queue_item_id: str, user: User = Depends(get_curre
                     art_url=art_url,
                     track_no=position + 1,
                     duration_ms=duration_ms,
+                    user_id=user.id,
                     priority=10,
                 )
             ),
@@ -2527,6 +2773,8 @@ async def request_fulfillment(queue_item_id: str, user: User = Depends(get_curre
         if qi2 and qi2.session_user_id == user.id:
             qi2.download_status = "QUEUED"
             db.commit()
+            from ..realtime import schedule_player_state_broadcast
+            schedule_player_state_broadcast(user.id)
     finally:
         db.close()
 

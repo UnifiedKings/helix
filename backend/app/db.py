@@ -35,6 +35,22 @@ def init_db() -> None:
         if "popular_track_pool_size" not in cols:
             conn.execute(text("ALTER TABLE stations ADD COLUMN popular_track_pool_size INTEGER NOT NULL DEFAULT 10"))
 
+        lobby_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(shared_lobbies)")).fetchall()}
+        if lobby_cols and "guest_queue_limit" not in lobby_cols:
+            conn.execute(text("ALTER TABLE shared_lobbies ADD COLUMN guest_queue_limit INTEGER NOT NULL DEFAULT 0"))
+        if lobby_cols and "cleanup_after_days" not in lobby_cols:
+            conn.execute(text("ALTER TABLE shared_lobbies ADD COLUMN cleanup_after_days INTEGER NOT NULL DEFAULT 0"))
+        if lobby_cols and "last_history_queue_item_id" not in lobby_cols:
+            conn.execute(text("ALTER TABLE shared_lobbies ADD COLUMN last_history_queue_item_id VARCHAR(36) NOT NULL DEFAULT ''"))
+        if lobby_cols and "active_station_id" not in lobby_cols:
+            conn.execute(text("ALTER TABLE shared_lobbies ADD COLUMN active_station_id VARCHAR(36) NOT NULL DEFAULT ''"))
+
+        lobby_queue_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(shared_lobby_queue_items)")).fetchall()}
+        if lobby_queue_cols and "station_id" not in lobby_queue_cols:
+            conn.execute(text("ALTER TABLE shared_lobby_queue_items ADD COLUMN station_id VARCHAR(36) NOT NULL DEFAULT ''"))
+        if lobby_queue_cols and "station_name" not in lobby_queue_cols:
+            conn.execute(text("ALTER TABLE shared_lobby_queue_items ADD COLUMN station_name TEXT NOT NULL DEFAULT ''"))
+
 
         # --- playlists.system_key uniqueness migration ---
         # Older schema used system_key='' for user-created playlists with a UNIQUE(user_id, system_key) constraint,

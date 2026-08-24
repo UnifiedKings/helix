@@ -13,6 +13,14 @@ from ..settings_store import get_settings
 
 router = APIRouter(prefix="/api/subsonic", tags=["subsonic"])
 
+
+def _load_settings_short() -> Dict[str, Any]:
+    db = SessionLocal()
+    try:
+        return dict(get_settings(db) or {})
+    finally:
+        db.close()
+
 # Cache results so search typing doesn't hammer Subsonic.
 _song_cache: TTLCache[Dict[str, Any]] = TTLCache(max_items=4096)
 _album_cache: TTLCache[Dict[str, Any]] = TTLCache(max_items=2048)
@@ -93,11 +101,12 @@ async def resolve_subsonic(
 
         title = s.get("title") or ""
         artist = s.get("artist") or ""
+        album = s.get("album") or ""
         duration_ms = s.get("duration_ms") or None
 
         sub_id = None
         try:
-            match = await client.search_song_best(title=title, artist=artist, duration_ms=duration_ms)
+            match = await client.search_song_best(title=title, artist=artist, duration_ms=duration_ms, album=album)
             if match:
                 sub_id = match.get("id")
         except Exception:

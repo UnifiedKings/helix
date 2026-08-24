@@ -1,0 +1,54 @@
+/* Song Radio seed picker */
+
+.station-song-seed-picker {
+  grid-column: 1 / -1;
+}
+
+.station-song-seed-search {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.65rem;
+  align-items: center;
+}
+
+.station-song-seed-selected {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border-radius: 12px;
+  background: rgba(255,255,255,0.035);
+}
+
+.station-song-seed-selected span,
+.station-song-seed-result span {
+  opacity: 0.75;
+  font-size: 0.9rem;
+}
+
+.station-song-seed-results {
+  display: grid;
+  gap: 0.4rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+.station-song-seed-result {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.65rem 0.75rem;
+  text-align: left;
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 10px;
+  background: rgba(255,255,255,0.025);
+  color: inherit;
+  cursor: pointer;
+}
+
+.station-song-seed-result:hover {
+  background: rgba(255,255,255,0.07);
+}

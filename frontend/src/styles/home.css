@@ -1,0 +1,480 @@
+/* Home page: music-first layout. */
+
+.home-page {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.home-session-card {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: clamp(190px, 20vw, 250px) minmax(0, 1fr);
+  gap: clamp(1.7rem, 3vw, 3.2rem);
+  align-items: center;
+  min-height: clamp(285px, 28vw, 330px);
+  padding: clamp(1.45rem, 2.2vw, 2rem);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 78% 48%, var(--accent-soft), transparent 33%),
+    #0a0e12;
+  box-shadow: 0 18px 45px rgba(0,0,0,0.18);
+}
+
+.home-session-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg,
+      rgba(7,10,13,0.98) 0%,
+      rgba(7,10,13,0.94) 20%,
+      rgba(7,10,13,0.74) 48%,
+      rgba(7,10,13,0.38) 73%,
+      rgba(7,10,13,0.56) 100%),
+    linear-gradient(0deg, rgba(7,10,13,0.38), transparent 48%);
+}
+
+.home-session-card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent 50%, var(--accent-soft) 100%);
+  opacity: 0.9;
+}
+
+.home-session-card > *:not(.home-session-backdrop) {
+  position: relative;
+  z-index: 2;
+}
+
+.home-session-backdrop {
+  position: absolute;
+  inset: -10%;
+  z-index: 0;
+  background-position: 74% center;
+  background-size: cover;
+  filter: blur(7px) saturate(1.28) brightness(0.72) contrast(1.05);
+  transform: scale(1.12);
+  opacity: 0.62;
+}
+
+.home-session-art {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  max-width: 250px;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 17px;
+  background: rgba(5,9,16,0.55);
+  box-shadow:
+    0 18px 44px rgba(0,0,0,0.46),
+    0 0 0 1px rgba(0,0,0,0.28);
+}
+
+.home-session-art .artwork-lg {
+  width: 100%;
+  height: 100%;
+  border-radius: 16px;
+}
+
+.home-session-art > span {
+  display: grid;
+  place-items: center;
+  width: 78px;
+  height: 78px;
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  font-size: 2rem;
+}
+
+.home-session-copy {
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  gap: 0.8rem;
+  min-width: 0;
+  max-width: 760px;
+}
+
+.home-session-copy .eyebrow {
+  color: var(--accent-strong);
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.home-session-title-row h1 {
+  margin: 0;
+  /*
+   * Long soundtrack titles can get absurdly tall here. Keep the hero headline
+   * prominent, but cap its maximum size and never let it consume the entire
+   * banner.
+   */
+  font-size: clamp(2.45rem, 3.8vw, 4.25rem);
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+  text-wrap: balance;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.home-session-copy > .muted {
+  margin: 0;
+  color: rgba(242,244,246,0.80);
+  font-size: clamp(0.98rem, 1.15vw, 1.12rem);
+}
+
+.home-session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  margin-top: 0.25rem;
+}
+
+.home-session-actions .button-link {
+  min-height: 44px;
+  padding: 0.65rem 1.15rem;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 10px;
+  background: rgba(8,12,16,0.48);
+  backdrop-filter: blur(10px);
+}
+
+.home-session-actions .button-link:hover {
+  border-color: rgba(255,255,255,0.26);
+  background: rgba(255,255,255,0.08);
+}
+
+.home-session-actions .button-link.primary {
+  border-color: var(--accent-border);
+  background: var(--accent);
+  color: var(--accent-contrast);
+  box-shadow: 0 10px 24px var(--accent-shadow);
+}
+
+.home-session-actions .button-link.primary:hover {
+  background: var(--accent-strong);
+}
+
+.home-session-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0;
+  margin-top: 0.15rem;
+}
+
+.home-session-meta span {
+  padding: 0 1rem;
+  color: rgba(232,237,243,0.90);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.home-session-meta span:first-child {
+  padding-left: 0;
+  color: var(--accent-strong);
+}
+
+.home-session-meta span + span {
+  border-left: 1px solid rgba(255,255,255,0.15);
+}
+
+.home-quick-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.075);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.018);
+}
+
+.home-quick-actions .home-quick-action {
+  position: relative;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.9rem 1rem;
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+  text-decoration: none;
+  transition: background 140ms ease, box-shadow 140ms ease;
+}
+
+.home-quick-actions .home-quick-action + .home-quick-action {
+  border-left: 1px solid rgba(255,255,255,0.09);
+}
+
+.home-quick-actions .home-quick-action:hover {
+  border-radius: 0;
+  background: var(--accent-soft);
+  box-shadow: inset 0 -2px 0 var(--accent);
+  color: var(--text);
+}
+
+.home-quick-icon {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  color: var(--accent-strong);
+  font-size: 1.35rem;
+}
+
+.home-quick-action > span:last-child {
+  min-width: 0;
+  display: grid;
+  gap: 0.18rem;
+}
+
+.home-quick-action strong,
+.home-quick-action small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-quick-action strong {
+  font-size: 0.9rem;
+}
+
+.home-quick-action small {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.home-activity-section {
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.075);
+  border-radius: 16px;
+  background: rgba(255,255,255,0.014);
+}
+
+.home-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem 0.7rem;
+}
+
+.home-section-heading h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.home-section-heading a {
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-decoration: none;
+}
+
+.home-section-heading a:hover {
+  color: var(--text);
+}
+
+.home-activity-list {
+  display: grid;
+  gap: 0;
+}
+
+.home-activity-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: center;
+  min-height: 62px;
+  padding: 0.55rem 1rem;
+  background: transparent;
+}
+
+.home-activity-item + .home-activity-item {
+  border-top: 1px solid rgba(255,255,255,0.065);
+}
+
+.home-activity-item:hover {
+  background: rgba(255,255,255,0.022);
+}
+
+.home-activity-item .artwork-sm {
+  width: 40px;
+  height: 40px;
+  border-radius: 7px;
+}
+
+.home-activity-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 7px;
+  color: var(--accent-strong);
+  background: rgba(184,106,31,0.10);
+}
+
+.home-activity-copy {
+  min-width: 0;
+}
+
+.home-activity-item strong,
+.home-activity-item .muted {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.home-activity-item time {
+  color: var(--faint);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.home-empty-copy {
+  margin: 0;
+  padding: 1rem;
+}
+
+@media (max-width: 1180px) {
+  .home-session-card {
+    grid-template-columns: 180px minmax(0, 1fr);
+    min-height: 260px;
+  }
+
+  .home-quick-actions {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .home-quick-actions .home-quick-action:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+
+  .home-quick-actions .home-quick-action:nth-child(4) {
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+}
+
+@media (max-width: 760px) {
+  .home-session-card,
+  .home-quick-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .home-session-card {
+    min-height: 0;
+    gap: 1.1rem;
+    padding: 1rem;
+  }
+
+  .home-session-art {
+    width: 146px;
+  }
+
+  .home-session-title-row h1 {
+    font-size: clamp(2rem, 9vw, 3rem);
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+  }
+
+  .home-quick-actions .home-quick-action + .home-quick-action {
+    border-left: 0;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+}
+
+/* Hero-only refinement: song-first presentation and tighter visual language. */
+.home-session-card {
+  border-radius: 12px;
+}
+
+.home-session-backdrop {
+  border-radius: inherit;
+}
+
+.home-session-art {
+  border-radius: 12px;
+}
+
+.home-session-art .artwork-lg {
+  border-radius: 11px;
+}
+
+.home-session-station {
+  margin: -0.25rem 0 0;
+  color: rgba(232, 237, 243, 0.72);
+  font-size: 0.92rem;
+}
+
+.home-session-station strong {
+  color: var(--accent-strong);
+  font-weight: 800;
+}
+
+.home-session-actions button.button-link {
+  font: inherit;
+  cursor: pointer;
+}
+
+.home-subsonic-action {
+  color: rgba(244, 246, 248, 0.94);
+}
+
+.home-subsonic-state {
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid rgba(255,255,255,0.13);
+  border-radius: 10px;
+  color: rgba(235, 239, 243, 0.88);
+  background: rgba(8,12,16,0.42);
+  backdrop-filter: blur(10px);
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.home-subsonic-state > span {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(214,125,38,0.42);
+  border-radius: 999px;
+  color: var(--accent-strong);
+}
+
+.home-subsonic-state.queued > span {
+  border-radius: 6px;
+}
+
+
+/* User-palette compatibility for the Home hero. */
+.home-session-actions .button-link.primary {
+  border-color: var(--accent-border) !important;
+  background: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+  box-shadow: 0 10px 24px var(--accent-shadow) !important;
+}
+
+.home-session-actions .button-link.primary:hover {
+  background: var(--accent-strong) !important;
+}

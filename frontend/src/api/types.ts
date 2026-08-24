@@ -131,7 +131,23 @@ export type PlaybackHistoryItem = QueueItem & {
 
 export type PlaybackHistoryResponse = {
   limit: number
+  offset: number
+  total: number
+  has_more: boolean
   items: PlaybackHistoryItem[]
+}
+
+export type PlaybackHistoryFilters = {
+  q?: string
+  artist?: string
+  album?: string
+  source?: string
+  event?: string
+  station_id?: string
+  date_from?: string
+  date_to?: string
+  limit?: number
+  offset?: number
 }
 
 export type StationConfigOption = {
@@ -208,7 +224,51 @@ export type PlaylistDetail = {
 export type User = {
   id: string
   username: string
+  role: 'admin' | 'user' | string
   is_admin?: boolean
+}
+
+export type UserSettings = {
+  appearance_accent_color: string
+  appearance_accent_contrast_color: string
+  appearance_logo_follow_accent: boolean
+  appearance_logo_color: string
+  appearance_background_color: string
+  appearance_surface_color: string
+  appearance_surface_soft_color: string
+  appearance_surface_raised_color: string
+  appearance_sidebar_color: string
+  appearance_queue_color: string
+  appearance_player_color: string
+  appearance_control_color: string
+  appearance_text_color: string
+  appearance_muted_color: string
+  appearance_faint_color: string
+  appearance_border_color: string
+  appearance_danger_color: string
+  appearance_success_color: string
+  appearance_reduce_motion: boolean
+  appearance_artwork_backgrounds: boolean
+  appearance_ui_density: 'compact' | 'comfortable' | 'spacious'
+  appearance_artwork_radius: 'square' | 'soft' | 'rounded'
+  queue_add_position: 'append' | 'next'
+  queue_show_duration: boolean
+  queue_show_playing_indicator: boolean
+  playback_default_volume: number
+  search_default_mode: 'hybrid' | 'subsonic' | 'ytmusic'
+  search_default_tab: 'songs' | 'albums' | 'artists'
+  station_queue_ahead: number
+  lobbies_default_name: string
+  lobbies_default_guests_can_add: boolean
+  lobbies_auto_copy_invite: boolean
+  notifications_import_queued: boolean
+  notifications_duration: 'short' | 'normal' | 'long'
+  advanced_custom_css: string
+}
+
+export type UserSettingsPayload = {
+  settings: UserSettings
+  limits: { station_queue_ahead_max: number }
 }
 
 export type LikeState = {
@@ -258,9 +318,27 @@ export type LobbyQueueItem = {
   yt_browse_id?: string
   mb_recording_id?: string
   mb_artist_id?: string
+  station_id?: string
+  station_name?: string
   added_by_member_id?: string
   added_by_nickname?: string
   created_at: string
+}
+
+export type LobbyHistoryItem = {
+  id: string
+  queue_item_id?: string
+  title: string
+  artist: string
+  album?: string
+  duration_ms?: number
+  art_url?: string
+  source?: string
+  subsonic_song_id?: string
+  yt_video_id?: string
+  added_by_member_id?: string
+  added_by_nickname?: string
+  played_at: string
 }
 
 export type LobbyState = {
@@ -270,6 +348,10 @@ export type LobbyState = {
   invite_code?: string | null
   is_open: boolean
   guest_permissions: LobbyPermissions
+  guest_queue_limit: number
+  cleanup_after_days: number
+  active_station_id: string
+  active_station_name: string
   self_member_id: string
   self_role: 'host' | 'guest' | string
   self_permissions: LobbyPermissions
@@ -282,6 +364,7 @@ export type LobbyState = {
   now_playing?: LobbyQueueItem | null
   queue: LobbyQueueItem[]
   members: LobbyMember[]
+  history: LobbyHistoryItem[]
   created_at: string
   updated_at: string
 }

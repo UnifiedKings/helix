@@ -16,12 +16,16 @@ class LobbyPermissions(BaseModel):
 class LobbyCreateRequest(BaseModel):
     name: str = "Shared Lobby"
     guest_permissions: LobbyPermissions = Field(default_factory=LobbyPermissions)
+    guest_queue_limit: int = Field(default=0, ge=0, le=100)
+    cleanup_after_days: int = Field(default=0, ge=0, le=365)
 
 
 class LobbyUpdateRequest(BaseModel):
     name: Optional[str] = None
     is_open: Optional[bool] = None
     guest_permissions: Optional[LobbyPermissions] = None
+    guest_queue_limit: Optional[int] = Field(default=None, ge=0, le=100)
+    cleanup_after_days: Optional[int] = Field(default=None, ge=0, le=365)
 
 
 class LobbyJoinRequest(BaseModel):
@@ -58,6 +62,10 @@ class LobbyMemberUpdateRequest(BaseModel):
     permissions: Optional[LobbyPermissions] = None
 
 
+class LobbySelfUpdateRequest(BaseModel):
+    nickname: Optional[str] = None
+
+
 class LobbyMemberResponse(BaseModel):
     id: str
     nickname: str
@@ -82,9 +90,27 @@ class LobbyQueueItemResponse(BaseModel):
     yt_browse_id: str = ""
     mb_recording_id: str = ""
     mb_artist_id: str = ""
+    station_id: str = ""
+    station_name: str = ""
     added_by_member_id: str = ""
     added_by_nickname: str = ""
     created_at: str
+
+
+class LobbyHistoryItemResponse(BaseModel):
+    id: str
+    queue_item_id: str = ""
+    title: str
+    artist: str
+    album: str = ""
+    duration_ms: int = 0
+    art_url: str = ""
+    source: str = ""
+    subsonic_song_id: str = ""
+    yt_video_id: str = ""
+    added_by_member_id: str = ""
+    added_by_nickname: str = ""
+    played_at: str
 
 
 class LobbyStateResponse(BaseModel):
@@ -94,6 +120,10 @@ class LobbyStateResponse(BaseModel):
     invite_code: Optional[str] = None
     is_open: bool
     guest_permissions: LobbyPermissions
+    guest_queue_limit: int = 0
+    cleanup_after_days: int = 0
+    active_station_id: str = ""
+    active_station_name: str = ""
     self_member_id: str = ""
     self_role: str = "guest"
     self_permissions: LobbyPermissions = Field(default_factory=LobbyPermissions)
@@ -106,6 +136,7 @@ class LobbyStateResponse(BaseModel):
     now_playing: Optional[LobbyQueueItemResponse] = None
     queue: list[LobbyQueueItemResponse] = []
     members: list[LobbyMemberResponse] = []
+    history: list[LobbyHistoryItemResponse] = []
     created_at: str
     updated_at: str
 

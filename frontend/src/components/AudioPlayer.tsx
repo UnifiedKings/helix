@@ -57,6 +57,15 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
     return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 0.85
   })
 
+  useEffect(() => {
+    if (window.localStorage.getItem('helix.volume') !== null) return
+    let cancelled = false
+    void api.userSettings().then((prefs) => {
+      if (!cancelled) setVolume(Math.max(0, Math.min(1, prefs.settings.playback_default_volume)))
+    }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [])
+
   const now = player?.now_playing ?? null
   const nowId = now?.id ?? ''
 

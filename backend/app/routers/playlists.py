@@ -89,6 +89,33 @@ def _ensure_liked_playlist(db: Session, user_id: str) -> Playlist:
     return p
 
 
+
+
+def _is_liked_playlist_row(p: Playlist | None) -> bool:
+    return bool(p and ((p.system_key or "") == "liked"))
+
+
+def _resolve_user_playlist(db: Session, user_id: str, playlist_id: str) -> Playlist | None:
+    """Resolve a playlist id, accepting both the literal liked sentinel and its DB UUID."""
+    pid = (playlist_id or "").strip()
+    if pid == "liked":
+        return _ensure_liked_playlist(db, user_id)
+    if not pid:
+        return None
+    return db.execute(select(Playlist).where(Playlist.id == pid, Playlist.user_id == user_id)).scalar_one_or_none()
+
+
+def _liked_playlist_detail(db: Session, user: User, liked: Playlist | None = None) -> PlaylistDetailResponse:
+    liked = liked or _ensure_liked_playlist(db, user.id)
+    rows = db.execute(
+        select(LikedTrack)
+        .where(LikedTrack.user_id == user.id)
+        .order_by(LikedTrack.created_at.desc())
+        .limit(5000)
+    ).scalars().all()
+    pr = _to_playlist_response(liked, len(rows))
+    return PlaylistDetailResponse(playlist=pr, tracks=[_to_track_response(r) for r in rows])
+
 def _normalize_user_playlist_system_keys(db: Session, user_id: str) -> None:
     """Convert legacy user-created playlist system_key values to NULL.
 
@@ -195,16 +222,16 @@ def create_playlist(payload: PlaylistCreateRequest, db: Session = Depends(get_db
 
 @router.get("/{playlist_id}", response_model=PlaylistDetailResponse)
 def playlist_detail(playlist_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # Special: liked playlist
-    if playlist_id == "liked":
-        liked = _ensure_liked_playlist(db, user.id)
-        rows = db.execute(select(LikedTrack).where(LikedTrack.user_id == user.id).order_by(LikedTrack.created_at.desc()).limit(5000)).scalars().all()
-        pr = _to_playlist_response(liked, len(rows))
-        return PlaylistDetailResponse(playlist=pr, tracks=[_to_track_response(r) for r in rows])
-
-    p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
+    p = _resolve_user_playlist(db, user.id, playlist_id)
     if not p:
         raise HTTPException(status_code=404, detail="Playlist not found")
+
+    # The frontend usually navigates with the real UUID returned by /api/playlists.
+    # For the system Liked Songs playlist, its tracks live in liked_tracks rather
+    # than playlist_tracks, so treat both /api/playlists/liked and
+    # /api/playlists/<liked UUID> identically.
+    if _is_liked_playlist_row(p):
+        return _liked_playlist_detail(db, user, p)
 
     rows = db.execute(select(PlaylistTrack).where(PlaylistTrack.playlist_id == p.id, PlaylistTrack.user_id == user.id).order_by(PlaylistTrack.position.asc(), PlaylistTrack.created_at.asc())).scalars().all()
     pr = _to_playlist_response(p, len(rows))
@@ -213,20 +240,24 @@ def playlist_detail(playlist_id: str, db: Session = Depends(get_db), user: User 
 
 @router.post("/{playlist_id}/tracks", response_model=PlaylistDetailResponse)
 def playlist_add_track(playlist_id: str, payload: PlaylistTrackAddRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    # Liked playlist: delegate to like toggle semantics (force liked)
-    if playlist_id == "liked":
-        # For now, just store in liked_tracks table.
-        from .likes import toggle_like  # local import to avoid circular
-        toggle_like(payload, db=db, user=user)
-        return playlist_detail("liked", db=db, user=user)
-
-    p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
+    p = _resolve_user_playlist(db, user.id, playlist_id)
     if not p:
         raise HTTPException(status_code=404, detail="Playlist not found")
+
+    key = _stable_key(payload)
+
+    # Liked playlist rows are stored in liked_tracks, not playlist_tracks. Accept
+    # either the "liked" sentinel or the real liked playlist UUID here too.
+    if _is_liked_playlist_row(p):
+        existing = db.execute(select(LikedTrack).where(LikedTrack.user_id == user.id, LikedTrack.key == key)).scalar_one_or_none()
+        if not existing:
+            from .likes import toggle_like  # local import to avoid circular
+            toggle_like(payload, db=db, user=user)
+        return _liked_playlist_detail(db, user, p)
+
     if p.system_key:
         raise HTTPException(status_code=400, detail="Cannot add tracks to system playlist")
 
-    key = _stable_key(payload)
     existing = db.execute(select(PlaylistTrack).where(PlaylistTrack.playlist_id == p.id, PlaylistTrack.key == key)).scalar_one_or_none()
     if existing:
         return playlist_detail(p.id, db=db, user=user)
@@ -270,20 +301,19 @@ def playlist_add_track(playlist_id: str, payload: PlaylistTrackAddRequest, db: S
 
 @router.delete("/{playlist_id}/tracks/{track_id}", response_model=PlaylistDetailResponse)
 def playlist_remove_track(playlist_id: str, track_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    if playlist_id == "liked":
+    p = _resolve_user_playlist(db, user.id, playlist_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+
+    if _is_liked_playlist_row(p):
         # Removing from liked playlist means un-like.
         row = db.execute(select(LikedTrack).where(LikedTrack.user_id == user.id, LikedTrack.id == track_id)).scalar_one_or_none()
         if row:
             db.delete(row)
+            p.updated_at = datetime.utcnow()
             db.commit()
-        # ensure cover refreshes immediately
-        liked = _ensure_liked_playlist(db, user.id)
-        invalidate_playlist_cover(liked.id)
-        return playlist_detail("liked", db=db, user=user)
-
-    p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
-    if not p:
-        raise HTTPException(status_code=404, detail="Playlist not found")
+        invalidate_playlist_cover(p.id)
+        return _liked_playlist_detail(db, user, p)
 
     row = db.execute(select(PlaylistTrack).where(PlaylistTrack.id == track_id, PlaylistTrack.playlist_id == p.id, PlaylistTrack.user_id == user.id)).scalar_one_or_none()
     if row:
@@ -303,12 +333,11 @@ def playlist_remove_track(playlist_id: str, track_id: str, db: Session = Depends
 
 @router.patch("/{playlist_id}/tracks/reorder", response_model=PlaylistDetailResponse)
 def playlist_reorder_tracks(playlist_id: str, payload: PlaylistReorderRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    if playlist_id == "liked":
-        raise HTTPException(status_code=400, detail="Liked playlist order cannot be edited")
-
-    p = db.execute(select(Playlist).where(Playlist.id == playlist_id, Playlist.user_id == user.id)).scalar_one_or_none()
+    p = _resolve_user_playlist(db, user.id, playlist_id)
     if not p:
         raise HTTPException(status_code=404, detail="Playlist not found")
+    if _is_liked_playlist_row(p):
+        raise HTTPException(status_code=400, detail="Liked playlist order cannot be edited")
     if p.system_key:
         raise HTTPException(status_code=400, detail="System playlist order cannot be edited")
 

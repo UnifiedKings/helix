@@ -7,7 +7,7 @@ from .models import (
     StationResult,
     StationProviderInfo,
 )
-from .registry import get_station_provider, list_station_providers, reload_station_providers
+from .registry import canonical_station_type, get_station_provider, list_station_providers, reload_station_providers
 
 __all__ = [
     "StationProvider",
@@ -15,6 +15,7 @@ __all__ = [
     "StationContext",
     "StationResult",
     "StationProviderInfo",
+    "canonical_station_type",
     "get_station_provider",
     "list_station_providers",
     "reload_station_providers",

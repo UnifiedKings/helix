@@ -1,6 +1,7 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom'
-import { AuthProvider, RedirectIfAuthed, RequireAuth } from './auth'
+import { AuthProvider, RedirectIfAuthed, RequireAdmin, RequireAuth } from './auth'
 import { Layout } from './components/Layout'
+import { UserThemeStyles } from './components/UserThemeStyles'
 import { AlbumDetailPage } from './pages/AlbumDetailPage'
 import { ArtistDetailPage } from './pages/ArtistDetailPage'
 import { HistoryPage } from './pages/HistoryPage'
@@ -12,7 +13,8 @@ import { LoginPage } from './pages/LoginPage'
 import { PlaylistEditPage } from './pages/PlaylistEditPage'
 import { PlaylistsPage } from './pages/PlaylistsPage'
 import { SearchPage } from './pages/SearchPage'
-import { SettingsPage } from './pages/SettingsPage'
+import { UserSettingsPage } from './pages/UserSettingsPage'
+import { AdminSettingsPage } from './pages/AdminSettingsPage'
 import { SetupPage } from './pages/SetupPage'
 import { StationsPage } from './pages/StationsPage'
 
@@ -20,6 +22,7 @@ export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
+        <UserThemeStyles />
         <Routes>
           <Route path="/login" element={<RedirectIfAuthed><LoginPage /></RedirectIfAuthed>} />
           <Route path="/setup" element={<SetupPage />} />
@@ -35,7 +38,8 @@ export function App() {
             <Route path="albums/:browseId" element={<AlbumDetailPage />} />
             <Route path="history" element={<HistoryPage />} />
             <Route path="lobbies" element={<LobbiesPage />} />
-            <Route path="settings" element={<SettingsPage />} />
+            <Route path="settings" element={<UserSettingsPage />} />
+            <Route path="admin/settings" element={<RequireAdmin><AdminSettingsPage /></RequireAdmin>} />
           </Route>
         </Routes>
       </AuthProvider>

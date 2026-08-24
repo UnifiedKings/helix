@@ -97,11 +97,43 @@ def _video_id_from_flat_entry(entry: Dict[str, Any]) -> str:
 
 
 def _best_thumb(item: Dict[str, Any]) -> str:
+    """Choose artwork-shaped thumbnails before simply choosing raw width.
+
+    YouTube Music frequently exposes both proper square album artwork and
+    wider/padded video thumbnails.  Album/library artwork should prefer the
+    square asset even when a widescreen thumbnail has a larger width.
+    """
     thumbs = item.get("thumbnails") or []
-    if isinstance(thumbs, list) and thumbs:
-        best = max(thumbs, key=lambda t: int((t or {}).get("width") or 0))
-        return str((best or {}).get("url") or "")
-    return ""
+    if not isinstance(thumbs, list) or not thumbs:
+        return ""
+
+    def _score(raw: Any) -> tuple[int, int, int]:
+        thumb = raw if isinstance(raw, dict) else {}
+        try:
+            width = int(thumb.get("width") or 0)
+        except (TypeError, ValueError):
+            width = 0
+        try:
+            height = int(thumb.get("height") or 0)
+        except (TypeError, ValueError):
+            height = 0
+
+        if width > 0 and height > 0:
+            square_error = abs(width - height) / max(width, height)
+            if square_error <= 0.08:
+                shape_rank = 2
+            elif square_error <= 0.20:
+                shape_rank = 1
+            else:
+                shape_rank = 0
+            return (shape_rank, min(width, height), width * height)
+
+        # Unknown dimensions are a last resort, but retain width as a weak
+        # quality signal when ytmusicapi does provide only one dimension.
+        return (-1, width, 0)
+
+    best = max(thumbs, key=_score)
+    return str((best or {}).get("url") or "") if isinstance(best, dict) else ""
 
 
 def _duration_to_seconds(d: Any) -> Optional[int]:
@@ -199,9 +231,18 @@ def search_ytmusic(
             continue
         artist = _artist_name_from_item(it, "")
         album = ""
+        album_browse_id = ""
         alb = it.get("album")
         if isinstance(alb, dict):
             album = str(alb.get("name") or "")
+            # ytmusicapi currently exposes the album browse id as `id` on song
+            # search results, but accept browseId/browse_id too for compatibility.
+            album_browse_id = str(
+                alb.get("id")
+                or alb.get("browseId")
+                or alb.get("browse_id")
+                or ""
+            ).strip()
         songs.append(
             {
                 "kind": "song",
@@ -209,6 +250,7 @@ def search_ytmusic(
                 "title": str(it.get("title") or ""),
                 "artist": artist,
                 "album": album,
+                "album_browse_id": album_browse_id,
                 "duration_seconds": _duration_to_seconds(it.get("duration")),
                 "thumbnail_url": _best_thumb(it),
                 "youtube_url": f"https://www.youtube.com/watch?v={vid}",
@@ -335,15 +377,113 @@ def _parse_artist_song_rows(rows: List[Dict[str, Any]], fallback_artist: str) ->
     return songs
 
 
-def get_artist_popular_songs(browse_id: str, *, limit: int = 10, _data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+def _norm_artist_lookup(value: str) -> str:
+    value = (value or "").strip().lower()
+    value = value.replace("’", "'").replace("‘", "'").replace("–", "-").replace("—", "-")
+    value = re.sub(r"^the\s+", "", value)
+    value = re.sub(r",\s*the$", "", value)
+    value = re.sub(r"[^a-z0-9\s]+", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
+
+
+def find_artist_by_name(name: str, *, artist_limit: int = 8) -> Dict[str, Any]:
+    """Resolve an artist name to a YouTube Music artist browse id.
+
+    Prefer an exact normalized artist-name match.  If YouTube Music does not
+    return one, use the first artist search result rather than introducing a
+    second identity service just to resolve the artist.
+    """
+    query = (name or "").strip()
+    if not query:
+        return {}
+    rows = (search_artists(query, artist_limit=max(1, int(artist_limit))) or {}).get("artists") or []
+    wanted = _norm_artist_lookup(query)
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        if _norm_artist_lookup(str(row.get("name") or "")) == wanted:
+            return row
+    for row in rows:
+        if isinstance(row, dict) and str(row.get("browse_id") or "").strip():
+            return row
+    return {}
+
+
+def get_artist_related_artists(
+    browse_id: str,
+    *,
+    limit: int = 100,
+    _data: Optional[Dict[str, Any]] = None,
+) -> List[Dict[str, Any]]:
+    """Return YouTube Music's related artists ("Fans might also like")."""
     bid = (browse_id or "").strip()
     if not bid:
         return []
     data = _data if isinstance(_data, dict) else (_client().get_artist(bid) or {})
+    rows = _section_results(data.get("related"))
+    related: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for rank, item in enumerate(rows, start=1):
+        name = str(item.get("artist") or item.get("name") or item.get("title") or "").strip()
+        related_id = str(item.get("browseId") or item.get("browse_id") or item.get("artist_id") or "").strip()
+        key = related_id or _norm_artist_lookup(name)
+        if not name or not key or key in seen:
+            continue
+        seen.add(key)
+        related.append(
+            {
+                "name": name,
+                "artist": name,
+                "browse_id": related_id,
+                "artist_id": related_id,
+                "rank": rank,
+                "thumbnail_url": _best_thumb(item),
+                "ytmusic_url": f"https://music.youtube.com/browse/{related_id}" if related_id else "",
+            }
+        )
+        if len(related) >= max(0, int(limit)):
+            break
+    return related
+
+
+def _expanded_artist_song_rows(client: YTMusic, songs_section: Any, limit: int) -> List[Dict[str, Any]]:
+    rows = _section_results(songs_section)
+    if not isinstance(songs_section, dict) or len(rows) >= limit:
+        return rows
+    browse_id = str(songs_section.get("browseId") or songs_section.get("browse_id") or "").strip()
+    if not browse_id:
+        return rows
+
+    # get_artist() exposes the songs continuation as a browseId. ytmusicapi's
+    # documented path is to pass it to get_playlist(); older versions can be
+    # inconsistent about whether the leading VL is accepted, so support both.
+    candidates = [browse_id]
+    if browse_id.startswith("VL") and len(browse_id) > 2:
+        candidates.append(browse_id[2:])
+    for playlist_id in candidates:
+        try:
+            payload = client.get_playlist(playlist_id, limit=max(1, int(limit))) or {}
+        except Exception:
+            continue
+        playlist_rows = payload.get("tracks") or []
+        if isinstance(playlist_rows, list) and playlist_rows:
+            return [row for row in playlist_rows if isinstance(row, dict)]
+    return rows
+
+
+def get_artist_popular_songs(browse_id: str, *, limit: int = 10, _data: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    bid = (browse_id or "").strip()
+    if not bid:
+        return []
+    wanted = max(0, int(limit))
+    if wanted <= 0:
+        return []
+    client = _client()
+    data = _data if isinstance(_data, dict) else (client.get_artist(bid) or {})
     name = str(data.get("name") or data.get("artist") or "").strip()
-    rows = _section_results(data.get("songs"))
+    rows = _expanded_artist_song_rows(client, data.get("songs"), wanted)
     songs = _parse_artist_song_rows(rows, name)
-    return songs[: max(0, int(limit))]
+    return songs[:wanted]
 
 
 def _parse_artist_album_rows(rows: List[Dict[str, Any]], fallback_artist: str, category: str) -> List[Dict[str, Any]]:
@@ -558,6 +698,145 @@ def get_album_tracks(browse_id: str) -> List[Dict[str, Any]]:
     return tracks
 
 
+def _is_video_thumbnail_url(url: str) -> bool:
+    value = str(url or "").lower()
+    return "i.ytimg.com/vi/" in value or "img.youtube.com/vi/" in value
+
+
+def _album_search_thumbnail(client: YTMusic, browse_id: str, title: str, artist: str) -> str:
+    """Resolve the album artwork shown by YouTube Music search.
+
+    ``get_album()`` can occasionally expose a YouTube video thumbnail even
+    though YouTube Music itself has a proper square ``yt3.googleusercontent``
+    album image. Album search results are a reliable place to recover that
+    artwork. Prefer an exact browse-id match and only use title/artist matching
+    as a conservative fallback.
+    """
+    query = " ".join(part for part in (artist.strip(), title.strip()) if part).strip()
+    if not query:
+        return ""
+
+    try:
+        rows = client.search(query, filter="albums", limit=8) or []
+    except Exception:
+        return ""
+
+    def norm(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+
+    wanted_title = norm(title)
+    wanted_artist = norm(artist)
+    fallback = ""
+
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        candidate = _best_thumb(row)
+        if not candidate:
+            continue
+
+        row_id = str(row.get("browseId") or row.get("browse_id") or "").strip()
+        if row_id and row_id == browse_id:
+            return candidate
+
+        row_title = norm(str(row.get("title") or ""))
+        row_artist = norm(_artist_name_from_item(row, ""))
+        if wanted_title and row_title == wanted_title:
+            if not wanted_artist or not row_artist or row_artist == wanted_artist:
+                fallback = fallback or candidate
+
+    return fallback
+
+
+
+
+
+def _watch_playlist_thumbnail(client: YTMusic, tracks: list[Dict[str, Any]]) -> str:
+    """Resolve artwork from YTMusic's watch-playlist response for an album track.
+
+    This is closer to the actual music-player surface than the generic album
+    payload, and often exposes the same yt3.googleusercontent.com artwork that
+    Helix receives from normal YTMusic song search.
+    """
+    if not tracks:
+        return ""
+    first = tracks[0] if isinstance(tracks[0], dict) else {}
+    video_id = str(first.get("video_id") or first.get("videoId") or "").strip()
+    if not video_id:
+        return ""
+    try:
+        payload = client.get_watch_playlist(videoId=video_id, limit=5) or {}
+    except Exception:
+        return ""
+    rows = payload.get("tracks") or []
+    if not isinstance(rows, list):
+        return ""
+    fallback = ""
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        candidate = _best_thumb(row)
+        if not candidate:
+            continue
+        row_vid = str(row.get("videoId") or row.get("video_id") or "").strip()
+        if row_vid == video_id:
+            return candidate
+        if not fallback:
+            fallback = candidate
+    return fallback
+
+def _track_search_thumbnail(client: YTMusic, tracks: list[Dict[str, Any]], album_title: str, album_artist: str) -> str:
+    """Recover the artwork attached to an exact YTMusic song search result.
+
+    Search playback already receives these yt3.googleusercontent.com images.
+    Album expansion sometimes receives an i.ytimg.com video frame instead, so
+    use the first album track as a second authoritative artwork source.
+    """
+    if not tracks:
+        return ""
+    first = tracks[0] if isinstance(tracks[0], dict) else {}
+    title = str(first.get("title") or "").strip()
+    video_id = str(first.get("video_id") or first.get("videoId") or "").strip()
+    query = " ".join(part for part in (album_artist.strip(), title) if part).strip()
+    if not query:
+        return ""
+    try:
+        rows = client.search(query, filter="songs", limit=8) or []
+    except Exception:
+        return ""
+
+    def norm(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", str(value or "").lower()).strip()
+
+    want_title = norm(title)
+    want_artist = norm(album_artist)
+    fallback = ""
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        candidate = _best_thumb(row)
+        if not candidate:
+            continue
+        row_vid = str(row.get("videoId") or row.get("video_id") or "").strip()
+        if video_id and row_vid == video_id:
+            return candidate
+        row_title = norm(str(row.get("title") or ""))
+        row_artist = norm(_artist_name_from_item(row, ""))
+        if want_title and row_title == want_title and (not want_artist or not row_artist or row_artist == want_artist):
+            fallback = fallback or candidate
+    return fallback
+
+
+def _upgrade_yt3_square_url(url: str, size: int = 544) -> str:
+    """Ask Google's artwork CDN for a larger square variant when possible."""
+    value = str(url or "").strip()
+    if "yt3.googleusercontent.com" not in value.lower():
+        return value
+    # Preserve the base asset token; only replace the image transform suffix.
+    if "=" in value:
+        value = value.split("=", 1)[0]
+    return f"{value}=w{size}-h{size}-l90-rj"
+
 def get_album_full(browse_id: str) -> Dict[str, Any]:
     bid = (browse_id or "").strip()
     if not bid:
@@ -569,6 +848,23 @@ def get_album_full(browse_id: str) -> Dict[str, Any]:
     year = str(data.get("year") or "").strip()
     thumb = _best_thumb(data)
     tracks = get_album_tracks(bid)
+
+    # Prefer the artwork attached to the album itself. Song/watch thumbnails
+    # can be square wrappers around a padded 16:9 video frame.
+    watch_thumb = _watch_playlist_thumbnail(c, tracks)
+    search_thumb = _album_search_thumbnail(c, bid, title, artist)
+    track_thumb = _track_search_thumbnail(c, tracks, title, artist)
+    direct_album_thumb = thumb if thumb and not _is_video_thumbnail_url(thumb) else ""
+    recovery_candidates = [search_thumb, track_thumb, watch_thumb]
+    recovery_clean = next(
+        (u for u in recovery_candidates if u and not _is_video_thumbnail_url(u)),
+        "",
+    )
+    thumb = direct_album_thumb or recovery_clean or thumb or next(
+        (u for u in recovery_candidates if u),
+        "",
+    )
+    thumb = _upgrade_yt3_square_url(thumb)
     return {
         "browse_id": bid,
         "title": title,
@@ -673,6 +969,79 @@ def _score_album_candidate(info: Dict[str, Any], *, album_title: str, artist: st
     return max(0.0, min(1.0, score))
 
 
+
+
+def get_song_radio(video_id: str, *, limit: int = 50) -> List[Dict[str, Any]]:
+    """Return YouTube Music radio candidates for one seed song.
+
+    ``get_watch_playlist(..., radio=True)`` is the supported ytmusicapi path for
+    the queue YouTube Music builds around a song. Helix pins a ytmusicapi
+    release that understands the current WEB_REMIX response shape. The
+    deterministic RDAMVM radio playlist remains a fallback because YouTube can
+    occasionally expose one form but not the other for a particular seed.
+    """
+    vid = (video_id or "").strip()
+    if not vid:
+        return []
+
+    c = _client()
+    requested = max(1, int(limit))
+    rows: List[Dict[str, Any]] = []
+    errors: List[str] = []
+
+    try:
+        data = c.get_watch_playlist(videoId=vid, limit=requested, radio=True) or {}
+        raw_rows = data.get("tracks") or []
+        if isinstance(raw_rows, list):
+            rows = [it for it in raw_rows if isinstance(it, dict)]
+    except Exception as exc:
+        errors.append(f"get_watch_playlist: {exc}")
+
+    if not rows:
+        try:
+            data = c.get_playlist(f"RDAMVM{vid}", limit=requested) or {}
+            raw_rows = data.get("tracks") or []
+            if isinstance(raw_rows, list):
+                rows = [it for it in raw_rows if isinstance(it, dict)]
+        except Exception as exc:
+            errors.append(f"get_playlist: {exc}")
+
+    if not rows and errors:
+        raise RuntimeError("; ".join(errors))
+
+    out: List[Dict[str, Any]] = []
+    seen: set[str] = set()
+    for it in rows:
+        item_vid = str(it.get("videoId") or "").strip()
+        if not item_vid or item_vid in seen:
+            continue
+        seen.add(item_vid)
+        title = str(it.get("title") or "").strip()
+        if not title:
+            continue
+        artist = _artist_name_from_item(it, "")
+        album = ""
+        alb = it.get("album")
+        if isinstance(alb, dict):
+            album = str(alb.get("name") or alb.get("title") or "").strip()
+        elif isinstance(alb, str):
+            album = alb.strip()
+        duration_seconds = _duration_to_seconds(it.get("length") or it.get("duration"))
+        out.append({
+            "kind": "song",
+            "video_id": item_vid,
+            "title": title,
+            "artist": artist,
+            "album": album,
+            "duration_seconds": duration_seconds,
+            "duration_ms": int(duration_seconds or 0) * 1000,
+            "thumbnail_url": _best_thumb(it),
+            "youtube_url": f"https://www.youtube.com/watch?v={item_vid}",
+            "ytmusic_url": f"https://music.youtube.com/watch?v={item_vid}",
+        })
+        if len(out) >= requested:
+            break
+    return out
 
 def find_song(*, title: str, artist: str, album: Optional[str] = None, duration_seconds: Optional[int] = None) -> MatchResult:
     """Backward-compatible alias used by stations_engine and older callers."""

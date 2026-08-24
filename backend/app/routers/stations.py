@@ -18,9 +18,10 @@ from ..api_schemas.player import PlayerStateResponse
 from ..api_schemas.stations import StationCreateRequest, StationUpdateRequest, StationResponse, StationPlayRequest, StationProviderResponse
 from ..settings_store import get_settings
 from ..stations_engine import generate_and_append_station_track, StationSeedArtistNotFound, StationGenerationError
-from ..station_providers import get_station_provider, list_station_providers, reload_station_providers
+from ..station_providers import canonical_station_type, get_station_provider, list_station_providers, reload_station_providers
 from ..station_covers import ensure_station_cover, custom_station_cover_path, delete_custom_station_cover, delete_generated_station_cover, has_custom_station_cover, save_custom_station_cover
 from ..player.engine import state
+from ..realtime import schedule_player_state_broadcast
 
 router = APIRouter(prefix="/api/stations", tags=["stations"])
 
@@ -77,18 +78,18 @@ def _station_config_payload(s: Station) -> dict:
     raw.setdefault("seed_artist", getattr(s, "seed_artist", "") or "")
     raw.setdefault("mb_artist_id", getattr(s, "mb_artist_id", "") or "")
     raw.setdefault("mb_recording_id", getattr(s, "mb_recording_id", "") or "")
-    raw.setdefault("discovery", float(getattr(s, "discovery", 0.35) or 0.35))
-    raw.setdefault("seed_influence", float(getattr(s, "seed_influence", 0.75) or 0.75))
-    raw.setdefault("artist_cooldown", int(getattr(s, "artist_cooldown", 5) or 5))
-    raw.setdefault("artist_variety", int(getattr(s, "artist_variety", 1) or 1))
+    raw.setdefault("discovery", float(0.35 if getattr(s, "discovery", None) is None else getattr(s, "discovery")))
+    raw.setdefault("seed_influence", float(0.75 if getattr(s, "seed_influence", None) is None else getattr(s, "seed_influence")))
+    raw.setdefault("artist_cooldown", int(getattr(s, "artist_cooldown", 5) if getattr(s, "artist_cooldown", None) is not None else 5))
+    raw.setdefault("artist_variety", int(1 if getattr(s, "artist_variety", None) is None else getattr(s, "artist_variety")))
     raw.setdefault("allow_seed_alternates", bool(int(getattr(s, "allow_seed_alternates", 0) or 0)))
     raw.setdefault("era_start", int(getattr(s, "era_start", 0) or 0))
     raw.setdefault("era_end", int(getattr(s, "era_end", 0) or 0))
-    raw.setdefault("popularity_bias", int(getattr(s, "popularity_bias", 50) or 50))
-    raw.setdefault("tag_strictness", int(getattr(s, "tag_strictness", 70) or 70))
-    raw.setdefault("popular_track_pool_size", int(getattr(s, "popular_track_pool_size", 10) or 10))
+    raw.setdefault("popularity_bias", int(50 if getattr(s, "popularity_bias", None) is None else getattr(s, "popularity_bias")))
+    raw.setdefault("tag_strictness", int(70 if getattr(s, "tag_strictness", None) is None else getattr(s, "tag_strictness")))
+    raw.setdefault("popular_track_pool_size", int(10 if getattr(s, "popular_track_pool_size", None) is None else getattr(s, "popular_track_pool_size")))
     raw.setdefault("artist_blacklist", str(getattr(s, "artist_blacklist", "") or ""))
-    raw.setdefault("temperature", float(getattr(s, "temperature", 0.9) or 0.9))
+    raw.setdefault("temperature", float(0.9 if getattr(s, "temperature", None) is None else getattr(s, "temperature")))
     raw.setdefault("source_mode", "prefer_library")
     return raw
 
@@ -97,25 +98,25 @@ def _to_station(s: Station, thumbnail_url: str = "") -> StationResponse:
     return StationResponse(
         id=s.id,
         name=s.name,
-        station_type=str(getattr(s, "station_type", "") or "listenbrainz_similar_artist"),
+        station_type=canonical_station_type(str(getattr(s, "station_type", "") or "similar_artist")),
         config=_station_config_payload(s),
         seed_type=s.seed_type,
         seed_title=s.seed_title,
         seed_artist=s.seed_artist,
         mb_artist_id=s.mb_artist_id or "",
         mb_recording_id=s.mb_recording_id or "",
-        discovery=float(s.discovery or 0.35),
-        seed_influence=float(getattr(s, "seed_influence", 0.75) or 0.75),
-        artist_cooldown=int(getattr(s, "artist_cooldown", 5) or 5),
-        artist_variety=int(getattr(s, "artist_variety", 1) or 1),
+        discovery=float(0.35 if s.discovery is None else s.discovery),
+        seed_influence=float(0.75 if getattr(s, "seed_influence", None) is None else getattr(s, "seed_influence")),
+        artist_cooldown=int(getattr(s, "artist_cooldown", 5) if getattr(s, "artist_cooldown", None) is not None else 5),
+        artist_variety=int(1 if getattr(s, "artist_variety", None) is None else getattr(s, "artist_variety")),
         allow_seed_alternates=bool(int(getattr(s, "allow_seed_alternates", 0) or 0)),
         era_start=int(getattr(s, "era_start", 0) or 0),
         era_end=int(getattr(s, "era_end", 0) or 0),
-        popularity_bias=int(getattr(s, "popularity_bias", 50) or 50),
-        tag_strictness=int(getattr(s, "tag_strictness", 70) or 70),
-        popular_track_pool_size=int(getattr(s, "popular_track_pool_size", 10) or 10),
+        popularity_bias=int(50 if getattr(s, "popularity_bias", None) is None else getattr(s, "popularity_bias")),
+        tag_strictness=int(70 if getattr(s, "tag_strictness", None) is None else getattr(s, "tag_strictness")),
+        popular_track_pool_size=int(10 if getattr(s, "popular_track_pool_size", None) is None else getattr(s, "popular_track_pool_size")),
         artist_blacklist=str(getattr(s, "artist_blacklist", "") or ""),
-        temperature=float(getattr(s, "temperature", 0.9) or 0.9),
+        temperature=float(0.9 if getattr(s, "temperature", None) is None else getattr(s, "temperature")),
         # Station cards should represent the seed artist, not the last played track.
         thumbnail_url=thumbnail_url or _cover_url(s.id, s.updated_at),
         cover_url=thumbnail_url or _cover_url(s.id, s.updated_at),
@@ -156,7 +157,7 @@ def create_station(payload: StationCreateRequest, db: Session = Depends(get_db),
     if seed_type not in ("artist", "track"):
         raise HTTPException(status_code=400, detail="seed_type must be 'artist' or 'track'")
 
-    station_type = (payload.station_type or "listenbrainz_similar_artist").strip()
+    station_type = canonical_station_type(payload.station_type)
     config = dict(payload.config or {})
     # Mirror legacy create fields into the provider config unless explicitly supplied.
     config.setdefault("seed_type", seed_type)
@@ -164,9 +165,9 @@ def create_station(payload: StationCreateRequest, db: Session = Depends(get_db),
     config.setdefault("seed_artist", (payload.seed_artist or "").strip())
     config.setdefault("mb_artist_id", (payload.mb_artist_id or "").strip())
     config.setdefault("mb_recording_id", (payload.mb_recording_id or "").strip())
-    config.setdefault("discovery", max(0.0, min(1.0, float(payload.discovery or 0.35))))
-    config.setdefault("seed_influence", max(0.0, min(1.0, float(payload.seed_influence or 0.75))))
-    config.setdefault("popular_track_pool_size", max(0, min(200, int(payload.popular_track_pool_size or 10))))
+    config.setdefault("discovery", max(0.0, min(1.0, float(0.35 if payload.discovery is None else payload.discovery))))
+    config.setdefault("seed_influence", max(0.0, min(1.0, float(0.75 if payload.seed_influence is None else payload.seed_influence))))
+    config.setdefault("popular_track_pool_size", max(0, min(200, int(10 if payload.popular_track_pool_size is None else payload.popular_track_pool_size))))
     config.setdefault("artist_blacklist", payload.artist_blacklist or "")
     try:
         get_station_provider(station_type).validate_config(config)
@@ -183,18 +184,18 @@ def create_station(payload: StationCreateRequest, db: Session = Depends(get_db),
         seed_artist=(payload.seed_artist or "").strip(),
         mb_artist_id=(payload.mb_artist_id or "").strip() if payload.mb_artist_id else "",
         mb_recording_id=(payload.mb_recording_id or "").strip() if payload.mb_recording_id else "",
-        discovery=max(0.0, min(1.0, float(payload.discovery or 0.35))),
-        seed_influence=max(0.0, min(1.0, float(payload.seed_influence or 0.75))),
+        discovery=max(0.0, min(1.0, float(0.35 if payload.discovery is None else payload.discovery))),
+        seed_influence=max(0.0, min(1.0, float(0.75 if payload.seed_influence is None else payload.seed_influence))),
         artist_cooldown=max(0, min(50, int(payload.artist_cooldown or 0))),
-        artist_variety=max(0, min(2, int(payload.artist_variety or 1))),
+        artist_variety=max(0, min(2, int(1 if payload.artist_variety is None else payload.artist_variety))),
         allow_seed_alternates=1 if bool(payload.allow_seed_alternates) else 0,
         era_start=max(0, min(3000, int(payload.era_start or 0))),
         era_end=max(0, min(3000, int(payload.era_end or 0))),
-        popularity_bias=max(0, min(100, int(payload.popularity_bias or 50))),
-        tag_strictness=max(0, min(100, int(payload.tag_strictness or 70))),
-        popular_track_pool_size=max(0, min(200, int(payload.popular_track_pool_size or 10))),
+        popularity_bias=max(0, min(100, int(50 if payload.popularity_bias is None else payload.popularity_bias))),
+        tag_strictness=max(0, min(100, int(70 if payload.tag_strictness is None else payload.tag_strictness))),
+        popular_track_pool_size=max(0, min(200, int(10 if payload.popular_track_pool_size is None else payload.popular_track_pool_size))),
         artist_blacklist=(payload.artist_blacklist or ""),
-        temperature=max(0.2, min(2.0, float(payload.temperature or 0.9))),
+        temperature=max(0.2, min(2.0, float(0.9 if payload.temperature is None else payload.temperature))),
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
     )
@@ -317,10 +318,21 @@ def update_station(station_id: str, payload: StationUpdateRequest, db: Session =
     if payload.name is not None:
         st.name = (payload.name or "").strip()
     if payload.station_type is not None:
-        st.station_type = (payload.station_type or "listenbrainz_similar_artist").strip()
+        st.station_type = canonical_station_type(payload.station_type)
     if payload.config is not None:
+        incoming_config = dict(payload.config or {})
         current = _station_config_payload(st)
-        current.update(dict(payload.config or {}))
+        current.update(incoming_config)
+        if "artist_cooldown" in incoming_config:
+            st.artist_cooldown = max(0, min(50, int(incoming_config.get("artist_cooldown") or 0)))
+        # Keep legacy seed columns synchronized with provider config. This matters
+        # for track-seeded providers such as Song Radio and for station cards/covers.
+        if "seed_type" in incoming_config:
+            st.seed_type = str(incoming_config.get("seed_type") or "artist").strip() or "artist"
+        if "seed_title" in incoming_config:
+            st.seed_title = str(incoming_config.get("seed_title") or "").strip()
+        if "seed_artist" in incoming_config:
+            st.seed_artist = str(incoming_config.get("seed_artist") or "").strip()
         st.config_json = json.dumps(current)
     if payload.discovery is not None:
         st.discovery = max(0.0, min(1.0, float(payload.discovery)))
@@ -328,6 +340,14 @@ def update_station(station_id: str, payload: StationUpdateRequest, db: Session =
         st.seed_influence = max(0.0, min(1.0, float(payload.seed_influence)))
     if payload.artist_cooldown is not None:
         st.artist_cooldown = max(0, min(50, int(payload.artist_cooldown)))
+        try:
+            current = json.loads(str(getattr(st, "config_json", "{}") or "{}"))
+            if not isinstance(current, dict):
+                current = {}
+        except Exception:
+            current = {}
+        current["artist_cooldown"] = int(st.artist_cooldown)
+        st.config_json = json.dumps(current)
     if payload.artist_variety is not None:
         st.artist_variety = max(0, min(2, int(payload.artist_variety)))
     if payload.allow_seed_alternates is not None:
@@ -347,7 +367,7 @@ def update_station(station_id: str, payload: StationUpdateRequest, db: Session =
 
     config = _station_config_payload(st)
     try:
-        get_station_provider(getattr(st, "station_type", "listenbrainz_similar_artist")).validate_config(config)
+        get_station_provider(getattr(st, "station_type", "similar_artist")).validate_config(config)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     st.config_json = json.dumps(config)
@@ -406,7 +426,9 @@ async def play_station(station_id: str, payload: StationPlayRequest, user: User 
     # Return current player state
     db = SessionLocal()
     try:
-        return state(db=db, user=user)
+        snapshot = state(db=db, user=user)
+        schedule_player_state_broadcast(user.id)
+        return snapshot
     finally:
         db.close()
 
@@ -428,4 +450,5 @@ def delete_station(station_id: str, db: Session = Depends(get_db), user: User = 
     # Remove station (StationTag cascades)
     db.delete(st)
     db.commit()
+    schedule_player_state_broadcast(user.id)
     return {"ok": True}

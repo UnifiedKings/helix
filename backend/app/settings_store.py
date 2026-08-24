@@ -22,8 +22,18 @@ DEFAULTS: dict[str, Any] = {
 
     # Playback queue behavior
     "player_max_queue_items": 500,
+    # Maximum number of station-generated tracks a user may choose to keep ahead.
+    # Individual users may select any value from 1 up to this ceiling.
+    "station_queue_ahead_max": 10,
+    # Number of upcoming queue items Helix proactively downloads. This is a
+    # server resource policy and remains independent of each user's logical
+    # station queue-ahead preference.
+    "download_prefetch_ahead": 1,
     # Keep missing items in the queue so Helix can fulfill them on-demand.
     "player_omit_missing": False,
+
+    # Number of listen-history rows retained per user. History API pagination is separate.
+    "listen_history_retention": 10000,
 
     # Future: fulfilled (lossy) tracks location within your Navidrome library
     # Example: "/music/Helix YouTube"

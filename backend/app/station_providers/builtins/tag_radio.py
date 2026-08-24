@@ -30,6 +30,25 @@ def _norm_pair(title: Any, artist: Any) -> str:
     return f"{_norm(title)}|{_norm(artist)}"
 
 
+
+
+def _blocked_artists_for_cooldown(
+    context: StationContext,
+    selected: list[StationResult],
+    cooldown: int,
+) -> set[str]:
+    """Artists appearing in the N tracks immediately preceding the next pick."""
+    cooldown = max(0, int(cooldown or 0))
+    if cooldown <= 0:
+        return set()
+
+    sequence: list[str] = []
+    sequence.extend(result.artist for result in reversed(selected))
+    sequence.extend(result.artist for result in reversed(context.already_selected or []))
+    sequence.extend(item.artist for item in reversed(context.queued_tracks or []))
+    sequence.extend(item.artist for item in context.recent_tracks or [])
+    return {_norm(artist) for artist in sequence[:cooldown] if _norm(artist)}
+
 def _parse_tags(raw: Any) -> list[str]:
     if isinstance(raw, list):
         parts = [str(item or "") for item in raw]
@@ -174,7 +193,7 @@ class TagRadioProvider(StationProvider):
     station_type = "listenbrainz_tag_radio"
     display_name = "Tag Radio"
     description = "Builds stations from ListenBrainz/MusicBrainz tags such as indie rock, synthpop, folk, or video game music."
-    version = "1.0.0"
+    version = "1.1.0"
     builtin = True
 
     def config_options(self) -> list[StationConfigOption]:
@@ -199,14 +218,16 @@ class TagRadioProvider(StationProvider):
                 ],
             ),
             StationConfigOption(
-                key="candidate_count",
-                label="Candidate pool size",
-                type="integer",
-                description="How many tag-radio candidates to request from ListenBrainz. Larger values allow deeper variety.",
-                default=250,
-                min_value=25,
-                max_value=1000,
-                step=25,
+                key="discovery_depth",
+                label="Discovery depth",
+                type="select",
+                description="Controls the breadth of the candidate pool used for this tag station.",
+                default="balanced",
+                choices=[
+                    {"value": "safe", "label": "Safe - tighter candidate pool"},
+                    {"value": "balanced", "label": "Balanced"},
+                    {"value": "deep", "label": "Deep - broader candidate pool"},
+                ],
             ),
             StationConfigOption(
                 key="popularity_begin",
@@ -239,6 +260,16 @@ class TagRadioProvider(StationProvider):
                 step=1,
             ),
             StationConfigOption(
+                key="artist_cooldown",
+                label="No repeated artist within",
+                type="integer",
+                description="Do not play an artist again until this many other tracks have passed. Set to 0 to disable.",
+                default=5,
+                min_value=0,
+                max_value=50,
+                step=1,
+            ),
+            StationConfigOption(
                 key="artist_blacklist",
                 label="Artist blacklist",
                 type="textarea",
@@ -264,12 +295,18 @@ class TagRadioProvider(StationProvider):
         operator = str(cfg.get("tag_match_mode") or "OR").strip().upper()
         if operator not in {"AND", "OR"}:
             operator = "OR"
-        candidate_count = max(25, min(1000, _safe_int(cfg.get("candidate_count"), 250)))
+        depth = str(cfg.get("discovery_depth") or "").strip().lower()
+        if depth in {"safe", "balanced", "deep"}:
+            candidate_count = {"safe": 100, "balanced": 250, "deep": 750}[depth]
+        else:
+            # Backward compatibility for stations saved before discovery_depth existed.
+            candidate_count = max(25, min(1000, _safe_int(cfg.get("candidate_count"), 250)))
         pop_begin = max(0, min(100, _safe_int(cfg.get("popularity_begin"), 0)))
         pop_end = max(0, min(100, _safe_int(cfg.get("popularity_end"), 100)))
         if pop_begin >= pop_end:
             pop_begin, pop_end = 0, 100
         recent_window = max(0, min(500, _safe_int(cfg.get("recent_track_window"), 75)))
+        artist_cooldown = max(0, min(50, _safe_int(cfg.get("artist_cooldown"), 5)))
         blacklist = _parse_artists(cfg.get("artist_blacklist") or cfg.get("artist_blacklist_items"))
 
         candidates: list[StationResult] = []
@@ -303,6 +340,9 @@ class TagRadioProvider(StationProvider):
         wanted = max(1, int(count or 1))
         selected: list[StationResult] = []
         for result in candidates:
+            blocked_artists = _blocked_artists_for_cooldown(context, selected, artist_cooldown)
+            if _norm(result.artist) in blocked_artists:
+                continue
             pair = _norm_pair(result.title, result.artist)
             if not pair or pair in used_pairs:
                 continue

@@ -34,7 +34,7 @@ const HIDDEN_SETTING_KEYS = new Set([
 
 const SETTING_GROUPS: Array<{ title: string; keys: string[] }> = [
   { title: 'Subsonic', keys: ['subsonic_base_url', 'subsonic_username', 'subsonic_password', 'subsonic_client_name', 'subsonic_api_version', 'subsonic_timeout_s'] },
-  { title: 'Playback', keys: ['player_max_queue_items', 'player_omit_missing', 'listen_history_limit'] },
+  { title: 'Playback', keys: ['player_max_queue_items', 'player_omit_missing', 'listen_history_retention'] },
   { title: 'Fulfillment', keys: ['fulfillment_library_subfolder', 'fulfillment_tag_comment', 'fulfillment_first_play_timeout_seconds', 'fulfillment_version_preference'] },
   { title: 'Search', keys: ['search_default_country', 'search_hide_non_official', 'search_prefer_original_release'] },
   { title: 'MusicBrainz', keys: ['musicbrainz_min_interval_ms', 'musicbrainz_user_agent'] },

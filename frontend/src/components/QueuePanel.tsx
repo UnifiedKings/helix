@@ -16,10 +16,16 @@ function formatDuration(ms?: number) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
-function QueueRow({ item, active, onJump, onRemove }: { item: QueueItem; active: boolean; onJump: () => void; onRemove: () => void }) {
+function QueueRow({ item, active, playing, onJump, onRemove }: { item: QueueItem; active: boolean; playing: boolean; onJump: () => void; onRemove: () => void }) {
   return (
     <div className={`queue-row queue-row-redesign ${active ? 'active' : ''}`}>
-      <span className="queue-drag-placeholder" aria-hidden="true">⁝⁝</span>
+      {active ? (
+        <span className={`queue-playing-bars ${playing ? 'is-playing' : 'is-paused'}`} aria-label={playing ? 'Now playing' : 'Current track'}>
+          <span />
+          <span />
+          <span />
+        </span>
+      ) : <span className="queue-drag-placeholder" aria-hidden="true">⁝⁝</span>}
       <button className="queue-main" onClick={onJump}>
         <Artwork src={item.art_url} alt={item.title} size="sm" />
         <span>
@@ -75,6 +81,7 @@ export function QueuePanel({ player, refresh, run }: Props) {
             key={item.id}
             item={item}
             active={index === player?.current_index}
+            playing={index === player?.current_index && Boolean(player?.is_playing)}
             onJump={() => run(() => api.jump(index), 'play')}
             onRemove={async () => {
               await api.removeQueueItem(item.id)

@@ -46,6 +46,19 @@ class Setting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 
+class UserSetting(Base):
+    __tablename__ = "user_settings"
+    __table_args__ = (UniqueConstraint("user_id", "key", name="uq_user_setting_user_key"),)
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    key: Mapped[str] = mapped_column(String(96), nullable=False)
+    value_json: Mapped[str] = mapped_column(Text, nullable=False, default="null")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    user: Mapped["User"] = relationship("User")
+
+
 # --- Playback / Queue (backend-owned) ---
 
 class PlaybackSession(Base):
@@ -149,8 +162,8 @@ class Station(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
     # Internal provider key used by the station-provider registry. Existing
-    # stations default to the original ListenBrainz similar-artist logic.
-    station_type: Mapped[str] = mapped_column(String(96), nullable=False, default="listenbrainz_similar_artist")
+    # stations use the provider-neutral Similar Artist Radio identifier.
+    station_type: Mapped[str] = mapped_column(String(96), nullable=False, default="similar_artist")
 
     # Provider-specific JSON config. The legacy columns below remain for
     # backward compatibility and are mirrored into provider config at runtime.

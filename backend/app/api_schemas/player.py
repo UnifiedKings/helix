@@ -127,6 +127,9 @@ class PlayerHistoryItem(BaseModel):
 
 class PlayerHistoryResponse(BaseModel):
     limit: int
+    offset: int = 0
+    total: int = 0
+    has_more: bool = False
     items: list[PlayerHistoryItem] = []
 
 

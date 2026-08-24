@@ -1,4 +1,4 @@
-import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, DislikeState, HomeSummary, LikeState, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, StationProviderInfo, AdminUser, Capabilities, User, LobbyJoinResponse, LobbyListResponse, LobbyPermissions, LobbyState } from './types'
+import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, DislikeState, HomeSummary, LikeState, PlaybackHistoryFilters, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, StationProviderInfo, AdminUser, Capabilities, User, UserSettingsPayload, UserSettings, LobbyJoinResponse, LobbyListResponse, LobbyPermissions, LobbyState } from './types'
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const { headers, ...rest } = options
@@ -25,6 +25,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (res.status === 204 || !responseText) return undefined as T
   return JSON.parse(responseText) as T
+}
+
+function announceSubsonicImportQueued(kind: 'track' | 'album', title?: string) {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent('helix:subsonic-import-queued', {
+    detail: { kind, title },
+  }))
 }
 
 
@@ -171,6 +178,12 @@ function identityQuery(item: QueueItem) {
 }
 
 
+
+function websocketUrl(path: string) {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+  return `${protocol}//${window.location.host}${path}`
+}
+
 function lobbyTokenKey(lobbyId: string) {
   return `helix.lobby.token.${lobbyId}`
 }
@@ -249,9 +262,13 @@ export const api = {
 
   health: () => request<{ ok?: boolean; status?: string }>('/health'),
   homeSummary: () => request<HomeSummary>('/api/home/summary'),
-  settings: () => request<Record<string, unknown>>('/settings'),
+  settings: () => request<Record<string, unknown>>('/api/settings'),
+  userSettings: () => request<UserSettingsPayload>('/api/user/settings'),
+  updateUserSettings: (payload: Partial<UserSettings>) => request<UserSettingsPayload>('/api/user/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
+  resetUserSettings: () => request<UserSettingsPayload>('/api/user/settings', { method: 'DELETE' }),
 
   playerState: () => request<PlayerState>(`/api/playback/state?t=${Date.now()}`, { cache: 'no-store' }),
+  playerSocketUrl: () => websocketUrl('/ws/player'),
   playSong: (song: SearchSong) => request<PlayerState>('/api/playback/track', { method: 'POST', body: JSON.stringify(songToPayload(song)) }),
   playAlbum: (album: SearchAlbum) => request<PlayerState>('/api/playback/album', { method: 'POST', body: JSON.stringify(albumToPayload(album)) }),
   playPlaylist: (playlistId: string, shuffle = false) => request<PlayerState>('/api/playback/playlist', { method: 'POST', body: JSON.stringify({ playlist_id: playlistId, shuffle }) }),
@@ -281,8 +298,15 @@ export const api = {
     return { artists: (payload.artists ?? []).map(normalizeArtist) }
   },
 
-  addSongToSubsonic: (song: SearchSong | QueueItem) => request<{ ok: boolean; video_id?: string }>('/api/subsonic/add/track', { method: 'POST', body: JSON.stringify(songToPayload(song as SearchSong)) }),
-  addAlbumToSubsonic: (album: SearchAlbum | AlbumDetail) => request<{ ok: boolean; total?: number; enqueued?: number; skipped_existing?: number }>('/api/subsonic/add/album', { method: 'POST', body: JSON.stringify(albumToPayload(album as SearchAlbum)) }),
+  addSongToSubsonic: (song: SearchSong | QueueItem) => {
+    announceSubsonicImportQueued('track', song.title)
+    return request<{ ok: boolean; video_id?: string }>('/api/subsonic/add/track', { method: 'POST', body: JSON.stringify(songToPayload(song as SearchSong)) })
+  },
+  resolveSubsonicSongs: (songs: Array<{ key: string; title: string; artist: string; album?: string; duration_ms?: number; yt_video_id?: string }>) => request<{ songs: Record<string, { available: boolean; subsonic_song_id?: string | null }> }>('/api/subsonic/resolve', { method: 'POST', body: JSON.stringify({ songs, albums: [] }) }),
+  addAlbumToSubsonic: (album: SearchAlbum | AlbumDetail) => {
+    announceSubsonicImportQueued('album', album.title)
+    return request<{ ok: boolean; total?: number; enqueued?: number; skipped_existing?: number }>('/api/subsonic/add/album', { method: 'POST', body: JSON.stringify(albumToPayload(album as SearchAlbum)) })
+  },
 
   artist: async (browseId: string) => normalizeArtist(await request<ArtistDetail>(`/api/ytmusic/artists/${encodeURIComponent(browseId)}`)) as ArtistDetail,
   artistPopular: async (browseId: string) => {
@@ -297,15 +321,23 @@ export const api = {
       singles: (payload.singles ?? []).map((album) => normalizeAlbum({ ...album, source: album.source || 'ytmusic' })),
     }
   },
-  album: async (browseId: string) => normalizeAlbumDetail(await request<AlbumDetail>(`/api/album/${encodeURIComponent(browseId)}`)),
+  album: async (albumId: string, source?: string) => normalizeAlbumDetail(await request<AlbumDetail>(`/api/album/${encodeURIComponent(albumId)}${source ? `?source=${encodeURIComponent(source)}` : ''}`)),
 
-  history: () => request<PlaybackHistoryResponse>('/api/history'),
+  history: (filters: PlaybackHistoryFilters = {}) => {
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(filters)) {
+      if (value === undefined || value === null || value === '') continue
+      params.set(key, String(value))
+    }
+    const suffix = params.toString() ? `?${params.toString()}` : ''
+    return request<PlaybackHistoryResponse>(`/api/history${suffix}`)
+  },
   replayHistory: (historyId: string) => request<PlayerState>('/api/playback/replay', { method: 'POST', body: JSON.stringify({ history_id: historyId }) }),
   setHistoryLimit: (limit: number) => request<PlaybackHistoryResponse>('/api/history/limit', { method: 'POST', body: JSON.stringify({ limit }) }),
 
   capabilities: () => request<Capabilities>('/capabilities'),
-  adminSettings: () => request<Record<string, unknown>>('/admin/settings'),
-  updateAdminSettings: (payload: Record<string, unknown>) => request<Record<string, unknown>>('/admin/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
+  adminSettings: () => request<Record<string, unknown>>('/api/admin/settings'),
+  updateAdminSettings: (payload: Record<string, unknown>) => request<Record<string, unknown>>('/api/admin/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
   adminUsers: () => request<AdminUser[]>('/admin/users'),
   createAdminUser: (payload: { username: string; password: string; role: 'admin' | 'user' }) => request<AdminUser>('/admin/users', { method: 'POST', body: JSON.stringify(payload) }),
   updateAdminUser: (id: string, payload: { is_active?: boolean; role?: 'admin' | 'user' }) => request<AdminUser>(`/admin/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
@@ -332,8 +364,11 @@ export const api = {
   deletePlaylist: (id: string) => request<{ ok: boolean }>(`/api/playlists/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   lobbies: () => request<LobbyListResponse>('/api/lobbies'),
-  createLobby: (name: string, guestPermissions?: LobbyPermissions) => request<LobbyState>('/api/lobbies', { method: 'POST', body: JSON.stringify({ name, guest_permissions: guestPermissions }) }),
-  updateLobby: (lobbyId: string, payload: { name?: string; is_open?: boolean; guest_permissions?: LobbyPermissions }) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  createLobby: (name: string, guestPermissions?: LobbyPermissions, guestQueueLimit?: number) => request<LobbyState>('/api/lobbies', { method: 'POST', body: JSON.stringify({ name, guest_permissions: guestPermissions, guest_queue_limit: guestQueueLimit }) }),
+  updateLobby: (lobbyId: string, payload: { name?: string; is_open?: boolean; guest_permissions?: LobbyPermissions; guest_queue_limit?: number; cleanup_after_days?: number }) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  regenerateLobbyInvite: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/invite/regenerate`, { method: 'POST', body: JSON.stringify({}) }),
+  playLobbyStation: (lobbyId: string, stationId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/station/${encodeURIComponent(stationId)}/play`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
+  stopLobbyStation: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/station/stop`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
   deleteLobby: (lobbyId: string) => request<{ ok: boolean }>(`/api/lobbies/${encodeURIComponent(lobbyId)}`, { method: 'DELETE' }),
   joinLobby: async (inviteCode: string, nickname: string) => {
     const cleanedInvite = inviteCode.trim()
@@ -354,6 +389,11 @@ export const api = {
     return request<LobbyState>(`/api/lobbies/join/${encodeURIComponent(cleanedInvite)}/resume?t=${Date.now()}`, { cache: 'no-store' })
   },
   lobbyState: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/state?t=${Date.now()}`, { headers: lobbyHeaders(lobbyId), cache: 'no-store' }),
+  lobbySocketUrl: (lobbyId: string) => {
+    const token = getLobbyToken(lobbyId)
+    const query = token ? `?token=${encodeURIComponent(token)}` : ''
+    return websocketUrl(`/ws/lobbies/${encodeURIComponent(lobbyId)}${query}`)
+  },
   lobbyAddQueueItem: (lobbyId: string, item: SearchSong | QueueItem | { title: string; artist: string; album?: string }) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/queue`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify(lobbyQueuePayload(item)) }),
   lobbyAddYoutubeUrl: (lobbyId: string, url: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/queue`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({ ytmusic_url: url }) }),
   lobbyRemoveQueueItem: (lobbyId: string, itemId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/queue/${encodeURIComponent(itemId)}`, { method: 'DELETE', headers: lobbyHeaders(lobbyId) }),
@@ -365,6 +405,7 @@ export const api = {
   lobbySeek: (lobbyId: string, positionMs: number) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/seek`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({ position_ms: positionMs }) }),
   lobbyNext: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/next`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
   lobbyPrevious: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/previous`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
+  lobbyUpdateSelf: (lobbyId: string, payload: { nickname?: string }) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/me`, { method: 'PATCH', headers: lobbyHeaders(lobbyId), body: JSON.stringify(payload) }),
   lobbyUpdateMember: (lobbyId: string, memberId: string, payload: { nickname?: string; is_active?: boolean; permissions?: LobbyPermissions }) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/members/${encodeURIComponent(memberId)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   lobbyKickMember: (lobbyId: string, memberId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/members/${encodeURIComponent(memberId)}`, { method: 'PATCH', body: JSON.stringify({ is_active: false }) }),
   lobbyLeave: (lobbyId: string) => request<{ ok: boolean }>(`/api/lobbies/${encodeURIComponent(lobbyId)}/leave`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),

@@ -13,7 +13,6 @@ from ..db import SessionLocal
 from ..models import User
 from ..settings_store import get_settings
 from ..cache import TTLCache
-from ..integrations.musicbrainz import MusicBrainzClient
 
 
 router = APIRouter(prefix="/api", tags=["search"])

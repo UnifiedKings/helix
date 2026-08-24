@@ -38,3 +38,537 @@
 [download-worker] OK video_id=YLp2cW7ICCU title='"Heroes"' track_no=1
 [download-worker] OK video_id=UVznunr4ArI title='王都グランセル - Royal Capital Grancel' track_no=1
 [download-worker] OK video_id=Kq88f_lt6MY title='Dana' track_no=3
+[download-worker] OK video_id=8gWHlHWIaRQ title='Happy Xmas (War Is Over) (Ultimate Mix)' track_no=1
+[download-worker] OK video_id=DSFqJZgMLxY title='Urgent' track_no=1
+[download-worker] OK video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=1
+[download-worker] OK video_id=ExzeYLRBC10 title='12 Fingers (2020 Remaster)' track_no=3
+[download-worker] OK video_id=D3UBHSNNfKc title='Shape Of My Heart' track_no=5
+[download-worker] OK video_id=iTbhSnB-jfg title='Modern Man' track_no=6
+[download-worker] OK video_id=QUL3FB_slHc title='In Your Own Time' track_no=45
+[download-worker] OK video_id=XCmOHoJmzUM title='Jaded' track_no=1
+[download-worker] OK video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=1
+[download-worker] OK video_id=ExzeYLRBC10 title='12 Fingers (2020 Remaster)' track_no=3
+[download-worker] OK video_id=QUL3FB_slHc title='In Your Own Time' track_no=45
+[download-worker] OK video_id=h0snX5iNx5E title='Bloodbuzz Ohio' track_no=7
+[download-worker] OK video_id=uaF4QY4Xs_8 title='Late Morning Lullaby' track_no=8
+[download-worker] OK video_id=q9OXlBdcOH0 title="The Lion's Roar" track_no=9
+[download-worker] OK video_id=1AUGcTB63P8 title='The Girl Running (feat. Jess Chalker)' track_no=1
+[download-worker] OK video_id=MUZwblurraA title='I\'m Still Here (Jim\'s Theme) (From "Treasure Planet"/Soundtrack Version)' track_no=2
+[download-worker] OK video_id=D3UBHSNNfKc title='Shape Of My Heart' track_no=3
+[download-worker] OK video_id=QUL3FB_slHc title='In Your Own Time' track_no=5
+[download-worker] OK video_id=q9OXlBdcOH0 title="The Lion's Roar" track_no=6
+[download-worker] OK video_id=t0PssM_440M title='Dirty Air' track_no=7
+[download-worker] OK video_id=Qu3nBckUqiY title='Empty Corridors (Live)' track_no=8
+[download-worker] OK video_id=kjsrnRmnPzE title='Burden of Tomorrow' track_no=9
+[download-worker] OK video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=1
+[download-worker] OK video_id=DqfbL5ME1Rg title='Rusted Wheel' track_no=1
+[download-worker] OK video_id=uaF4QY4Xs_8 title='Late Morning Lullaby' track_no=1
+[download-worker] OK video_id=QMFy_fMVDfk title='Revelator Eyes' track_no=3
+[download-worker] OK video_id=H0B993pXX2I title='Dust Bowl Dance' track_no=4
+[download-worker] OK video_id=E4QBeH2GopY title='Oh Valencia' track_no=5
+[download-worker] OK video_id=ILwbA_GtER8 title='妖星悲譚' track_no=6
+[download-worker] OK video_id=xQ_5QWA6LiU title='Need the Sun to Break' track_no=7
+[download-worker] OK video_id=ukz-lBaaya8 title='Weathervane' track_no=8
+[download-worker] FAILED attempt=1/4 video_id=IXNedA7uDSc title='The Engine Driver' track_no=9 url=https://music.youtube.com/watch?v=IXNedA7uDSc err=RuntimeError('ERROR: [youtube] IXNedA7uDSc: Video unavailable. This video is not available')
+[download-worker] FAILED attempt=2/4 video_id=IXNedA7uDSc title='The Engine Driver' track_no=9 url=https://music.youtube.com/watch?v=IXNedA7uDSc err=RuntimeError('ERROR: [youtube] IXNedA7uDSc: Video unavailable. This video is not available')
+[download-worker] FAILED attempt=3/4 video_id=IXNedA7uDSc title='The Engine Driver' track_no=9 url=https://music.youtube.com/watch?v=IXNedA7uDSc err=RuntimeError('ERROR: [youtube] IXNedA7uDSc: Video unavailable. This video is not available')
+[download-worker] FAILED attempt=4/4 video_id=IXNedA7uDSc title='The Engine Driver' track_no=9 url=https://music.youtube.com/watch?v=IXNedA7uDSc err=RuntimeError('ERROR: [youtube] IXNedA7uDSc: Video unavailable. This video is not available')
+[download-worker] GAVE_UP video_id=IXNedA7uDSc title='The Engine Driver' track_no=9
+[download-worker] OK video_id=q9OXlBdcOH0 title="The Lion's Roar" track_no=10
+[download-worker] OK video_id=kZZxD64TVQU title='Buster the Ghost of Garden' track_no=0
+[download-worker] OK video_id=q8OzX96EjSI title='有角の若獅子たち - Horned Young Lions' track_no=0
+[download-worker] OK video_id=1828lQRbK5o title='Who Laughs Last (feat. Kristen Stewart)' track_no=5
+[download-worker] OK video_id=ogi8RedVO_M title='Fire Eternal (feat. Kazu Makino)' track_no=8
+[download-worker] OK video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=1
+[download-worker] OK video_id=ExzeYLRBC10 title='12 Fingers (2020 Remaster)' track_no=3
+[download-worker] OK video_id=D3UBHSNNfKc title='Shape Of My Heart' track_no=5
+[download-worker] OK video_id=XhYj7xZwoCA title='Missionary' track_no=1
+[download-worker] OK video_id=6oynO9PcMXY title='Toil and Trouble' track_no=2
+[download-worker] OK video_id=0Om-1vMT-0k title='Silvia' track_no=1
+[download-worker] OK video_id=AUAxlOfw2O0 title="All These Things That I've Done" track_no=2
+[download-worker] OK video_id=0itGqFgY4ts title="Lover's Spit" track_no=3
+[download-worker] OK video_id=GnE7iHhNBUk title='Manhattan' track_no=5
+[download-worker] OK video_id=H0B993pXX2I title='Dust Bowl Dance' track_no=1
+[download-worker] FAILED attempt=1/4 video_id=IXNedA7uDSc title='The Engine Driver' track_no=2 url=https://music.youtube.com/watch?v=IXNedA7uDSc err=RuntimeError('ERROR: [youtube] IXNedA7uDSc: Video unavailable. This video is not available')
+[download-worker] FAILED attempt=2/4 video_id=IXNedA7uDSc title='The Engine Driver' track_no=2 url=https://music.youtube.com/watch?v=IXNedA7uDSc err=RuntimeError('ERROR: [youtube] IXNedA7uDSc: Video unavailable. This video is not available')
+[download-worker] FAILED attempt=3/4 video_id=IXNedA7uDSc title='The Engine Driver' track_no=2 url=https://music.youtube.com/watch?v=IXNedA7uDSc err=RuntimeError('ERROR: [youtube] IXNedA7uDSc: Video unavailable. This video is not available')
+[download-worker] FAILED attempt=4/4 video_id=IXNedA7uDSc title='The Engine Driver' track_no=2 url=https://music.youtube.com/watch?v=IXNedA7uDSc err=RuntimeError('ERROR: [youtube] IXNedA7uDSc: Video unavailable. This video is not available')
+[download-worker] GAVE_UP video_id=IXNedA7uDSc title='The Engine Driver' track_no=2
+[download-worker] OK video_id=MHpxpexx8AU title='Please Me Like You Want To' track_no=9
+[download-worker] OK video_id=t0PssM_440M title='Dirty Air' track_no=8
+[download-worker] OK video_id=W2jg4uZ5OYA title='She-Wrecks' track_no=7
+[download-worker] OK video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=1
+[download-worker] OK video_id=q9OXlBdcOH0 title="The Lion's Roar" track_no=9
+[download-worker] OK video_id=uaF4QY4Xs_8 title='Late Morning Lullaby' track_no=8
+[download-worker] OK video_id=Mesq_o8QNOc title='Further Away' track_no=17
+[download-worker] OK video_id=8LFWYsUtfV0 title='Cough Syrup' track_no=2
+[download-worker] OK video_id=BfhI-7ueioc title='Boondocks' track_no=3
+[download-worker] OK video_id=BfhI-7ueioc title='Boondocks' track_no=3
+[download-worker] OK video_id=qvq_nlU1kxI title='風を共に舞う気持ち - Feelings Soar With the Wind' track_no=1
+[download-worker] OK video_id=Rbgw_rduQpM title='I Really Want to Stay at Your House' track_no=1
+[download-worker] OK video_id=wbLuoNyGzUM title='天のため - For the Sky' track_no=1
+[download-worker] OK video_id=_yIbr6yAMLw title='A New Legendary Opening' track_no=2
+[download-worker] OK video_id=-lYhpUegNus title='イルバーンズの遺跡 (オリジナル) - Illburns Ruins' track_no=3
+[download-worker] OK video_id=bxJ5keauYX0 title='追憶の彼方に - Beyond the Reminiscences' track_no=4
+[download-worker] OK video_id=WyDrQleqjL4 title='天儀室 - Heavenly Ceremonial Room' track_no=5
+[download-worker] OK video_id=zr1xTlrr-5Y title='Road to Solitary Death' track_no=6
+[download-worker] OK video_id=ExzeYLRBC10 title='12 Fingers (2020 Remaster)' track_no=1
+[download-worker] OK video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=1
+[download-worker] OK video_id=ExzeYLRBC10 title='12 Fingers (2020 Remaster)' track_no=3
+[download-worker] OK video_id=D3UBHSNNfKc title='Shape Of My Heart' track_no=5
+[download-worker] OK video_id=iTbhSnB-jfg title='Modern Man' track_no=6
+[download-worker] OK video_id=iTbhSnB-jfg title='Modern Man' track_no=6
+[download-worker] OK video_id=h0snX5iNx5E title='Bloodbuzz Ohio' track_no=7
+[download-worker] OK video_id=uaF4QY4Xs_8 title='Late Morning Lullaby' track_no=8
+[download-worker] OK video_id=q9OXlBdcOH0 title="The Lion's Roar" track_no=9
+[download-worker] OK video_id=JCFJotdil8A title='King of the World' track_no=1
+[download-worker] OK video_id=IGLVMBTIAPE title='Free Bird' track_no=1
+[download-worker] OK video_id=Arz0GFZR8hI title="And It's Still Alright" track_no=1
+[download-worker] OK video_id=OAAU2Dz5SCU title="This Ain't Nothin'" track_no=2
+[download-worker] OK video_id=TtQfY5lDgBw title='Big Time In The Jungle' track_no=1
+[download-worker] OK video_id=3TjygR8hPJ4 title='I Wanna Be In The Cavalry' track_no=1
+[download-worker] OK video_id=Bg_rabxk_ww title='Horse Soldier, Horse Soldier' track_no=1
+[download-worker] OK video_id=8rEw9sCwo8E title='Roar of the Jungle Dragon' track_no=1
+[download-worker] OK video_id=CLW3FnDa1nQ title='Welcome to The Internet' track_no=1
+[download-worker] OK video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=1
+[download-worker] OK video_id=D3UBHSNNfKc title='Shape Of My Heart' track_no=5
+[download-worker] OK video_id=D3UBHSNNfKc title='Shape Of My Heart' track_no=5
+[download-worker] OK video_id=QUL3FB_slHc title='In Your Own Time' track_no=45
+[download-worker] OK video_id=J6-gJwybbVQ title='Hannah' track_no=25
+[download-worker] OK video_id=kjsrnRmnPzE title='Burden of Tomorrow' track_no=21
+[download-worker] OK video_id=Mesq_o8QNOc title='Further Away' track_no=17
+[download-worker] OK video_id=7JzLO2g9cZM title='Passing Afternoon' track_no=24
+[download-worker] OK video_id=HhLw84Y9LvM title='Good Luck' track_no=1
+[download-worker] OK video_id=TtQfY5lDgBw title='Big Time In The Jungle' track_no=2
+[download-worker] OK video_id=Arz0GFZR8hI title="And It's Still Alright" track_no=2
+[download-worker] OK video_id=Bg_rabxk_ww title='Horse Soldier, Horse Soldier' track_no=3
+[download-worker] OK video_id=Arz0GFZR8hI title="And It's Still Alright" track_no=4
+[download-worker] OK video_id=IGLVMBTIAPE title='Free Bird' track_no=6
+[download-worker] OK video_id=1828lQRbK5o title='Who Laughs Last (feat. Kristen Stewart)' track_no=5
+[download-worker] OK video_id=IGLVMBTIAPE title='Free Bird' track_no=3
+[download-worker] OK video_id=mmpJqnbp6A8 title='Fly With Me' track_no=1
+[download-worker] OK video_id=ba6urd2HBtg title="No Past Land (Rare Version, incluida En La B.S.O. de 'Men Hunters')" track_no=1
+[download-worker] OK video_id=7--EmxTvYQ4 title="I Don't Want to Live, I Don't Want to Die" track_no=2
+[download-worker] OK video_id=HYCrKrRzGBs title="But I'll Never Forget The Way You Make Me Feel" track_no=3
+[download-worker] OK video_id=1T6RAcBkHME title='Island' track_no=4
+[download-worker] OK video_id=1T6RAcBkHME title='Island' track_no=4
+[download-worker] OK video_id=JIMeHbeCCdg title='Cynthia: Champion Cynthia (From "Pokémon Diamond and Pearl") / Battle! Champion (From "Pokémon Diamond and Pearl")' track_no=1
+[download-worker] OK video_id=4C0BfyDDjnk title='Encounter! Champion Cynthia Approaches! (From "Pokemon Diamond, Pearl and Platinum") [Piano Solo]' track_no=2
+[download-worker] OK video_id=2UyL0qBTqWU title='Lamplighter' track_no=1
+[download-worker] OK video_id=xN0UJLBww78 title='Mendenhall' track_no=2
+[download-worker] OK video_id=NCNp14DYMv8 title='Aftermath' track_no=3
+[download-worker] OK video_id=ZA8jAoAqg58 title='Family' track_no=4
+[download-worker] OK video_id=8OrMjQs_bw8 title='See You Again' track_no=1
+[download-worker] OK video_id=zTNkcP9_0-M title='At the End of Disaster' track_no=2
+[download-worker] OK video_id=9W7s97RsVMs title="気分はキャプテン・トーマス (スペシャルアレンジ) - Captain Thomas' Feelings (Special Arrange)" track_no=3
+[download-worker] OK video_id=8qlrPLAoaUU title='幻の大地 セルペンティナ - Mythical Land Selpentina' track_no=5
+[download-worker] FAILED attempt=1/4 video_id=nGtPHUHAHYk title='自由の翼 - Wings of Freedom' track_no=6 url=https://music.youtube.com/watch?v=nGtPHUHAHYk err=RuntimeError('WARNING: [youtube] [jsc] Remote components challenge solver script (deno) and NPM package (deno) were skipped. These may be required to solve JS challenges. You can enable these downloads with  --remote-components ejs:github  (recommended) or  --remote-components ejs:npm , respectively. For more information and alternatives, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] nGtPHUHAHYk: Signature solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] nGtPHUHAHYk: n challenge solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=nGtPHUHAHYk title='自由の翼 - Wings of Freedom' track_no=6
+[download-worker] OK video_id=xTU36FLqFEU title='Termination' track_no=7
+[download-worker] OK video_id=s602GKHVvv8 title='Final Battle' track_no=9
+[download-worker] OK video_id=DTOoTVO81zQ title='Fair Skies' track_no=10
+[download-worker] FAILED attempt=1/4 video_id=LxbU7W7HCOo title='時の封印 (オリジナル) - Sealed Time' track_no=11 url=https://music.youtube.com/watch?v=LxbU7W7HCOo err=RuntimeError('WARNING: [youtube] [jsc] Remote components challenge solver script (deno) and NPM package (deno) were skipped. These may be required to solve JS challenges. You can enable these downloads with  --remote-components ejs:github  (recommended) or  --remote-components ejs:npm , respectively. For more information and alternatives, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] LxbU7W7HCOo: Signature solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] LxbU7W7HCOo: n challenge solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=LxbU7W7HCOo title='時の封印 (オリジナル) - Sealed Time' track_no=11
+[download-worker] OK video_id=i2QB1163_3o title='Desert After Tears' track_no=12
+[download-worker] OK video_id=FFHk6xkKyMA title='哀愁のトワイライト (オリジナル) - Tearful Twilight' track_no=15
+[download-worker] OK video_id=tYgkTdFIVds title='女神の機嫌は時の運 - Mood of the Goddess Depends On Luck' track_no=20
+[download-worker] OK video_id=7alvcsmhz-Y title='Hope for the Hopeless' track_no=21
+[download-worker] OK video_id=-GSGgSMM0Q4 title='ポムりますか? - Shall We Pom?' track_no=22
+[download-worker] OK video_id=l4Xycfz4EHc title='予定外の奇蹟 - Unexpected Miracle' track_no=23
+[download-worker] OK video_id=RWGTNJukg2A title='創立記念祭 - Founding Anniversary Festival' track_no=24
+[download-worker] OK video_id=L6eqF_9CVH8 title="まろうどの賛歌 - Visitor's Hymn" track_no=25
+[download-worker] OK video_id=wHC0e6ajEc0 title="父さんだもの - It's Dad" track_no=26
+[download-worker] OK video_id=IGLVMBTIAPE title='Free Bird' track_no=1
+[download-worker] OK video_id=ZA8jAoAqg58 title='Family' track_no=1
+[download-worker] OK video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=2
+[download-worker] OK video_id=8rEw9sCwo8E title='Roar of the Jungle Dragon' track_no=1
+[download-worker] OK video_id=ZA8jAoAqg58 title='Family' track_no=1
+[download-worker] FAILED attempt=1/4 video_id=ExzeYLRBC10 title='12 Fingers (2020 Remaster)' track_no=4 url=https://music.youtube.com/watch?v=ExzeYLRBC10 err=RuntimeError('WARNING: [youtube] [jsc] Remote components challenge solver script (deno) and NPM package (deno) were skipped. These may be required to solve JS challenges. You can enable these downloads with  --remote-components ejs:github  (recommended) or  --remote-components ejs:npm , respectively. For more information and alternatives, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] ExzeYLRBC10: Signature solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] ExzeYLRBC10: n challenge solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=ExzeYLRBC10 title='12 Fingers (2020 Remaster)' track_no=4
+[download-worker] OK video_id=GEdmY9sy4as title='Tops of the Trees' track_no=1
+[download-worker] OK video_id=GEdmY9sy4as title='Tops of the Trees' track_no=1
+[download-worker] OK video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=1
+[download-worker] OK video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=1
+[download-worker] OK video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=1
+[download-worker] OK video_id=VSLHKBcnSE4 title='Donut: The Musical (feat. Dan Godwin)' track_no=1
+[download-worker] OK video_id=VSLHKBcnSE4 title='Donut: The Musical (feat. Dan Godwin)' track_no=1
+[download-worker] FAILED attempt=1/4 video_id=TtQfY5lDgBw title='Big Time In The Jungle' track_no=1 url=https://music.youtube.com/watch?v=TtQfY5lDgBw err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=TtQfY5lDgBw title='Big Time In The Jungle' track_no=1
+[download-worker] OK video_id=8rEw9sCwo8E title='Roar of the Jungle Dragon' track_no=1
+[download-worker] OK video_id=8rEw9sCwo8E title='Roar of the Jungle Dragon' track_no=1
+[download-worker] OK video_id=qR6mTJRbcaE title='Escape From The City ...for City Escape' track_no=1
+[download-worker] OK video_id=8rEw9sCwo8E title='Roar of the Jungle Dragon' track_no=1
+[download-worker] OK video_id=8rEw9sCwo8E title='Roar of the Jungle Dragon' track_no=1
+[download-worker] OK video_id=xN0UJLBww78 title='Mendenhall' track_no=1
+[download-worker] OK video_id=EMJ6WcfBIx4 title='Logic Song / We Waited...' track_no=2
+[download-worker] OK video_id=IGLVMBTIAPE title='Free Bird' track_no=2
+[download-worker] OK video_id=VTgMFcFIH9k title='Unwell' track_no=4
+[download-worker] OK video_id=1828lQRbK5o title='Who Laughs Last (feat. Kristen Stewart)' track_no=5
+[download-worker] OK video_id=8rEw9sCwo8E title='Roar of the Jungle Dragon' track_no=1
+[download-worker] OK video_id=G1j1xhfjBmc title='Hero' track_no=1
+[download-worker] OK video_id=VTgMFcFIH9k title='Unwell' track_no=1
+[download-worker] OK video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=1
+[download-worker] OK video_id=ZA8jAoAqg58 title='Family' track_no=1
+[download-worker] OK video_id=vrRngeomRAU title='In My Home' track_no=2
+[download-worker] OK video_id=MUZwblurraA title='I\'m Still Here (Jim\'s Theme) (From "Treasure Planet"/Soundtrack Version)' track_no=3
+[download-worker] OK video_id=7JzLO2g9cZM title='Passing Afternoon' track_no=5
+[download-worker] OK video_id=W2jg4uZ5OYA title='She-Wrecks' track_no=6
+[download-worker] OK video_id=mQER0A0ej0M title='Hey Jude' track_no=7
+[download-worker] OK video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=1
+[download-worker] OK video_id=ZA8jAoAqg58 title='Family' track_no=1
+[download-worker] OK video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=2
+[download-worker] OK video_id=ExzeYLRBC10 title='12 Fingers (2020 Remaster)' track_no=4
+[download-worker] FAILED attempt=1/4 video_id=D3UBHSNNfKc title='Shape Of My Heart' track_no=6 url=https://music.youtube.com/watch?v=D3UBHSNNfKc err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=D3UBHSNNfKc title='Shape Of My Heart' track_no=6
+[download-worker] OK video_id=iTbhSnB-jfg title='Modern Man' track_no=7
+[download-worker] OK video_id=VTgMFcFIH9k title='Unwell' track_no=1
+[download-worker] OK video_id=0Md0E5icspA title='Cups (Pitch Perfect’s “When I’m Gone”) (Pop Version)' track_no=1
+[download-worker] OK video_id=VTgMFcFIH9k title='Unwell' track_no=1
+[download-worker] OK video_id=ZA8jAoAqg58 title='Family' track_no=1
+[download-worker] FAILED attempt=1/4 video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=2 url=https://music.youtube.com/watch?v=cilM-3kT7Ug err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=2
+[download-worker] OK video_id=ExzeYLRBC10 title='12 Fingers (2020 Remaster)' track_no=4
+[download-worker] OK video_id=D3UBHSNNfKc title='Shape Of My Heart' track_no=6
+[download-worker] OK video_id=iTbhSnB-jfg title='Modern Man' track_no=7
+[download-worker] OK video_id=h0snX5iNx5E title='Bloodbuzz Ohio' track_no=8
+[download-worker] OK video_id=uaF4QY4Xs_8 title='Late Morning Lullaby' track_no=9
+[download-worker] OK video_id=q9OXlBdcOH0 title="The Lion's Roar" track_no=10
+[download-worker] OK video_id=mQER0A0ej0M title='Hey Jude' track_no=11
+[download-worker] OK video_id=xQ_5QWA6LiU title='Need the Sun to Break' track_no=12
+[download-worker] OK video_id=0Md0E5icspA title='Cups (Pitch Perfect’s “When I’m Gone”) (Pop Version)' track_no=1
+[download-worker] OK video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=2
+[download-worker] OK video_id=TtQfY5lDgBw title='Big Time In The Jungle' track_no=1
+[download-worker] OK video_id=lAgRcRtzYBM title='My Good Gal' track_no=1
+[download-worker] OK video_id=35Ipe_0kadM title='The Ballad Of Curtis Loew' track_no=1
+[download-worker] OK video_id=1828lQRbK5o title='Who Laughs Last (feat. Kristen Stewart)' track_no=5
+[download-worker] OK video_id=ogi8RedVO_M title='Fire Eternal (feat. Kazu Makino)' track_no=8
+[download-worker] OK video_id=35Ipe_0kadM title='The Ballad Of Curtis Loew' track_no=16
+[download-worker] OK video_id=35Ipe_0kadM title='The Ballad Of Curtis Loew' track_no=1
+[download-worker] OK video_id=VTgMFcFIH9k title='Unwell' track_no=4
+[download-worker] OK video_id=t0PssM_440M title='Dirty Air' track_no=1
+[download-worker] OK video_id=ZA8jAoAqg58 title='Family' track_no=1
+[download-worker] FAILED attempt=1/4 video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=2 url=https://music.youtube.com/watch?v=cilM-3kT7Ug err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=2/4 video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=2 url=https://music.youtube.com/watch?v=cilM-3kT7Ug err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=3/4 video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=2 url=https://music.youtube.com/watch?v=cilM-3kT7Ug err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=cilM-3kT7Ug title='Overcome the Rocky Path' track_no=2
+[download-worker] OK video_id=ExzeYLRBC10 title='12 Fingers (2020 Remaster)' track_no=4
+[download-worker] OK video_id=D3UBHSNNfKc title='Shape Of My Heart' track_no=6
+[download-worker] OK video_id=iTbhSnB-jfg title='Modern Man' track_no=7
+[download-worker] OK video_id=h0snX5iNx5E title='Bloodbuzz Ohio' track_no=8
+[download-worker] OK video_id=uaF4QY4Xs_8 title='Late Morning Lullaby' track_no=9
+[download-worker] OK video_id=q9OXlBdcOH0 title="The Lion's Roar" track_no=10
+[download-worker] OK video_id=mQER0A0ej0M title='Hey Jude' track_no=11
+[download-worker] OK video_id=xQ_5QWA6LiU title='Need the Sun to Break' track_no=12
+[download-worker] OK video_id=By5m9KyzaJQ title='Elysium' track_no=13
+[download-worker] OK video_id=MUZwblurraA title='I\'m Still Here (Jim\'s Theme) (From "Treasure Planet"/Soundtrack Version)' track_no=14
+[download-worker] OK video_id=qJgRduuN_ww title='If I Wanted Someone' track_no=15
+[download-worker] OK video_id=o5lOREmMzD4 title='Falling' track_no=16
+[download-worker] FAILED attempt=1/4 video_id=IXNedA7uDSc title='The Engine Driver' track_no=17 url=https://music.youtube.com/watch?v=IXNedA7uDSc err=RuntimeError('ERROR: [youtube] IXNedA7uDSc: Video unavailable. This video is not available')
+[download-worker] FAILED attempt=2/4 video_id=IXNedA7uDSc title='The Engine Driver' track_no=17 url=https://music.youtube.com/watch?v=IXNedA7uDSc err=RuntimeError('ERROR: [youtube] IXNedA7uDSc: Video unavailable. This video is not available')
+[download-worker] FAILED attempt=3/4 video_id=IXNedA7uDSc title='The Engine Driver' track_no=17 url=https://music.youtube.com/watch?v=IXNedA7uDSc err=RuntimeError('ERROR: [youtube] IXNedA7uDSc: Video unavailable. This video is not available')
+[download-worker] FAILED attempt=4/4 video_id=IXNedA7uDSc title='The Engine Driver' track_no=17 url=https://music.youtube.com/watch?v=IXNedA7uDSc err=RuntimeError('ERROR: [youtube] IXNedA7uDSc: Video unavailable. This video is not available')
+[download-worker] GAVE_UP video_id=IXNedA7uDSc title='The Engine Driver' track_no=17
+[download-worker] OK video_id=Mesq_o8QNOc title='Further Away' track_no=18
+[download-worker] OK video_id=Qu3nBckUqiY title='Empty Corridors (Live)' track_no=20
+[download-worker] OK video_id=H0B993pXX2I title='Dust Bowl Dance' track_no=21
+[download-worker] OK video_id=kjsrnRmnPzE title='Burden of Tomorrow' track_no=22
+[download-worker] OK video_id=Ubt_qaac_wM title='Kyoto' track_no=23
+[download-worker] OK video_id=1AUGcTB63P8 title='The Girl Running (feat. Jess Chalker)' track_no=24
+[download-worker] OK video_id=7JzLO2g9cZM title='Passing Afternoon' track_no=25
+[download-worker] OK video_id=J6-gJwybbVQ title='Hannah' track_no=26
+[download-worker] OK video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=1
+[download-worker] OK video_id=I0AcQpE3gxA title='Cry for Me, Cry for You' track_no=1
+[download-worker] OK video_id=CCUyzg5IgGk title='Covering Your Tracks' track_no=1
+[download-worker] OK video_id=tNXfPXghhU8 title='When You Wake Up (Dark Version)' track_no=3
+[download-worker] OK video_id=vcaMLWtrRgo title='Just Like a Wall (Raining Version)' track_no=4
+[download-worker] OK video_id=LddrP9OyN5E title='All in Good Time' track_no=5
+[download-worker] OK video_id=By5m9KyzaJQ title='Elysium' track_no=1
+[download-worker] FAILED attempt=1/4 video_id=ZA8jAoAqg58 title='Family' track_no=1 url=https://music.youtube.com/watch?v=ZA8jAoAqg58 err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=2/4 video_id=ZA8jAoAqg58 title='Family' track_no=1 url=https://music.youtube.com/watch?v=ZA8jAoAqg58 err=RuntimeError('WARNING: [youtube] [jsc] Remote components challenge solver script (deno) and NPM package (deno) were skipped. These may be required to solve JS challenges. You can enable these downloads with  --remote-components ejs:github  (recommended) or  --remote-components ejs:npm , respectively. For more information and alternatives, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] ZA8jAoAqg58: Signature solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] ZA8jAoAqg58: n challenge solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=ZA8jAoAqg58 title='Family' track_no=1
+[download-worker] OK video_id=J6-gJwybbVQ title='Hannah' track_no=26
+[download-worker] OK video_id=ukz-lBaaya8 title='Weathervane' track_no=28
+[download-worker] FAILED attempt=1/4 video_id=W2jg4uZ5OYA title='She-Wrecks' track_no=29 url=https://music.youtube.com/watch?v=W2jg4uZ5OYA err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=W2jg4uZ5OYA title='She-Wrecks' track_no=29
+[download-worker] OK video_id=QMFy_fMVDfk title='Revelator Eyes' track_no=30
+[download-worker] FAILED attempt=1/4 video_id=QL3kW2wwJNU title='It Ain’t Over' track_no=31 url=https://music.youtube.com/watch?v=QL3kW2wwJNU err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=QL3kW2wwJNU title='It Ain’t Over' track_no=31
+[download-worker] OK video_id=ILwbA_GtER8 title='妖星悲譚' track_no=32
+[download-worker] OK video_id=uT8qq10n2S4 title="They're in Love, Where Am I?" track_no=33
+[download-worker] OK video_id=iZl6XWBJkz8 title='Fool’s Gold' track_no=35
+[download-worker] OK video_id=E4QBeH2GopY title='Oh Valencia' track_no=36
+[download-worker] OK video_id=_3YYEU4_x_0 title='50/50' track_no=37
+[download-worker] FAILED attempt=1/4 video_id=MHpxpexx8AU title='Please Me Like You Want To' track_no=38 url=https://music.youtube.com/watch?v=MHpxpexx8AU err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=MHpxpexx8AU title='Please Me Like You Want To' track_no=38
+[download-worker] OK video_id=GCUUD80NNro title='Please Speak Well of Me' track_no=39
+[download-worker] OK video_id=v5ziZdMHZfk title='Keep It There' track_no=40
+[download-worker] FAILED attempt=1/4 video_id=vKZwf4pxQ0Q title='Blue Light' track_no=41 url=https://music.youtube.com/watch?v=vKZwf4pxQ0Q err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=vKZwf4pxQ0Q title='Blue Light' track_no=41
+[download-worker] OK video_id=AJfmS5cH7r0 title='Other Things' track_no=43
+[download-worker] FAILED attempt=1/4 video_id=rJs_XmLoqMk title='Strangers Again' track_no=44 url=https://music.youtube.com/watch?v=rJs_XmLoqMk err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=rJs_XmLoqMk title='Strangers Again' track_no=44
+[download-worker] FAILED attempt=1/4 video_id=vrRngeomRAU title='In My Home' track_no=45 url=https://music.youtube.com/watch?v=vrRngeomRAU err=RuntimeError('WARNING: [youtube] [jsc] Remote components challenge solver script (deno) and NPM package (deno) were skipped. These may be required to solve JS challenges. You can enable these downloads with  --remote-components ejs:github  (recommended) or  --remote-components ejs:npm , respectively. For more information and alternatives, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] vrRngeomRAU: Signature solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] vrRngeomRAU: n challenge solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=2/4 video_id=vrRngeomRAU title='In My Home' track_no=45 url=https://music.youtube.com/watch?v=vrRngeomRAU err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=vrRngeomRAU title='In My Home' track_no=45
+[download-worker] FAILED attempt=1/4 video_id=QUL3FB_slHc title='In Your Own Time' track_no=46 url=https://music.youtube.com/watch?v=QUL3FB_slHc err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=QUL3FB_slHc title='In Your Own Time' track_no=46
+[download-worker] FAILED attempt=1/4 video_id=QUL3FB_slHc title='In Your Own Time' track_no=46 url=https://music.youtube.com/watch?v=QUL3FB_slHc err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=2/4 video_id=QUL3FB_slHc title='In Your Own Time' track_no=46 url=https://music.youtube.com/watch?v=QUL3FB_slHc err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] OK video_id=QUL3FB_slHc title='In Your Own Time' track_no=46
+[download-worker] OK video_id=J6-gJwybbVQ title='Hannah' track_no=5
+[download-worker] FAILED attempt=1/4 video_id=By5m9KyzaJQ title='Elysium' track_no=6 url=https://music.youtube.com/watch?v=By5m9KyzaJQ err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=2/4 video_id=By5m9KyzaJQ title='Elysium' track_no=6 url=https://music.youtube.com/watch?v=By5m9KyzaJQ err=RuntimeError('WARNING: [youtube] [jsc] Remote components challenge solver script (deno) and NPM package (deno) were skipped. These may be required to solve JS challenges. You can enable these downloads with  --remote-components ejs:github  (recommended) or  --remote-components ejs:npm , respectively. For more information and alternatives, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] By5m9KyzaJQ: Signature solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] By5m9KyzaJQ: n challenge solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=3/4 video_id=By5m9KyzaJQ title='Elysium' track_no=6 url=https://music.youtube.com/watch?v=By5m9KyzaJQ err=RuntimeError('WARNING: [youtube] [jsc] Remote components challenge solver script (deno) and NPM package (deno) were skipped. These may be required to solve JS challenges. You can enable these downloads with  --remote-components ejs:github  (recommended) or  --remote-components ejs:npm , respectively. For more information and alternatives, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] By5m9KyzaJQ: Signature solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] By5m9KyzaJQ: n challenge solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=4/4 video_id=By5m9KyzaJQ title='Elysium' track_no=6 url=https://music.youtube.com/watch?v=By5m9KyzaJQ err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] GAVE_UP video_id=By5m9KyzaJQ title='Elysium' track_no=6
+[download-worker] FAILED attempt=1/4 video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=7 url=https://music.youtube.com/watch?v=qQzdAsjWGPg err=RuntimeError('WARNING: [youtube] [jsc] Remote components challenge solver script (deno) and NPM package (deno) were skipped. These may be required to solve JS challenges. You can enable these downloads with  --remote-components ejs:github  (recommended) or  --remote-components ejs:npm , respectively. For more information and alternatives, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] qQzdAsjWGPg: Signature solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nWARNING: [youtube] qQzdAsjWGPg: n challenge solving failed: Some formats may be missing. Ensure you have a supported JavaScript runtime and challenge solver script distribution installed. Review any warnings presented before this message. For more details, refer to  https://github.com/yt-dlp/yt-dlp/wiki/EJS\nERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=2/4 video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=7 url=https://music.youtube.com/watch?v=qQzdAsjWGPg err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=3/4 video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=7 url=https://music.youtube.com/watch?v=qQzdAsjWGPg err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=4/4 video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=7 url=https://music.youtube.com/watch?v=qQzdAsjWGPg err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] GAVE_UP video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=7
+[download-worker] OK video_id=Mesq_o8QNOc title='Further Away' track_no=1
+[download-worker] FAILED attempt=1/4 video_id=EUE7huATCv8 title='Follow You To Virgie (OurVinyl Sessions)' track_no=1 url=https://music.youtube.com/watch?v=EUE7huATCv8 err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=2/4 video_id=EUE7huATCv8 title='Follow You To Virgie (OurVinyl Sessions)' track_no=1 url=https://music.youtube.com/watch?v=EUE7huATCv8 err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=3/4 video_id=EUE7huATCv8 title='Follow You To Virgie (OurVinyl Sessions)' track_no=1 url=https://music.youtube.com/watch?v=EUE7huATCv8 err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=4/4 video_id=EUE7huATCv8 title='Follow You To Virgie (OurVinyl Sessions)' track_no=1 url=https://music.youtube.com/watch?v=EUE7huATCv8 err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] GAVE_UP video_id=EUE7huATCv8 title='Follow You To Virgie (OurVinyl Sessions)' track_no=1
+[download-worker] FAILED attempt=1/4 video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=2 url=https://music.youtube.com/watch?v=qQzdAsjWGPg err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=1/4 video_id=EUE7huATCv8 title='Follow You To Virgie (OurVinyl Sessions)' track_no=1 url=https://music.youtube.com/watch?v=EUE7huATCv8 err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=2/4 video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=2 url=https://music.youtube.com/watch?v=qQzdAsjWGPg err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=1/4 video_id=By5m9KyzaJQ title='Elysium' track_no=2 url=https://music.youtube.com/watch?v=By5m9KyzaJQ err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=1/4 video_id=ZA8jAoAqg58 title='Family' track_no=1 url=https://music.youtube.com/watch?v=ZA8jAoAqg58 err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=2/4 video_id=EUE7huATCv8 title='Follow You To Virgie (OurVinyl Sessions)' track_no=1 url=https://music.youtube.com/watch?v=EUE7huATCv8 err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=2/4 video_id=By5m9KyzaJQ title='Elysium' track_no=2 url=https://music.youtube.com/watch?v=By5m9KyzaJQ err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=2/4 video_id=ZA8jAoAqg58 title='Family' track_no=1 url=https://music.youtube.com/watch?v=ZA8jAoAqg58 err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=3/4 video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=2 url=https://music.youtube.com/watch?v=qQzdAsjWGPg err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=1/4 video_id=ZA8jAoAqg58 title='Family' track_no=1 url=https://music.youtube.com/watch?v=ZA8jAoAqg58 err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=2/4 video_id=ZA8jAoAqg58 title='Family' track_no=1 url=https://music.youtube.com/watch?v=ZA8jAoAqg58 err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=3/4 video_id=ZA8jAoAqg58 title='Family' track_no=1 url=https://music.youtube.com/watch?v=ZA8jAoAqg58 err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] FAILED attempt=4/4 video_id=ZA8jAoAqg58 title='Family' track_no=1 url=https://music.youtube.com/watch?v=ZA8jAoAqg58 err=RuntimeError('ERROR: unable to download video data: HTTP Error 403: Forbidden')
+[download-worker] GAVE_UP video_id=ZA8jAoAqg58 title='Family' track_no=1
+[download-worker] OK video_id=ZA8jAoAqg58 title='Family' track_no=1
+[download-worker] OK video_id=EUE7huATCv8 title='Follow You To Virgie (OurVinyl Sessions)' track_no=1
+[download-worker] OK video_id=umig7gtwUy0 title='You Haunt Me' track_no=3
+[download-worker] OK video_id=EUE7huATCv8 title='Follow You To Virgie (OurVinyl Sessions)' track_no=4
+[download-worker] OK video_id=90f2cMmMitE title='way of life (英雄伝説 零の軌跡) - Way of Life (The Legend of Heroes: Zero No Kiseki)' track_no=1
+[download-worker] OK video_id=yNXQxjXsE6M title='Ai No Uta' track_no=2
+[download-worker] OK video_id=GdExZbUU9xM title='To Make the End of Battle' track_no=4
+[download-worker] OK video_id=4CGuwpljTTA title='A Matter of Trust' track_no=1
+[download-worker] OK video_id=By5m9KyzaJQ title='Elysium' track_no=1
+[download-worker] OK video_id=0RiUiMbWC_w title='I Saw You Close Your Eyes' track_no=1
+[download-worker] OK video_id=rlsprAYFRHA title='A Beautiful Life' track_no=2
+[download-worker] OK video_id=qQzdAsjWGPg title='My Way (2008 Remastered)' track_no=0
+[download-worker] OK video_id=rlsprAYFRHA title='A Beautiful Life' track_no=2
+[download-worker] OK video_id=rlsprAYFRHA title='A Beautiful Life' track_no=2
+[download-worker] OK video_id=Mesq_o8QNOc title='Further Away' track_no=0
+[download-worker] OK video_id=YQfNWq-ypGE title='&Run' track_no=3
+[download-worker] OK video_id=lhrEg4lfMgo title='Kid' track_no=5
+[download-worker] OK video_id=MWBbeqErsFM title='No Good For You' track_no=6
+[download-worker] OK video_id=RXUD68wTb8Q title='Tomato Can' track_no=7
+[download-worker] OK video_id=kssAM7rWe2M title='Live That Long' track_no=8
+[download-worker] OK video_id=mCHUw7ACS8o title='Of Monsters and Men - Dirty Paws (Official Lyric Video)' track_no=3
+[download-worker] OK video_id=AObC5VKMdEc title='The Oh Hellos - Hello My Old Heart' track_no=12
+[download-worker] OK video_id=380I5IoX1Ho title='The Fretless Feat. Ruth Moody- Waterbound' track_no=11
+[download-worker] OK video_id=AObC5VKMdEc title='The Oh Hellos - Hello My Old Heart' track_no=12
+[download-worker] OK video_id=380I5IoX1Ho title='The Fretless Feat. Ruth Moody- Waterbound' track_no=11
+[download-worker] OK video_id=8FE8vwh56e4 title="Wishing Well - The Oh Hello's" track_no=13
+[download-worker] OK video_id=em36sFoB6Cg title='Losing All Sense' track_no=9
+[download-worker] OK video_id=8FE8vwh56e4 title="Wishing Well - The Oh Hello's" track_no=13
+[download-worker] OK video_id=AObC5VKMdEc title='The Oh Hellos - Hello My Old Heart' track_no=12
+[download-worker] OK video_id=EDdV_x513dc title="Cold Is The Night - The Oh Hello's" track_no=14
+[download-worker] OK video_id=Hd9vh89To4M title="Like The Dawn - The Oh Hello's" track_no=15
+[download-worker] OK video_id=ukZ5ujjHe9I title='Ashita Eno Kiseki' track_no=17
+[download-worker] OK video_id=rlsprAYFRHA title='A Beautiful Life' track_no=19
+[download-worker] OK video_id=MemwLL9jOCE title='Heaven Is A Place' track_no=21
+[download-worker] OK video_id=5Nc7HHInL8c title='Gold' track_no=22
+[download-worker] OK video_id=A5rohNXvVSc title='Home' track_no=2
+[download-worker] OK video_id=WcHpojJz8Bc title="(Don't Fear) The Reaper (Single Version)" track_no=3
+[download-worker] OK video_id=I0s7QIbvZNQ title='Yono Isizuetaru Tameni' track_no=1
+[download-worker] OK video_id=K-4COKUjhsk title='Gin No Ishi' track_no=2
+[download-worker] OK video_id=l9ivvCVXiT8 title='To Make the End of Battle' track_no=3
+[download-worker] OK video_id=nr4cm3zUt_k title='名もなき悪夢の果て (Short Ver.) - Namonaki Akumu No Hate (Short Ver.)' track_no=6
+[download-worker] OK video_id=I97Hi0mwCDY title='Lunatic Showdown' track_no=7
+[download-worker] OK video_id=dieFXCB-7Mk title="I'll Remember You" track_no=8
+[download-worker] OK video_id=YOaiJC-xj-8 title='銀の意志 金の翼 - Gin No Ishi Kin No Tsubasa' track_no=10
+[download-worker] OK video_id=WGSUWTy67hQ title='Sophisticated Fight -Command Battle-' track_no=13
+[download-worker] OK video_id=kZZxD64TVQU title='Buster the Ghost of Garden' track_no=14
+[download-worker] OK video_id=ITRMzZfg3ww title='Gin No Ishi Super Arrange Ver.' track_no=15
+[download-worker] OK video_id=cwNiqrZV3pY title='旅立ちの小径 - The Byway of Departure' track_no=18
+[download-worker] OK video_id=vNfkdVsvJ5M title='Vacant Interference' track_no=21
+[download-worker] OK video_id=QoY9BpVJFE4 title='Seize the day (東亰ザナドゥ主題歌) - Seize the Day (Tokyo Xanadu Opening Theme Song)' track_no=22
+[download-worker] OK video_id=9US7N7IDxCw title='The Height of Majesty' track_no=23
+[download-worker] OK video_id=NDmz0ozWHP4 title='Iclucian Dance' track_no=25
+[download-worker] OK video_id=i2QB1163_3o title='Desert After Tears' track_no=26
+[download-worker] OK video_id=gwP1v88U2FU title='Release of the Far West Ocean' track_no=29
+[download-worker] OK video_id=B6bTLNbX8Kw title='The Strongest Enemy' track_no=30
+[download-worker] OK video_id=8QtZ-khElZw title='女神の唄 - Megami No Uta' track_no=31
+[download-worker] OK video_id=tOejDU4LP2E title='Mighty Obstacle' track_no=33
+[download-worker] OK video_id=-w3ZLlEoPoU title='Tantoll' track_no=35
+[download-worker] OK video_id=Snnyr9Q4XyM title='Genesis Beyond the Beginning' track_no=36
+[download-worker] OK video_id=sXruEYWPQvM title='Overcome the Rocky Path' track_no=37
+[download-worker] OK video_id=YIzaWWaoXOs title="The Boy's Got Wings" track_no=38
+[download-worker] OK video_id=PcDXyU8_ZbQ title='Final Battle' track_no=39
+[download-worker] OK video_id=6uiCTZcMo7k title='Crimson Sin' track_no=41
+[download-worker] OK video_id=upJ4QHbLH-0 title='NO END NO WORLD（Opening Size） - No End No World -Opening Size-' track_no=42
+[download-worker] OK video_id=vliQTohOhjM title='No End No World' track_no=43
+[download-worker] OK video_id=fM10PrpgX2s title='Palace of Destruction' track_no=44
+[download-worker] OK video_id=I0AcQpE3gxA title='Cry for Me, Cry for You' track_no=46
+[download-worker] OK video_id=gToi-E9Zh0g title='Studio City Zeiss' track_no=47
+[download-worker] OK video_id=q3tebJkt5yw title='Deadly Temptation' track_no=49
+[download-worker] OK video_id=ovz71p0FMbw title='The Foliage Ocean in Celceta' track_no=50
+[download-worker] OK video_id=rE6Mi7O2VJg title='Innocent Primeval Breaker' track_no=52
+[download-worker] OK video_id=ukZ5ujjHe9I title='Ashita Eno Kiseki' track_no=58
+[download-worker] OK video_id=BywmgopIJ1c title='TO MAKE THE END OF BATTLE -LONG VERSION- - To Make the End of Battle - Long Version -' track_no=59
+[download-worker] OK video_id=HZfCGU0fHnQ title='The Fortress of Destiny' track_no=60
+[download-worker] OK video_id=l87iWm8o7MY title='TO MAKE THE END OF BATTLE (イースII) - To Make the End of Battle (Ys II)' track_no=61
+[download-worker] OK video_id=q_jGnWNDMjY title='No End No World -Instrumental Ver.-' track_no=62
+[download-worker] OK video_id=1H5R08f5Uts title='Gadobadorrer' track_no=63
+[download-worker] OK video_id=1H5R08f5Uts title='Gadobadorrer' track_no=63
+[download-worker] OK video_id=dqsCGPp9iRM title='ヴァルハラの戦士たち - Warriors of Varhala' track_no=64
+[download-worker] OK video_id=zBvIYcSwjXI title='From "i" (亰都ザナドゥ -桜花幻舞-) - From "i" (KYOTO XANADU -the Blooming Phantom-)' track_no=66
+[download-worker] OK video_id=pp0lU6jCOVg title='Silent Desert' track_no=67
+[download-worker] OK video_id=KtsQEx0bK9w title='To Confirm My Existence' track_no=71
+[download-worker] OK video_id=IcE1ma8m74E title='明日への軌跡 -Opening Size- - Ashita Eno Kiseki -Opening Size-' track_no=72
+[download-worker] OK video_id=A9Bj0FfByDs title='Solid-State Shard Blow' track_no=73
+[download-worker] OK video_id=Uz8EfUx-aR4 title='銀の意志 - Gin No Ishi' track_no=77
+[download-worker] OK video_id=yNXQxjXsE6M title='Ai No Uta' track_no=78
+[download-worker] OK video_id=u3WUByCMg2A title='名もなき悪夢の果て - Namonaki Akumu No Hate' track_no=80
+[download-worker] OK video_id=m6xc3ml4b5k title='Ernst' track_no=82
+[download-worker] OK video_id=fEORZSJw6jA title='Crimson Fighter' track_no=1
+[download-worker] OK video_id=iL-jC7XyLeo title='Sweet Home Alabama' track_no=1
+[download-worker] OK video_id=qJF0doztm4c title='Ophelia' track_no=1
+[download-worker] OK video_id=rnO-MflYxCw title='Pumped Up Kicks' track_no=3
+[download-worker] OK video_id=vA4ewUgA_SM title='Evergreen' track_no=4
+[download-worker] OK video_id=x5GG_fr8WyM title='Disarm' track_no=5
+[download-worker] OK video_id=YSAqXEcgoZ4 title="Boys Don't Cry (Single Version)" track_no=6
+[download-worker] OK video_id=DmmCwSqNbl4 title='Paint It, Black (Mono)' track_no=7
+[download-worker] OK video_id=m2zUrruKjDQ title='Mr. Brightside' track_no=8
+[download-worker] OK video_id=VJx7Et20OI0 title='Cold Cold Cold' track_no=9
+[download-worker] OK video_id=376MbaaeAGc title='Sunlight' track_no=10
+[download-worker] OK video_id=v3cgdlHzQDQ title='Dog Days Are Over' track_no=11
+[download-worker] OK video_id=tUsH87zLvAg title='Young Folks' track_no=13
+[download-worker] OK video_id=WcHpojJz8Bc title="(Don't Fear) The Reaper (Single Version)" track_no=14
+[download-worker] OK video_id=rt7PPidlIvg title='Funnel Of Love' track_no=15
+[download-worker] OK video_id=bepPFNnaviA title='White Winter Hymnal' track_no=16
+[download-worker] OK video_id=Kf5pXDhx5Vc title='End of Beginning' track_no=17
+[download-worker] OK video_id=0wFVsbbrEHQ title='Real Love Baby' track_no=18
+[download-worker] OK video_id=sh7BZf7D5Bw title='The Devil Went Down to Georgia' track_no=1
+[download-worker] OK video_id=VTgMFcFIH9k title='Unwell' track_no=2
+[download-worker] OK video_id=8rEw9sCwo8E title='Roar of the Jungle Dragon' track_no=3
+[download-worker] OK video_id=0Md0E5icspA title='Cups (Pitch Perfect’s “When I’m Gone”) (Pop Version)' track_no=1
+[download-worker] OK video_id=HuvluDiW-go title='Buster the Ghost of Garden' track_no=3
+[download-worker] OK video_id=K-4COKUjhsk title='Gin No Ishi' track_no=4
+[download-worker] OK video_id=QxVvGYuOiJc title='Sunshine Coastline' track_no=5
+[download-worker] OK video_id=6uiCTZcMo7k title='Crimson Sin' track_no=6
+[download-worker] OK video_id=zEt86d1GQ4k title='現在という煌めき - The Sparkle of the Present' track_no=8
+[download-worker] OK video_id=cD3-Iej0HXA title='銀の意志 金の翼 - Gin No Ishi Kin No Tsubasa' track_no=10
+[download-worker] OK video_id=XIZVmp7_m7c title='碧い軌跡 Aoi Kiseki' track_no=12
+[download-worker] OK video_id=Q_SbQ3vldvs title='明日への鼓動 (「英雄伝説 閃の軌跡」主題歌) - Ashita E No Kodou (The Legend of Heroes: Sen No Kiseki Theme Song)' track_no=13
+[download-worker] OK video_id=QxVvGYuOiJc title='Sunshine Coastline' track_no=5
+[download-worker] OK video_id=QxVvGYuOiJc title='Sunshine Coastline' track_no=5
+[download-worker] OK video_id=XIZVmp7_m7c title='碧い軌跡 Aoi Kiseki' track_no=12
+[download-worker] OK video_id=6uiCTZcMo7k title='Crimson Sin' track_no=6
+[download-worker] OK video_id=HuvluDiW-go title='Buster the Ghost of Garden' track_no=3
+[download-worker] OK video_id=2zJ-TEnqtzc title='The Silver Will -Gin No Ishi- (The Legend of Heroes: Sora No Kiseki First Chapter)' track_no=6
+[download-worker] OK video_id=_82GpI3t1SI title='そして、宇宙へ── - And Then, into Space...' track_no=7
+[download-worker] OK video_id=A9Bj0FfByDs title='Solid-State Shard Blow' track_no=1
+[download-worker] OK video_id=VRIHW-aQl-k title="You Don't Mess Around with Jim" track_no=1
+[download-worker] OK video_id=shq1hvsDkYc title='Tomorrow’s Gonna Be a Brighter Day' track_no=2
+[download-worker] OK video_id=yi97MaOasCo title="New York's Not My Home" track_no=3
+[download-worker] OK video_id=22_5w7tCUwE title='Hard Time Losin’ Man' track_no=4
+[download-worker] OK video_id=BQh0KWfICpQ title='Photographs and Memories' track_no=5
+[download-worker] OK video_id=94W6Y6y4B7s title='Walkin’ Back to Georgia' track_no=6
+[download-worker] OK video_id=khYxP7TiFSA title="Operator (That's Not the Way It Feels)" track_no=7
+[download-worker] OK video_id=Q29sOLG8xGE title='Time in a Bottle' track_no=8
+[download-worker] OK video_id=aFjBXeJprNM title='Rapid Roy (The Stock Car Boy)' track_no=9
+[download-worker] OK video_id=JyjYghrxVDU title='Box #10' track_no=10
+[download-worker] OK video_id=WfjjMvbH5I4 title='A Long Time Ago' track_no=11
+[download-worker] OK video_id=SwtsNEFaGbc title='Hey Tomorrow' track_no=12
+[download-worker] OK video_id=VTgMFcFIH9k title='Unwell' track_no=0
+[download-worker] OK video_id=8rEw9sCwo8E title='Roar of the Jungle Dragon' track_no=1
+[download-worker] OK video_id=QxVvGYuOiJc title='Sunshine Coastline' track_no=1
+[download-worker] OK video_id=376MbaaeAGc title='Sunlight' track_no=0
+[download-worker] OK video_id=GCvpXnEQSlc title='Weeping Red Devil' track_no=1
+[download-worker] OK video_id=dqsCGPp9iRM title='ヴァルハラの戦士たち - Warriors of Varhala' track_no=1
+[download-worker] OK video_id=noiy7ajORtA title='What You Know' track_no=1
+[download-worker] OK video_id=iRXE3NNaiks title='I Summon You' track_no=1
+[download-worker] OK video_id=dPLaDtvVdaU title='Mykonos' track_no=1
+[download-worker] OK video_id=vaIT6vbF3cI title='Rindu Serindu Rindunya' track_no=1
+[download-worker] OK video_id=KtsQEx0bK9w title='To Confirm My Existence' track_no=1
+[download-worker] OK video_id=KtsQEx0bK9w title='To Confirm My Existence' track_no=1
+[download-worker] OK video_id=rg_VZ-0QuvA title='Through Patches of Violet' track_no=1
+[download-worker] OK video_id=BuzAgy_88HM title='Limbus Company OST - Canto IX Boss 3 Battle Theme 2' track_no=1
+[download-worker] OK video_id=XsAml9lKf2U title='Canto IX - Boss Battle Theme' track_no=1
+[download-worker] OK video_id=5GtWIwTeS-4 title='Hello, World' track_no=3
+[download-worker] OK video_id=rg_VZ-0QuvA title='Through Patches of Violet' track_no=1
+[download-worker] OK video_id=PcDXyU8_ZbQ title='Final Battle' track_no=5
+[download-worker] OK video_id=m6xc3ml4b5k title='Ernst' track_no=6
+[download-worker] OK video_id=GdExZbUU9xM title='To Make the End of Battle' track_no=8
+[download-worker] OK video_id=WGSUWTy67hQ title='Sophisticated Fight -Command Battle-' track_no=9
+[download-worker] OK video_id=dieFXCB-7Mk title="I'll Remember You" track_no=10
+[download-worker] OK video_id=ksTbW2IihtA title='Cloaca Maxima' track_no=12
+[download-worker] OK video_id=q_jGnWNDMjY title='No End No World -Instrumental Ver.-' track_no=14
+[download-worker] OK video_id=cwNiqrZV3pY title='旅立ちの小径 - The Byway of Departure' track_no=16
+[download-worker] OK video_id=TH-tJ_9NxI0 title='碧い軌跡 Aoi Kiseki -Opening size- - Aoi Kiseki - Opening Size -' track_no=17
+[download-worker] OK video_id=i2QB1163_3o title='Desert After Tears' track_no=18
+[download-worker] OK video_id=BywmgopIJ1c title='TO MAKE THE END OF BATTLE -LONG VERSION- - To Make the End of Battle - Long Version -' track_no=19
+[download-worker] OK video_id=nr4cm3zUt_k title='名もなき悪夢の果て (Short Ver.) - Namonaki Akumu No Hate (Short Ver.)' track_no=20
+[download-worker] OK video_id=QoY9BpVJFE4 title='Seize the day (東亰ザナドゥ主題歌) - Seize the Day (Tokyo Xanadu Opening Theme Song)' track_no=22
+[download-worker] OK video_id=uyTvfzocyUY title='Detoxify the Snake Venom! -Command Battle-' track_no=23
+[download-worker] OK video_id=fEORZSJw6jA title='Crimson Fighter' track_no=24
+[download-worker] OK video_id=6tLuN-eh4T4 title='Kevin Graham' track_no=25
+[download-worker] OK video_id=op1J76lEBOs title='シロイセカイ - Shiroisekai' track_no=26
+[download-worker] OK video_id=3EXJvsT6Ijc title='Mystic Core' track_no=27
+[download-worker] OK video_id=Uz8EfUx-aR4 title='銀の意志 - Gin No Ishi' track_no=28
+[download-worker] OK video_id=IcE1ma8m74E title='明日への軌跡 -Opening Size- - Ashita Eno Kiseki -Opening Size-' track_no=30
+[download-worker] OK video_id=1VW9x8VL7CM title='Senko No Yukue ("The Legend of Heroes: Sen No Kiseki II" Opening Theme)' track_no=32
+[download-worker] OK video_id=q3tebJkt5yw title='Deadly Temptation' track_no=33
+[download-worker] OK video_id=u3WUByCMg2A title='名もなき悪夢の果て - Namonaki Akumu No Hate' track_no=34
+[download-worker] OK video_id=sXruEYWPQvM title='Overcome the Rocky Path' track_no=39
+[download-worker] OK video_id=tOejDU4LP2E title='Mighty Obstacle' track_no=42
+[download-worker] OK video_id=wZAtaQjZOgU title='Valestein Castle' track_no=43
+[download-worker] OK video_id=HN2gvlNyyKU title='A-to-Z' track_no=45
+[download-worker] OK video_id=tOejDU4LP2E title='Mighty Obstacle' track_no=1
+[download-worker] OK video_id=1H5R08f5Uts title='Gadobadorrer' track_no=1
+[download-worker] OK video_id=MwWpdyTPRpY title='Dreams of the Goddess -Feena-' track_no=4
+[download-worker] OK video_id=YIzaWWaoXOs title="The Boy's Got Wings" track_no=6
+[download-worker] OK video_id=vliQTohOhjM title='No End No World' track_no=9
+[download-worker] OK video_id=HZfCGU0fHnQ title='The Fortress of Destiny' track_no=10
+[download-worker] OK video_id=h5Z4TyTMzsY title='I Swear...' track_no=11
+[download-worker] OK video_id=ITRMzZfg3ww title='Gin No Ishi Super Arrange Ver.' track_no=12
+[download-worker] OK video_id=l87iWm8o7MY title='TO MAKE THE END OF BATTLE (イースII) - To Make the End of Battle (Ys II)' track_no=13
+[download-worker] OK video_id=ZT2KBcfWrLk title='Azure Destiny' track_no=14
+[download-worker] OK video_id=9US7N7IDxCw title='The Height of Majesty' track_no=16
+[download-worker] OK video_id=-yirrEpmdPo title="Gens D'armes" track_no=18
+[download-worker] OK video_id=7o_8ZrP95wM title='Oinaru Chikara' track_no=20
+[download-worker] OK video_id=B6bTLNbX8Kw title='The Strongest Enemy' track_no=22
+[download-worker] OK video_id=jdOmMyl1D3A title='Shizuka' track_no=1
+[download-worker] OK video_id=mfha0a8IXKs title='Too Sweet' track_no=2
+[download-worker] OK video_id=mLxPHPY7SSY title='To Make the End of Battle' track_no=2
+[download-worker] OK video_id=BywmgopIJ1c title='TO MAKE THE END OF BATTLE -LONG VERSION- - To Make the End of Battle - Long Version -' track_no=1
+[download-worker] OK video_id=_82GpI3t1SI title='そして、宇宙へ── - And Then, into Space...' track_no=5
+[download-worker] OK video_id=9ngiB9h4ijE title='Choctaw Bingo' track_no=2
+[download-worker] OK video_id=MBaGrkY9cvY title='Dark Days (Sofi Tukker Remix)' track_no=3
+[download-worker] OK video_id=j5RlrPXjkA8 title='Feels Right' track_no=4
+[download-worker] OK video_id=RXUD68wTb8Q title='Tomato Can' track_no=6
+[download-worker] OK video_id=4nM7DuTE29k title='Meet Me In The Sky' track_no=7
+[download-worker] OK video_id=w80sthOJXr4 title="Don't You Evah" track_no=8
+[download-worker] OK video_id=z-2bwxYHfvI title='Astronaut' track_no=9
+[download-worker] OK video_id=TfEWsS43ZfU title='Marathon' track_no=10
+[download-worker] OK video_id=kssAM7rWe2M title='Live That Long' track_no=13
+[download-worker] OK video_id=jdOmMyl1D3A title='Shizuka' track_no=1
+[download-worker] OK video_id=95FyXUHv8hk title='Skinny Love' track_no=1
+[download-worker] OK video_id=JnRw8bXVbPI title='Bitter Sweet Symphony' track_no=2
+[download-worker] OK video_id=mfha0a8IXKs title='Too Sweet' track_no=4
+[download-worker] OK video_id=9DYPfItb2fk title='Lonely Boy' track_no=5
+[download-worker] OK video_id=A5rohNXvVSc title='Home' track_no=6
+[download-worker] OK video_id=wPY6dOC-MDA title='Sailor Song' track_no=7
+[download-worker] OK video_id=9-fLvSVMi5Q title='Who You Share it With' track_no=8
+[download-worker] OK video_id=c-8abSPAPOU title='back to friends' track_no=10
+[download-worker] OK video_id=oHVVoe2Vj8s title='Sign of the Times' track_no=11
+[download-worker] OK video_id=f5ydCBPLT4Y title='Coastline' track_no=12
+[download-worker] OK video_id=zTByLCLu6NI title='My Silver Lining' track_no=14
+[download-worker] OK video_id=En_6WWOWh8E title='Riptide' track_no=18
+[download-worker] OK video_id=pfYFVKadTjk title='Dancing With You (Baby)' track_no=19
+[download-worker] OK video_id=1veF_lrvij8 title='New Slang' track_no=20
+[download-worker] OK video_id=5I6LoW3AjXM title='Sedona' track_no=21

@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 class StationCreateRequest(BaseModel):
     name: str
-    station_type: str = "listenbrainz_similar_artist"
+    station_type: str = "similar_artist"
     config: dict[str, Any] = {}
     seed_type: str = "artist"  # artist|track
     seed_title: str = ""
@@ -48,7 +48,7 @@ class StationUpdateRequest(BaseModel):
 class StationResponse(BaseModel):
     id: str
     name: str
-    station_type: str = "listenbrainz_similar_artist"
+    station_type: str = "similar_artist"
     config: dict[str, Any] = {}
     seed_type: str
     seed_title: str

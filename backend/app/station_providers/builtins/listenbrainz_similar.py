@@ -7,12 +7,11 @@ import random
 import re
 from typing import Any
 
-from ...integrations.listenbrainz import lb_similar_artists_for_artist, lb_top_recordings_for_artist
-from ...integrations.musicbrainz import lookup_artist_mbid_by_name
+from ...integrations.ytmusic import find_artist_by_name, get_artist_popular_songs, get_artist_related_artists
 from ..base import StationProvider
 from ..models import StationConfigOption, StationContext, StationResult
 
-LOG = logging.getLogger("helix.station_providers.listenbrainz")
+LOG = logging.getLogger("helix.station_providers.similar_artist")
 
 
 def _clean(s: str) -> str:
@@ -112,8 +111,8 @@ def _pick_station_artist(
 class ListenBrainzSimilarArtistProvider(StationProvider):
     station_type = "listenbrainz_similar_artist"
     display_name = "Similar Artist Radio"
-    description = "Uses ListenBrainz similar artists and top recordings to recommend station tracks."
-    version = "1.0.0"
+    description = "Uses YouTube Music related artists and artist songs to recommend station tracks."
+    version = "1.1.0"
     builtin = True
 
     def config_options(self) -> list[StationConfigOption]:
@@ -122,7 +121,7 @@ class ListenBrainzSimilarArtistProvider(StationProvider):
                 key="seed_artist",
                 label="Seed artist",
                 type="string",
-                description="The artist used as the anchor for ListenBrainz similar-artist recommendations.",
+                description="The artist used as the anchor for YouTube Music related-artist recommendations.",
                 required=True,
             ),
             StationConfigOption(
@@ -149,7 +148,7 @@ class ListenBrainzSimilarArtistProvider(StationProvider):
                 key="popular_track_pool_size",
                 label="Popular track pool size",
                 type="integer",
-                description="How many of each selected artist's top ListenBrainz recordings can be sampled. Smaller numbers favor familiar songs; larger numbers allow deeper cuts.",
+                description="How many of each selected artist's YouTube Music songs can be sampled. Smaller numbers favor familiar songs; larger numbers allow deeper cuts.",
                 default=10,
                 min_value=1,
                 max_value=1000,
@@ -164,30 +163,40 @@ class ListenBrainzSimilarArtistProvider(StationProvider):
             ),
         ]
 
-    async def _artist_mbid(self, artist: str, existing_mbid: str = "") -> str:
-        mbid = _clean(existing_mbid)
-        if mbid:
-            return mbid
+    async def _yt_artist(self, artist: str) -> dict[str, Any]:
         if not _clean(artist):
-            return ""
+            return {}
         try:
             return await asyncio.wait_for(
-                lookup_artist_mbid_by_name(artist),
-                timeout=float(os.getenv("HELIX_MB_LOOKUP_TIMEOUT_S", "8")),
-            )
-        except Exception:
-            return ""
+                asyncio.to_thread(find_artist_by_name, artist, artist_limit=8),
+                timeout=float(os.getenv("HELIX_YTMUSIC_LOOKUP_TIMEOUT_S", "8")),
+            ) or {}
+        except Exception as exc:
+            LOG.warning("Similar Artist YouTube Music lookup failed artist=%r err=%s", artist, exc)
+            return {}
 
-    async def _top_recordings(self, artist_mbid: str, limit: int) -> list[dict[str, Any]]:
-        if not artist_mbid:
+    async def _related_artists(self, browse_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        if not browse_id:
             return []
         try:
             return await asyncio.wait_for(
-                lb_top_recordings_for_artist(artist_mbid, max(1, int(limit))),
-                timeout=float(os.getenv("HELIX_LB_TOP_TRACK_TIMEOUT_S", "10")),
+                asyncio.to_thread(get_artist_related_artists, browse_id, limit=max(1, int(limit))),
+                timeout=float(os.getenv("HELIX_YTMUSIC_RELATED_TIMEOUT_S", "10")),
             ) or []
         except Exception as exc:
-            LOG.warning("ListenBrainz top recordings failed artist_mbid=%s err=%s", artist_mbid, exc)
+            LOG.warning("YouTube Music related artists failed browse_id=%s err=%s", browse_id, exc)
+            return []
+
+    async def _top_recordings(self, browse_id: str, limit: int) -> list[dict[str, Any]]:
+        if not browse_id:
+            return []
+        try:
+            return await asyncio.wait_for(
+                asyncio.to_thread(get_artist_popular_songs, browse_id, limit=max(1, int(limit))),
+                timeout=float(os.getenv("HELIX_YTMUSIC_ARTIST_SONGS_TIMEOUT_S", "12")),
+            ) or []
+        except Exception as exc:
+            LOG.warning("YouTube Music artist songs failed browse_id=%s err=%s", browse_id, exc)
             return []
 
     async def next_tracks(self, context: StationContext, count: int) -> list[StationResult]:
@@ -195,34 +204,48 @@ class ListenBrainzSimilarArtistProvider(StationProvider):
         self.validate_config(cfg)
 
         seed_artist = _clean(str(cfg.get("seed_artist") or ""))
-        mb_artist_id = _clean(str(cfg.get("mb_artist_id") or ""))
         discovery = float(cfg.get("discovery", 0.35) or 0.35)
         seed_influence = float(cfg.get("seed_influence", 0.75) or 0.75)
         popular_track_pool_size = max(1, int(cfg.get("popular_track_pool_size", 10) or 10))
         blacklist = {_norm_artist(a) for a in (cfg.get("artist_blacklist_items") or []) if a}
 
-        mb_artist_id = await self._artist_mbid(seed_artist, mb_artist_id)
-        if not mb_artist_id:
-            raise ValueError(f"Station seed artist MBID not found for {seed_artist!r}")
+        seed_row = await self._yt_artist(seed_artist)
+        seed_yt_id = _clean(str(seed_row.get("browse_id") or seed_row.get("artist_id") or ""))
+        if not seed_yt_id:
+            raise ValueError(f"Station seed artist not found on YouTube Music for {seed_artist!r}")
 
-        try:
-            similar_artists = await asyncio.wait_for(
-                lb_similar_artists_for_artist(mb_artist_id, limit=100),
-                timeout=float(os.getenv("HELIX_LB_SIMILAR_TIMEOUT_S", "10")),
-            ) or []
-        except Exception as exc:
-            LOG.warning("ListenBrainz similar artists failed seed=%s err=%s", seed_artist, exc)
-            similar_artists = []
-
-        candidate_artists: list[dict[str, Any]] = []
-        if seed_artist:
-            candidate_artists.append({"similar_artist_name": seed_artist, "rank": 0})
-        candidate_artists.extend(similar_artists)
+        related_artists = await self._related_artists(seed_yt_id, limit=100)
+        candidate_artists: list[dict[str, Any]] = [
+            {
+                "similar_artist_name": seed_artist,
+                "yt_artist_id": seed_yt_id,
+                "rank": 0,
+            }
+        ]
+        for row in related_artists:
+            if not isinstance(row, dict):
+                continue
+            name = _clean(str(row.get("name") or row.get("artist") or row.get("title") or ""))
+            if not name:
+                continue
+            candidate_artists.append(
+                {
+                    "similar_artist_name": name,
+                    "yt_artist_id": _clean(str(row.get("browse_id") or row.get("artist_id") or "")),
+                    "rank": _infer_int(row.get("rank"), len(candidate_artists)),
+                }
+            )
 
         recent_pairs = {_norm_pair(t.title, t.artist) for t in context.recent_tracks}
         selected_pairs = {r.key() for r in context.already_selected}
         selected: list[StationResult] = []
         selected_artists: list[str] = [r.artist for r in context.already_selected]
+        recordings_cache: dict[str, list[dict[str, Any]]] = {}
+        artist_id_by_name = {
+            _norm_artist(str(row.get("similar_artist_name") or "")): _clean(str(row.get("yt_artist_id") or ""))
+            for row in candidate_artists
+            if _clean(str(row.get("similar_artist_name") or ""))
+        }
         attempts = max(count * 8, 12)
 
         for _ in range(attempts):
@@ -237,8 +260,19 @@ class ListenBrainzSimilarArtistProvider(StationProvider):
                 blacklist=blacklist,
                 selected_artists=selected_artists,
             )
-            artist_mbid = await self._artist_mbid(artist)
-            recordings = await self._top_recordings(artist_mbid, popular_track_pool_size)
+            artist_key = _norm_artist(artist)
+            yt_artist_id = artist_id_by_name.get(artist_key, "")
+            if not yt_artist_id:
+                artist_row = await self._yt_artist(artist)
+                yt_artist_id = _clean(str(artist_row.get("browse_id") or artist_row.get("artist_id") or ""))
+                if yt_artist_id:
+                    artist_id_by_name[artist_key] = yt_artist_id
+            if not yt_artist_id:
+                continue
+
+            if yt_artist_id not in recordings_cache:
+                recordings_cache[yt_artist_id] = await self._top_recordings(yt_artist_id, popular_track_pool_size)
+            recordings = list(recordings_cache.get(yt_artist_id) or [])
             if not recordings:
                 continue
             random.shuffle(recordings)
@@ -253,11 +287,20 @@ class ListenBrainzSimilarArtistProvider(StationProvider):
                 result = StationResult(
                     title=title,
                     artist=track_artist,
-                    duration_ms=_infer_int(recording.get("duration_ms") or recording.get("durationMs") or 0, 0),
-                    reason=f"ListenBrainz similar artist: {artist}",
+                    album=_clean(str(recording.get("album") or "")),
+                    duration_ms=_infer_int(
+                        recording.get("duration_ms")
+                        or (int(recording.get("duration_seconds") or 0) * 1000)
+                        or recording.get("durationMs")
+                        or 0,
+                        0,
+                    ),
+                    reason=f"YouTube Music related artist: {artist}",
                     provider_metadata={
-                        "artist_mbid": artist_mbid,
-                        "recording_mbid": str(recording.get("recording_mbid") or recording.get("recording_id") or ""),
+                        "yt_artist_id": yt_artist_id,
+                        "video_id": str(recording.get("video_id") or recording.get("videoId") or ""),
+                        "thumbnail_url": str(recording.get("thumbnail_url") or ""),
+                        "discovery_source": "ytmusic",
                         "provider": self.station_type,
                     },
                 )

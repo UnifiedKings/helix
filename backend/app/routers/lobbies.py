@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import json
+import logging
 import os
 import re
 import secrets
@@ -19,15 +21,17 @@ from yt_dlp import YoutubeDL
 
 from ..auth import SESSION_COOKIE, cookie_secure, get_current_user
 from ..db import get_db, SessionLocal
-from ..models import SessionToken, User
-from ..lobby_models import SharedLobby, SharedLobbyMember, SharedLobbyQueueItem
+from ..models import SessionToken, User, Station
+from ..lobby_models import SharedLobby, SharedLobbyHistoryItem, SharedLobbyMember, SharedLobbyQueueItem
 from ..api_schemas.lobbies import (
     LobbyCreateRequest,
     LobbyJoinRequest,
     LobbyJoinResponse,
+    LobbyHistoryItemResponse,
     LobbyListResponse,
     LobbyMemberResponse,
     LobbyMemberUpdateRequest,
+    LobbySelfUpdateRequest,
     LobbyOkResponse,
     LobbyPermissions,
     LobbyQueueAddRequest,
@@ -52,12 +56,17 @@ from ..routers.search import (
     _search_subsonic_only,
     _ytmusic_search,
 )
+from ..realtime import schedule_lobby_state_broadcast
+from ..lobby_station import fill_lobby_station, schedule_lobby_station_fill
+from ..stations_engine import StationGenerationError, StationSeedArtistNotFound
 from ..player.engine import (
     _ensure_playable_for_stream,
     _stream_inbound_progressive,
     _stream_inbound_with_range,
     _stream_subsonic_with_range,
 )
+
+LOG = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/lobbies", tags=["shared lobbies"])
 
@@ -379,6 +388,84 @@ def _queue_rows(db: Session, lobby_id: str) -> list[SharedLobbyQueueItem]:
     ).scalars().all()
 
 
+def _history_rows(db: Session, lobby_id: str, limit: int = 25) -> list[SharedLobbyHistoryItem]:
+    return db.execute(
+        select(SharedLobbyHistoryItem)
+        .where(SharedLobbyHistoryItem.lobby_id == lobby_id)
+        .order_by(SharedLobbyHistoryItem.played_at.desc())
+        .limit(max(1, min(200, int(limit or 25))))
+    ).scalars().all()
+
+
+def _to_history_response(item: SharedLobbyHistoryItem) -> LobbyHistoryItemResponse:
+    return LobbyHistoryItemResponse(
+        id=item.id,
+        queue_item_id=item.queue_item_id or "",
+        title=item.title or "",
+        artist=item.artist or "",
+        album=item.album or "",
+        duration_ms=int(item.duration_ms or 0),
+        art_url=item.art_url or "",
+        source=item.source or "",
+        subsonic_song_id=item.subsonic_song_id or "",
+        yt_video_id=item.yt_video_id or "",
+        added_by_member_id=item.added_by_member_id or "",
+        added_by_nickname=item.added_by_nickname or "",
+        played_at=_iso(item.played_at),
+    )
+
+
+def _record_now_playing_history(db: Session, lobby: SharedLobby) -> None:
+    """Record a snapshot when a different queue item becomes active playback."""
+    if not lobby.is_playing:
+        return
+    rows = _queue_rows(db, lobby.id)
+    index = int(lobby.current_index or 0)
+    if not (0 <= index < len(rows)):
+        return
+    item = rows[index]
+    if (lobby.last_history_queue_item_id or "") == item.id:
+        return
+
+    nickname = ""
+    if item.added_by_member_id:
+        member = db.get(SharedLobbyMember, item.added_by_member_id)
+        if member:
+            nickname = member.nickname or "Guest"
+
+    db.add(SharedLobbyHistoryItem(
+        lobby_id=lobby.id,
+        queue_item_id=item.id,
+        added_by_member_id=item.added_by_member_id,
+        added_by_nickname=nickname,
+        title=item.title or "",
+        artist=item.artist or "",
+        album=item.album or "",
+        duration_ms=int(item.duration_ms or 0),
+        art_url=_lobby_art_url(lobby.id, item),
+        source=item.source or "",
+        subsonic_song_id=item.subsonic_song_id or "",
+        yt_video_id=item.yt_video_id or "",
+        played_at=_now(),
+    ))
+    lobby.last_history_queue_item_id = item.id
+    db.add(lobby)
+
+
+def _pending_queue_count_for_member(
+    rows: list[SharedLobbyQueueItem],
+    lobby: SharedLobby,
+    member_id: str,
+) -> int:
+    """Count tracks still waiting for a member, excluding current/played tracks."""
+    current_index = max(0, int(lobby.current_index or 0))
+    return sum(
+        1
+        for item in rows
+        if item.added_by_member_id == member_id and int(item.position or 0) > current_index
+    )
+
+
 def _renumber_queue(db: Session, lobby_id: str) -> list[SharedLobbyQueueItem]:
     rows = _queue_rows(db, lobby_id)
 
@@ -414,6 +501,8 @@ def _to_queue_item_response(item: SharedLobbyQueueItem, member_names: dict[str, 
         yt_browse_id=item.yt_browse_id or "",
         mb_recording_id=item.mb_recording_id or "",
         mb_artist_id=item.mb_artist_id or "",
+        station_id=getattr(item, "station_id", "") or "",
+        station_name=getattr(item, "station_name", "") or "",
         added_by_member_id=added_by_id,
         added_by_nickname=member_names.get(added_by_id, ""),
         created_at=_iso(item.created_at),
@@ -443,6 +532,12 @@ def _to_lobby_state(db: Session, lobby: SharedLobby, actor: SharedLobbyMember | 
     queue = _queue_rows(db, lobby.id)
     now_playing = queue[lobby.current_index] if 0 <= int(lobby.current_index or 0) < len(queue) else None
     actor_perms = _member_permissions(actor) if actor else LobbyPermissions()
+    active_station_id = (getattr(lobby, "active_station_id", "") or "").strip()
+    active_station_name = ""
+    if active_station_id:
+        station = db.get(Station, active_station_id)
+        if station and station.user_id == lobby.host_user_id:
+            active_station_name = station.name or "Station"
     return LobbyStateResponse(
         id=lobby.id,
         name=lobby.name or "Shared Lobby",
@@ -450,6 +545,10 @@ def _to_lobby_state(db: Session, lobby: SharedLobby, actor: SharedLobbyMember | 
         invite_code=lobby.invite_code if include_invite else None,
         is_open=bool(lobby.is_open),
         guest_permissions=_load_permissions(lobby.permissions_json),
+        guest_queue_limit=max(0, int(lobby.guest_queue_limit or 0)),
+        cleanup_after_days=max(0, int(lobby.cleanup_after_days or 0)),
+        active_station_id=active_station_id,
+        active_station_name=active_station_name,
         self_member_id=actor.id if actor else "",
         self_role=(actor.role if actor else "guest"),
         self_permissions=actor_perms,
@@ -462,6 +561,7 @@ def _to_lobby_state(db: Session, lobby: SharedLobby, actor: SharedLobbyMember | 
         now_playing=_to_queue_item_response(now_playing, member_names) if now_playing else None,
         queue=[_to_queue_item_response(item, member_names) for item in queue],
         members=[_to_member_response(m) for m in members],
+        history=[_to_history_response(item) for item in _history_rows(db, lobby.id, 25)],
         created_at=_iso(lobby.created_at),
         updated_at=_iso(lobby.updated_at),
     )
@@ -477,6 +577,7 @@ def _commit_lobby_state(db: Session, lobby: SharedLobby, actor: SharedLobbyMembe
     db.flush()
     response = _to_lobby_state(db, lobby, actor, include_invite=include_invite)
     db.commit()
+    schedule_lobby_state_broadcast(lobby.id)
     return response
 
 
@@ -497,6 +598,8 @@ def create_lobby(payload: LobbyCreateRequest, db: Session = Depends(get_db), use
         invite_code=invite,
         permissions_json=_dump_permissions(payload.guest_permissions),
         is_open=True,
+        guest_queue_limit=max(0, int(payload.guest_queue_limit or 0)),
+        cleanup_after_days=max(0, int(payload.cleanup_after_days or 0)),
         is_playing=False,
         position_ms=0,
         position_updated_at=_now(),
@@ -576,9 +679,11 @@ def resume_joined_lobby(invite_code: str, request: Request, db: Session = Depend
         raise HTTPException(status_code=400, detail="invite_code is required")
 
     lobby = db.execute(select(SharedLobby).where(SharedLobby.invite_code == invite)).scalar_one_or_none()
-    if not lobby or not lobby.is_open:
-        raise HTTPException(status_code=404, detail="Lobby not found or closed")
+    if not lobby:
+        raise HTTPException(status_code=404, detail="Lobby not found")
 
+    # A locked lobby rejects new joins, but members who already possess a valid
+    # lobby token must still be able to resume/reconnect.
     _, actor = _actor_for_lobby(db, request, lobby)
     include_invite = actor.role == "host"
     response = _to_lobby_state(db, lobby, actor, include_invite=include_invite)
@@ -642,19 +747,46 @@ async def lobby_search(
     if hit is not None:
         return hit
 
+    ytm_timeout_s = max(3.0, float(os.getenv("HELIX_LOBBY_YTMUSIC_SEARCH_TIMEOUT_S", "15") or "15"))
+    sub_timeout_s = max(3.0, float(os.getenv("HELIX_LOBBY_SUBSONIC_SEARCH_TIMEOUT_S", "12") or "12"))
+
+    async def _yt_search_safe(song_count: int, album_count: int) -> dict[str, Any]:
+        try:
+            raw = await asyncio.wait_for(
+                asyncio.to_thread(_ytmusic_search, qq, song_limit=song_count, album_limit=album_count),
+                timeout=ytm_timeout_s,
+            )
+            return _search_mark_ytmusic(raw)
+        except (asyncio.TimeoutError, Exception):
+            return {"songs": [], "albums": []}
+
+    async def _sub_search_safe(song_count: int, album_count: int) -> dict[str, Any]:
+        if not subsonic_enabled:
+            return {"songs": [], "albums": []}
+        try:
+            return await asyncio.wait_for(
+                _search_subsonic_only(settings, qq, song_count, album_count),
+                timeout=sub_timeout_s,
+            )
+        except (asyncio.TimeoutError, Exception):
+            return {"songs": [], "albums": []}
+
     if search_mode == "ytmusic":
-        payload = _search_mark_ytmusic(_ytmusic_search(qq, song_limit=song_limit, album_limit=album_limit))
+        payload = await _yt_search_safe(song_limit, album_limit)
         payload["mode"] = "ytmusic"
     elif search_mode == "subsonic":
-        payload = await _search_subsonic_only(settings, qq, song_limit, album_limit)
+        payload = await _sub_search_safe(song_limit, album_limit)
         payload["mode"] = "subsonic"
     else:
-        yt_payload = _search_mark_ytmusic(_ytmusic_search(qq, song_limit=song_limit, album_limit=album_limit))
-        sub_payload = (
-            await _search_subsonic_only(settings, qq, subsonic_limit, subsonic_limit)
-            if subsonic_enabled and subsonic_limit > 0
-            else {"songs": [], "albums": []}
+        # Run both providers concurrently. A slow/down YTM or Subsonic source
+        # must not leave the lobby's "All" search spinning forever.
+        yt_task = _yt_search_safe(song_limit, album_limit)
+        sub_task = (
+            _sub_search_safe(subsonic_limit, subsonic_limit)
+            if subsonic_limit > 0
+            else asyncio.sleep(0, result={"songs": [], "albums": []})
         )
+        yt_payload, sub_payload = await asyncio.gather(yt_task, sub_task)
         sub_song_keys = {_search_song_key(item) for item in sub_payload.get("songs") or []}
         sub_album_keys = {_search_album_key(item) for item in sub_payload.get("albums") or []}
         yt_songs = [item for item in yt_payload.get("songs") or [] if _search_song_key(item) not in sub_song_keys]
@@ -887,12 +1019,51 @@ def update_lobby(lobby_id: str, payload: LobbyUpdateRequest, db: Session = Depen
     if payload.is_open is not None:
         lobby.is_open = bool(payload.is_open)
     if payload.guest_permissions is not None:
-        lobby.permissions_json = _dump_permissions(payload.guest_permissions)
+        permissions_json = _dump_permissions(payload.guest_permissions)
+        lobby.permissions_json = permissions_json
+
+        # Global guest permissions are the baseline for every guest currently
+        # in the lobby. When the host changes them, keep each guest member's
+        # stored effective permissions in sync as well. Individual overrides
+        # can still be applied afterward through the per-member update route.
+        guests = db.execute(
+            select(SharedLobbyMember).where(
+                SharedLobbyMember.lobby_id == lobby.id,
+                SharedLobbyMember.role == "guest",
+            )
+        ).scalars().all()
+        for guest in guests:
+            guest.permissions_json = permissions_json
+            db.add(guest)
+    if payload.guest_queue_limit is not None:
+        lobby.guest_queue_limit = max(0, int(payload.guest_queue_limit))
+    if payload.cleanup_after_days is not None:
+        lobby.cleanup_after_days = max(0, min(365, int(payload.cleanup_after_days)))
     _touch_lobby(lobby)
     db.add(lobby)
     db.commit()
+    schedule_lobby_state_broadcast(lobby.id)
     member = db.execute(select(SharedLobbyMember).where(SharedLobbyMember.lobby_id == lobby.id, SharedLobbyMember.user_id == user.id, SharedLobbyMember.role == "host")).scalar_one_or_none()
     return _to_lobby_state(db, lobby, member, include_invite=True)
+
+
+@router.post("/{lobby_id}/invite/regenerate", response_model=LobbyStateResponse)
+def regenerate_lobby_invite(lobby_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    lobby = _get_lobby(db, lobby_id)
+    _require_host(lobby, user)
+    for _ in range(8):
+        invite = _new_invite_code()
+        if not db.execute(select(SharedLobby).where(SharedLobby.invite_code == invite)).scalar_one_or_none():
+            lobby.invite_code = invite
+            break
+    else:
+        raise HTTPException(status_code=500, detail="Could not generate lobby invite")
+    _touch_lobby(lobby)
+    db.add(lobby)
+    db.commit()
+    schedule_lobby_state_broadcast(lobby.id)
+    host_member = db.execute(select(SharedLobbyMember).where(SharedLobbyMember.lobby_id == lobby.id, SharedLobbyMember.user_id == user.id, SharedLobbyMember.role == "host")).scalar_one_or_none()
+    return _to_lobby_state(db, lobby, host_member, include_invite=True)
 
 
 @router.delete("/{lobby_id}", response_model=LobbyOkResponse)
@@ -901,6 +1072,7 @@ def delete_lobby(lobby_id: str, db: Session = Depends(get_db), user: User = Depe
     _require_host(lobby, user)
     db.delete(lobby)
     db.commit()
+    schedule_lobby_state_broadcast(lobby_id)
     return LobbyOkResponse(ok=True)
 
 
@@ -980,13 +1152,13 @@ def add_queue_item(lobby_id: str, payload: LobbyQueueAddRequest, request: Reques
 
     rows = _queue_rows(db, lobby.id)
     base_pos = len(rows)
-    added = 0
+    pending_items: list[SharedLobbyQueueItem] = []
     for meta in metas:
         try:
             item = _lobby_queue_item_from_meta(
                 lobby_id=lobby.id,
                 actor_id=actor.id,
-                position=base_pos + added,
+                position=base_pos + len(pending_items),
                 payload=payload,
                 meta=meta,
             )
@@ -994,18 +1166,35 @@ def add_queue_item(lobby_id: str, payload: LobbyQueueAddRequest, request: Reques
             if len(metas) == 1:
                 raise
             continue
-        db.add(item)
-        added += 1
+        pending_items.append(item)
 
-    if added <= 0:
+    if not pending_items:
         raise HTTPException(status_code=400, detail="Could not find playable tracks in that YouTube link")
+
+    if actor.role != "host":
+        limit = max(0, int(lobby.guest_queue_limit or 0))
+        if limit > 0:
+            pending_count = _pending_queue_count_for_member(rows, lobby, actor.id)
+            remaining = max(0, limit - pending_count)
+            if len(pending_items) > remaining:
+                if remaining <= 0:
+                    detail = f"You already have {pending_count} pending track{'s' if pending_count != 1 else ''}; this lobby allows {limit} per guest"
+                else:
+                    detail = f"You can only add {remaining} more track{'s' if remaining != 1 else ''}; this lobby allows {limit} pending per guest"
+                raise HTTPException(status_code=409, detail=detail)
+
+    for item in pending_items:
+        db.add(item)
 
     if len(rows) == 0:
         lobby.current_index = 0
         lobby.position_ms = 0
         lobby.position_updated_at = _now()
     _touch_lobby(lobby)
-    return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+    response = _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+    if (getattr(lobby, "active_station_id", "") or "").strip():
+        schedule_lobby_station_fill(lobby.id)
+    return response
 
 
 @router.delete("/{lobby_id}/queue", response_model=LobbyStateResponse)
@@ -1025,6 +1214,7 @@ def clear_queue_items(lobby_id: str, request: Request, db: Session = Depends(get
         lobby.current_index = 0
         lobby.position_ms = 0
         lobby.is_playing = False
+        lobby.last_history_queue_item_id = ""
         lobby.position_updated_at = _now()
         _touch_lobby(lobby)
         db.add(lobby)
@@ -1040,6 +1230,7 @@ def clear_queue_items(lobby_id: str, request: Request, db: Session = Depends(get
         response.position_ms = 0
         response.effective_position_ms = 0
         db.commit()
+        schedule_lobby_state_broadcast(lobby.id)
         return response
     except HTTPException:
         raise
@@ -1118,6 +1309,7 @@ def reorder_queue_items(lobby_id: str, payload: LobbyQueueReorderRequest, reques
         db.flush()
         response = _to_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
         db.commit()
+        schedule_lobby_state_broadcast(lobby.id)
         return response
     except HTTPException:
         raise
@@ -1149,6 +1341,7 @@ def play_queue_item(lobby_id: str, item_id: str, request: Request, db: Session =
     lobby.position_ms = 0
     lobby.is_playing = True
     lobby.position_updated_at = _now()
+    _record_now_playing_history(db, lobby)
     _touch_lobby(lobby)
     return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
 
@@ -1210,6 +1403,7 @@ def remove_queue_item(lobby_id: str, item_id: str, request: Request, db: Session
             elif current_index >= len(rows):
                 lobby.current_index = len(rows) - 1
 
+        _record_now_playing_history(db, lobby)
         _touch_lobby(lobby)
         db.add(lobby)
         db.flush()
@@ -1218,12 +1412,91 @@ def remove_queue_item(lobby_id: str, item_id: str, request: Request, db: Session
         # cannot turn response rendering into a 500.
         response = _to_lobby_state(db, lobby, actor, include_invite=include_invite)
         db.commit()
+        schedule_lobby_state_broadcast(lobby.id)
         return response
     except HTTPException:
         raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Could not remove lobby queue item: {exc}") from exc
+
+@router.post("/{lobby_id}/station/{station_id}/play", response_model=LobbyStateResponse)
+async def play_lobby_station(lobby_id: str, station_id: str, request: Request, db: Session = Depends(get_db)):
+    lobby = _get_lobby(db, lobby_id)
+    user, actor = _actor_for_lobby(db, request, lobby)
+    if actor.role != "host" or not user or user.id != lobby.host_user_id:
+        raise HTTPException(status_code=403, detail="Only the lobby host can start a station")
+    station = db.get(Station, station_id)
+    if not station or station.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Station not found")
+
+    # Starting/changing a station must not destroy the shared queue. The
+    # station becomes the auto-fill source for the existing queue. If the
+    # lobby already has tracks, "Play station" should also resume playback
+    # immediately; station generation is allowed to retry in the background
+    # without deactivating the station just because one refill attempt failed.
+    rows = _queue_rows(db, lobby.id)
+    queue_was_empty = len(rows) == 0
+    lobby.active_station_id = station.id
+    if rows:
+        lobby.current_index = max(0, min(int(lobby.current_index or 0), len(rows) - 1))
+        # Changing/starting the station only changes the lobby's auto-fill
+        # source.  Do not reset the timing anchor for a track that is already
+        # playing: doing so makes clients seek back to the stored position_ms
+        # and can appear to restart the current track.  If playback is paused,
+        # Play station still resumes it from the stored paused position.
+        if not lobby.is_playing:
+            lobby.is_playing = True
+            lobby.position_updated_at = _now()
+    _touch_lobby(lobby)
+    db.commit()
+    schedule_lobby_state_broadcast(lobby.id)
+    try:
+        await fill_lobby_station(lobby.id, start_if_empty=queue_was_empty)
+    except StationSeedArtistNotFound as exc:
+        # An empty lobby cannot start without a generated current track.
+        # Existing queues may keep playing while the station monitor retries.
+        if queue_was_empty:
+            failed_db = SessionLocal()
+            try:
+                failed = failed_db.get(SharedLobby, lobby.id)
+                if failed:
+                    failed.active_station_id = ""
+                    failed_db.commit()
+                    schedule_lobby_state_broadcast(lobby.id)
+            finally:
+                failed_db.close()
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        LOG.warning("Initial lobby station refill failed lobby=%s station=%s err=%s", lobby.id, station.id, exc)
+    except StationGenerationError as exc:
+        if queue_was_empty:
+            failed_db = SessionLocal()
+            try:
+                failed = failed_db.get(SharedLobby, lobby.id)
+                if failed:
+                    failed.active_station_id = ""
+                    failed_db.commit()
+                    schedule_lobby_state_broadcast(lobby.id)
+            finally:
+                failed_db.close()
+            raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
+        LOG.warning("Initial lobby station refill failed lobby=%s station=%s err=%s", lobby.id, station.id, exc)
+    db.expire_all()
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    return _to_lobby_state(db, lobby, actor, include_invite=True)
+
+
+@router.post("/{lobby_id}/station/stop", response_model=LobbyStateResponse)
+def stop_lobby_station(lobby_id: str, request: Request, db: Session = Depends(get_db)):
+    lobby = _get_lobby(db, lobby_id)
+    user, actor = _actor_for_lobby(db, request, lobby)
+    if actor.role != "host" or not user or user.id != lobby.host_user_id:
+        raise HTTPException(status_code=403, detail="Only the lobby host can stop a station")
+    lobby.active_station_id = ""
+    _touch_lobby(lobby)
+    return _commit_lobby_state(db, lobby, actor, include_invite=True)
+
 
 @router.post("/{lobby_id}/play", response_model=LobbyStateResponse)
 def lobby_play(lobby_id: str, request: Request, db: Session = Depends(get_db)):
@@ -1234,6 +1507,7 @@ def lobby_play(lobby_id: str, request: Request, db: Session = Depends(get_db)):
     if _queue_rows(db, lobby.id):
         lobby.is_playing = True
         lobby.position_updated_at = _now()
+        _record_now_playing_history(db, lobby)
     _touch_lobby(lobby)
     return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
 
@@ -1284,8 +1558,12 @@ def lobby_next(lobby_id: str, request: Request, db: Session = Depends(get_db)):
         lobby.position_ms = 0
         lobby.is_playing = False
     lobby.position_updated_at = _now()
+    _record_now_playing_history(db, lobby)
     _touch_lobby(lobby)
-    return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+    response = _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+    if (getattr(lobby, "active_station_id", "") or "").strip():
+        schedule_lobby_station_fill(lobby.id)
+    return response
 
 
 @router.post("/{lobby_id}/previous", response_model=LobbyStateResponse)
@@ -1298,7 +1576,28 @@ def lobby_previous(lobby_id: str, request: Request, db: Session = Depends(get_db
     lobby.current_index = max(0, int(lobby.current_index or 0) - 1)
     lobby.position_ms = 0
     lobby.position_updated_at = _now()
+    _record_now_playing_history(db, lobby)
     _touch_lobby(lobby)
+    return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+
+@router.patch("/{lobby_id}/me", response_model=LobbyStateResponse)
+def update_self_member(
+    lobby_id: str,
+    payload: LobbySelfUpdateRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    if payload.nickname is not None:
+        nickname = _clean_text(payload.nickname, 80)
+        if not nickname:
+            raise HTTPException(status_code=400, detail="Nickname cannot be empty")
+        actor.nickname = nickname
+    actor.last_seen_at = _now()
+    _touch_lobby(lobby)
+    db.add(actor)
     return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
 
 
@@ -1321,6 +1620,7 @@ def update_member(lobby_id: str, member_id: str, payload: LobbyMemberUpdateReque
     _touch_lobby(lobby)
     db.add(member)
     db.commit()
+    schedule_lobby_state_broadcast(lobby.id)
     host_member = db.execute(select(SharedLobbyMember).where(SharedLobbyMember.lobby_id == lobby.id, SharedLobbyMember.user_id == user.id, SharedLobbyMember.role == "host")).scalar_one_or_none()
     return _to_lobby_state(db, lobby, host_member, include_invite=True)
 
@@ -1335,5 +1635,6 @@ def leave_lobby(lobby_id: str, request: Request, response: Response, db: Session
     actor.last_seen_at = _now()
     db.add(actor)
     db.commit()
+    schedule_lobby_state_broadcast(lobby.id)
     response.delete_cookie(LOBBY_TOKEN_COOKIE, path="/")
     return LobbyOkResponse(ok=True)

@@ -22,6 +22,29 @@ function activeMemberCount(lobby: LobbyState) {
   return (lobby.members ?? []).filter((member) => member.is_active).length
 }
 
+function LobbyArtwork({ lobby }: { lobby: LobbyState }) {
+  const artwork = (lobby.queue ?? [])
+    .map((item) => item.art_url)
+    .filter((value): value is string => Boolean(value))
+    .slice(0, 4)
+
+  if (!artwork.length) {
+    return (
+      <div className="lobby-list-art lobby-list-art-empty" aria-hidden="true">
+        <span>◎</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`lobby-list-art lobby-list-art-${Math.min(artwork.length, 4)}`} aria-hidden="true">
+      {artwork.map((url, index) => (
+        <img key={`${url}-${index}`} src={url} alt="" />
+      ))}
+    </div>
+  )
+}
+
 export function LobbiesPage() {
   const [lobbies, setLobbies] = useState<LobbyState[]>([])
   const [name, setName] = useState('Shared Lobby')
@@ -30,6 +53,7 @@ export function LobbiesPage() {
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
+  const [autoCopyInvite, setAutoCopyInvite] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -44,7 +68,16 @@ export function LobbiesPage() {
     }
   }
 
-  useEffect(() => { void load() }, [])
+  useEffect(() => {
+    void load()
+    void api.userSettings().then((prefs) => {
+      setName(prefs.settings.lobbies_default_name || 'Shared Lobby')
+      setGuestCanAdd(Boolean(prefs.settings.lobbies_default_guests_can_add))
+      setAutoCopyInvite(Boolean(prefs.settings.lobbies_auto_copy_invite))
+    }).catch(() => {
+      // Keep the bundled lobby defaults if user preferences cannot be loaded.
+    })
+  }, [])
 
   async function create(event: FormEvent) {
     event.preventDefault()
@@ -56,7 +89,20 @@ export function LobbiesPage() {
       const perms = { ...DEFAULT_GUEST_PERMISSIONS, can_add_to_queue: guestCanAdd }
       const lobby = await api.createLobby(name.trim(), perms)
       setLobbies((existing) => [lobby, ...existing.filter((item) => item.id !== lobby.id)])
-      setStatus(`Created lobby: ${lobby.name}`)
+
+      if (autoCopyInvite && lobby.invite_code) {
+        const url = inviteUrl(lobby)
+        if (url) {
+          try {
+            await navigator.clipboard.writeText(url)
+            setStatus(`Created ${lobby.name}. Invite link copied.`)
+          } catch {
+            setStatus(`Created lobby: ${lobby.name}`)
+          }
+        }
+      } else {
+        setStatus(`Created lobby: ${lobby.name}`)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create lobby')
     } finally {
@@ -83,49 +129,71 @@ export function LobbiesPage() {
   }
 
   return (
-    <div className="page-stack lobby-page-stack">
-      <section className="lobby-hero">
+    <div className="page-stack lobby-page-stack lobby-list-page">
+      <header className="lobby-list-header">
         <div>
           <h1>Shared Lobbies</h1>
-          <p className="muted">Create a listening room where guests can join with a nickname and sync to the host-controlled queue.</p>
+          <p>Create a listening room where guests can join with a nickname and sync to the host-controlled queue.</p>
         </div>
-      </section>
+        <span className="lobby-list-count">{lobbies.length} {lobbies.length === 1 ? 'lobby' : 'lobbies'}</span>
+      </header>
 
       {error ? <div className="error-banner">{error}</div> : null}
       {status ? <div className="info-banner">{status}</div> : null}
 
-      <section className="panel lobby-create-panel">
+      <section className="lobby-list-create-section">
         <h2>Create lobby</h2>
         <form className="lobby-create-form" onSubmit={create}>
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Lobby name" />
           <label className="lobby-checkbox">
             <input type="checkbox" checked={guestCanAdd} onChange={(event) => setGuestCanAdd(event.target.checked)} />
-            Guests can add to queue
+            <span>Guests can add to queue</span>
           </label>
           <button className="primary" disabled={creating || !name.trim()}>{creating ? 'Creating…' : 'Create lobby'}</button>
         </form>
       </section>
 
       <section className="lobby-list-section">
-        <div className="section-heading">
+        <div className="section-heading lobby-list-heading">
           <h2>Your lobbies</h2>
-          <button type="button" onClick={() => void load()} disabled={loading}>{loading ? 'Refreshing…' : 'Refresh'}</button>
+          <button className="lobby-refresh-button" type="button" onClick={() => void load()} disabled={loading}>
+            <span aria-hidden="true">↻</span>
+            {loading ? 'Refreshing…' : 'Refresh'}
+          </button>
         </div>
-        {lobbies.length === 0 ? <p className="muted">No lobbies yet.</p> : null}
+
+        {lobbies.length === 0 ? <p className="muted lobby-list-empty">No lobbies yet.</p> : null}
+
         <div className="lobby-card-grid">
           {lobbies.map((lobby) => (
             <article className="lobby-card" key={lobby.id}>
-              <div>
-                <span className="eyebrow">{lobby.is_open ? 'Open' : 'Closed'}</span>
-                <h3>{lobby.name}</h3>
-                <p className="muted">{activeMemberCount(lobby)} members • {lobby.queue.length} queued</p>
+              <LobbyArtwork lobby={lobby} />
+
+              <div className="lobby-card-main">
+                <div className="lobby-card-copy">
+                  <span className={`lobby-state-label ${lobby.is_open ? 'open' : 'closed'}`}>
+                    {lobby.is_open ? 'Open' : 'Closed'}
+                  </span>
+                  <h3>{lobby.name}</h3>
+                  <p>{activeMemberCount(lobby)} members <span>•</span> {lobby.queue.length} queued</p>
+                </div>
+
+                <div className="lobby-card-actions">
+                  <Link className="button-link primary" to={`/lobby/${encodeURIComponent(lobby.id)}`}>Open</Link>
+                  <button type="button" onClick={() => void copyInvite(lobby)} disabled={!lobby.invite_code}>Copy invite</button>
+                  <button className="danger" type="button" onClick={() => void closeLobby(lobby)}>Close</button>
+                </div>
               </div>
-              <div className="lobby-card-actions">
-                <Link className="button-link primary" to={`/lobby/${encodeURIComponent(lobby.id)}`}>Open</Link>
-                <button type="button" onClick={() => void copyInvite(lobby)} disabled={!lobby.invite_code}>Copy invite</button>
-                <button className="danger" type="button" onClick={() => void closeLobby(lobby)}>Close</button>
-              </div>
-              {lobby.invite_code ? <code className="lobby-invite-code">{inviteUrl(lobby)}</code> : null}
+
+              {lobby.invite_code ? (
+                <div className="lobby-invite-row">
+                  <div>
+                    <span className="lobby-invite-label">Invite</span>
+                    <code className="lobby-invite-code">{inviteUrl(lobby)}</code>
+                  </div>
+                  <button type="button" onClick={() => void copyInvite(lobby)}>Copy</button>
+                </div>
+              ) : null}
             </article>
           ))}
         </div>

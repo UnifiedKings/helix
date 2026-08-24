@@ -1,26 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
-import type { HomeSummary, HomeAttentionItem, HomeActivityItem } from '../api/types'
+import type { HomeActivityItem, HomeSummary } from '../api/types'
 import { Artwork } from '../components/Artwork'
 import type { usePlayer } from '../hooks/usePlayer'
 
 type PlayerContext = ReturnType<typeof usePlayer>
-
-const DISMISSED_ATTENTION_KEY = 'helix.home.dismissedAttention'
-
-function loadDismissedAttentionIds() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(DISMISSED_ATTENTION_KEY) || '[]')
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : []
-  } catch {
-    return []
-  }
-}
-
-function saveDismissedAttentionIds(ids: string[]) {
-  localStorage.setItem(DISMISSED_ATTENTION_KEY, JSON.stringify(ids))
-}
 
 function formatDuration(ms?: number) {
   const totalSeconds = Math.max(0, Math.floor((ms ?? 0) / 1000))
@@ -40,83 +25,25 @@ function relativeTime(value?: string) {
   if (minutes < 60) return `${minutes}m ago`
   const hours = Math.floor(minutes / 60)
   if (hours < 24) return `${hours}h ago`
-  const days = Math.floor(hours / 24)
-  return `${days}d ago`
+  return `${Math.floor(hours / 24)}d ago`
 }
 
-function AttentionCard({ items, totalItems, onDismiss, onDismissAll }: {
-  items: HomeAttentionItem[]
-  totalItems: number
-  onDismiss: (id: string) => void
-  onDismissAll: () => void
-}) {
-  const visible = items.slice(0, 3)
-  const hiddenCount = Math.max(0, totalItems - items.length)
-  const hasProblems = visible.length > 0
+function ActivityList({ items }: { items: HomeActivityItem[] }) {
   return (
-    <section className={`home-panel home-attention-panel ${hasProblems ? 'needs-attention' : 'healthy'}`}>
-      <div className="home-panel-heading">
-        <span className="home-panel-icon" aria-hidden="true">{hasProblems ? '⚠' : '✓'}</span>
-        <div>
-          <h2>{hasProblems ? 'Needs Attention' : 'System Health'}</h2>
-          <p className="muted">{hasProblems ? `${items.length} item${items.length === 1 ? '' : 's'} to review${hiddenCount ? ` • ${hiddenCount} cleared` : ''}` : hiddenCount ? `${hiddenCount} cleared item${hiddenCount === 1 ? '' : 's'}` : 'Everything looks good.'}</p>
-        </div>
-      </div>
-      <div className="home-attention-list">
-        {hasProblems ? visible.map((item) => (
-          <div className="home-attention-item" key={item.id}>
-            <span className="home-attention-dot" aria-hidden="true" />
-            <div>
-              <strong>{item.title}</strong>
-              <span className="muted">{item.detail}</span>
-            </div>
-            <button
-              className="home-attention-clear"
-              type="button"
-              onClick={() => onDismiss(item.id)}
-              aria-label={`Clear ${item.title}`}
-            >
-              Clear
-            </button>
-          </div>
-        )) : (
-          <div className="home-attention-item quiet">
-            <span className="home-attention-dot" aria-hidden="true" />
-            <div>
-              <strong>No playback issues detected</strong>
-              <span className="muted">Queue, settings, and recent errors look normal.</span>
-            </div>
-          </div>
-        )}
-        {hasProblems && items.length > 1 ? (
-          <button className="home-attention-clear-all" type="button" onClick={onDismissAll}>
-            Clear all shown issues
-          </button>
-        ) : null}
-      </div>
-    </section>
-  )
-}
-
-function ActivityCard({ items }: { items: HomeActivityItem[] }) {
-  return (
-    <section className="home-panel home-activity-panel">
-      <div className="home-panel-heading compact">
-        <span className="home-panel-icon" aria-hidden="true">⌁</span>
-        <div>
-          <h2>Recent Activity</h2>
-          <p className="muted">Last few things Helix knows about.</p>
-        </div>
+    <section className="home-activity-section">
+      <div className="home-section-heading">
+        <h2>Recent Activity</h2>
+        <Link to="/history">View History <span aria-hidden="true">›</span></Link>
       </div>
       <div className="home-activity-list">
-        {items.length ? items.slice(0, 4).map((item) => (
+        {items.length ? items.slice(0, 6).map((item) => (
           <div className="home-activity-item" key={item.id}>
             {item.art_url ? (
               <Artwork src={item.art_url} alt={item.title} size="sm" />
             ) : (
               <span className="home-activity-icon" aria-hidden="true">{item.icon || '♪'}</span>
             )}
-            <div>
+            <div className="home-activity-copy">
               <strong>{item.title}</strong>
               <span className="muted">{item.detail}</span>
             </div>
@@ -133,8 +60,8 @@ function ActivityCard({ items }: { items: HomeActivityItem[] }) {
 export function HomePage() {
   const player = useOutletContext<PlayerContext>()
   const [summary, setSummary] = useState<HomeSummary | null>(null)
-  const [dismissedAttentionIds, setDismissedAttentionIds] = useState<string[]>(() => loadDismissedAttentionIds())
   const [error, setError] = useState('')
+  const [subsonicState, setSubsonicState] = useState<'unknown' | 'available' | 'missing' | 'queued'>('unknown')
   const current = player.player?.now_playing ?? null
   const queue = player.player?.queue ?? []
   const station = player.player?.active_station ?? null
@@ -148,58 +75,73 @@ export function HomePage() {
     return () => { cancelled = true }
   }, [])
 
+  useEffect(() => {
+    let cancelled = false
+    if (!current) {
+      setSubsonicState('unknown')
+      return () => { cancelled = true }
+    }
+    if (current.subsonic_song_id || current.source?.toLowerCase() === 'subsonic') {
+      setSubsonicState('available')
+      return () => { cancelled = true }
+    }
+
+    setSubsonicState('unknown')
+    api.resolveSubsonicSongs([{
+      key: current.id || 'now-playing',
+      title: current.title,
+      artist: current.artist,
+      album: current.album,
+      duration_ms: current.duration_ms,
+      yt_video_id: current.yt_video_id,
+    }])
+      .then((payload) => {
+        if (cancelled) return
+        const match = payload.songs[current.id || 'now-playing']
+        setSubsonicState(match?.available ? 'available' : 'missing')
+      })
+      .catch(() => { if (!cancelled) setSubsonicState('missing') })
+
+    return () => { cancelled = true }
+  }, [current?.id, current?.title, current?.artist, current?.album, current?.duration_ms, current?.subsonic_song_id, current?.source, current?.yt_video_id])
+
+  async function addCurrentToSubsonic() {
+    if (!current || subsonicState !== 'missing') return
+    try {
+      setError('')
+      await api.addSongToSubsonic(current)
+      setSubsonicState('queued')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not add track to Subsonic')
+    }
+  }
+
   const session = useMemo(() => {
     if (!current) {
       return {
         label: 'Current Session',
         title: 'Nothing Playing',
         subtitle: 'Start with Search, a Station, or a Lobby.',
-        mode: 'Idle',
         icon: '♪',
       }
     }
-    if (activeStation) {
-      return {
-        label: 'Station Playing',
-        title: station?.name || 'Station',
-        subtitle: `${current.title} — ${current.artist}`,
-        mode: 'Station',
-        icon: '◉',
-      }
-    }
     return {
-      label: 'Current Session',
+      label: 'Now Playing',
       title: current.title,
       subtitle: current.artist,
-      mode: 'Queue Mode',
       icon: '♪',
     }
-  }, [activeStation, current, station?.name])
+  }, [current])
 
-  const allAttention = summary?.attention ?? []
-  const attention = allAttention.filter((item) => !dismissedAttentionIds.includes(item.id))
+
   const activity = summary?.recent_activity ?? []
 
-  function dismissAttention(id: string) {
-    setDismissedAttentionIds((currentIds) => {
-      const nextIds = Array.from(new Set([...currentIds, id]))
-      saveDismissedAttentionIds(nextIds)
-      return nextIds
-    })
-  }
-
-  function dismissAllVisibleAttention() {
-    setDismissedAttentionIds((currentIds) => {
-      const nextIds = Array.from(new Set([...currentIds, ...attention.map((item) => item.id)]))
-      saveDismissedAttentionIds(nextIds)
-      return nextIds
-    })
-  }
-
   return (
-    <div className="home-page">
+    <div className="home-page home-page-refined">
       {error ? <div className="error-banner">{error}</div> : null}
+
       <section className={`home-session-card ${current ? 'active' : 'idle'}`}>
+        {current?.art_url ? <div className="home-session-backdrop" style={{ backgroundImage: `url(${current.art_url})` }} /> : null}
         <div className="home-session-art">
           {current ? <Artwork src={current.art_url} alt={current.title} size="lg" /> : <span aria-hidden="true">{session.icon}</span>}
         </div>
@@ -207,49 +149,44 @@ export function HomePage() {
           <span className="eyebrow">{session.label}</span>
           <div className="home-session-title-row">
             <h1>{session.title}</h1>
-            <span className="home-mode-pill">{session.mode}</span>
           </div>
           <p className="muted">{session.subtitle}</p>
+          {activeStation && station ? <p className="home-session-station">From station: <strong>{station.name}</strong></p> : null}
+          <div className="home-session-actions">
+            {activeStation && player.player?.active_station_id ? <Link className="button-link primary" to={`/stations?edit=${encodeURIComponent(player.player.active_station_id)}`}>Edit Station</Link> : null}
+            {current ? <Link className="button-link" to="/stations">Change Station</Link> : <Link className="button-link primary" to="/search">Search Music</Link>}
+            {current && subsonicState === 'missing' ? <button type="button" className="button-link home-subsonic-action" onClick={() => void addCurrentToSubsonic()}>＋ Add to Subsonic</button> : null}
+            {current && subsonicState === 'available' ? <span className="home-subsonic-state" title="This track is already in Subsonic" aria-label="In Subsonic"><span aria-hidden="true">✓</span> In Subsonic</span> : null}
+            {current && subsonicState === 'queued' ? <span className="home-subsonic-state queued"><span aria-hidden="true">↧</span> Queued for Subsonic</span> : null}
+          </div>
           <div className="home-session-meta">
-            <span>{player.player?.is_playing ? 'Playing' : current ? 'Paused' : 'Ready'}</span>
+            <span className={player.player?.is_playing ? 'is-playing' : ''}>{player.player?.is_playing ? 'Playing' : current ? 'Paused' : 'Ready'}</span>
             <span>{queue.length} in queue</span>
             {current ? <span>{formatDuration(current.duration_ms)}</span> : null}
-            {current?.source ? <span>{current.source === 'subsonic' ? 'Local Library' : current.source}</span> : null}
           </div>
         </div>
-        <div className="home-session-actions">
-          {activeStation && player.player?.active_station_id ? <Link className="button-link" to="/stations">View Station</Link> : null}
-          {current ? <Link className="button-link" to="/search">Find More</Link> : <Link className="button-link primary" to="/search">Search Music</Link>}
-        </div>
       </section>
 
-      <section className="home-launch-grid" aria-label="Start something">
-        <Link className="home-launch-card" to="/search">
-          <span aria-hidden="true">⌕</span>
-          <strong>Search Music</strong>
-          <small>Find songs, albums, and artists.</small>
+      <nav className="home-quick-actions" aria-label="Quick actions">
+        <Link className="home-quick-action" to="/search">
+          <span className="home-quick-icon" aria-hidden="true">⌕</span>
+          <span><strong>Search Music</strong><small>Find songs, albums, and artists</small></span>
         </Link>
-        <Link className="home-launch-card" to="/stations">
-          <span aria-hidden="true">◉</span>
-          <strong>Start Station</strong>
-          <small>Create a station and let Helix build the vibe.</small>
+        <Link className="home-quick-action" to="/stations">
+          <span className="home-quick-icon" aria-hidden="true">◉</span>
+          <span><strong>Start Station</strong><small>Create a station and let Helix build the vibe</small></span>
         </Link>
-        <Link className="home-launch-card" to="/playlists">
-          <span aria-hidden="true">♫</span>
-          <strong>Open Playlists</strong>
-          <small>Play or manage saved playlists.</small>
+        <Link className="home-quick-action" to="/playlists">
+          <span className="home-quick-icon" aria-hidden="true">♫</span>
+          <span><strong>Playlists</strong><small>Play or manage saved playlists</small></span>
         </Link>
-        <Link className="home-launch-card" to="/lobbies">
-          <span aria-hidden="true">◎</span>
-          <strong>Open Lobbies</strong>
-          <small>Listen together with friends.</small>
+        <Link className="home-quick-action" to="/lobbies">
+          <span className="home-quick-icon" aria-hidden="true">◎</span>
+          <span><strong>Lobbies</strong><small>Listen together with friends</small></span>
         </Link>
-      </section>
+      </nav>
 
-      <section className="home-lower-grid">
-        <AttentionCard items={attention} totalItems={allAttention.length} onDismiss={dismissAttention} onDismissAll={dismissAllVisibleAttention} />
-        <ActivityCard items={activity} />
-      </section>
+      <ActivityList items={activity} />
     </div>
   )
 }

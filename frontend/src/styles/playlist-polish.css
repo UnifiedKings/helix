@@ -1,0 +1,633 @@
+/* Playlist editor hero polish */
+
+.playlist-editor-page .playlist-editor-hero {
+  position: relative;
+  overflow: hidden;
+  border-radius: 28px;
+  border: 1px solid rgba(184, 106, 31, 0.20);
+  background: radial-gradient(circle at 8% 50%, rgba(184, 106, 31, 0.28), transparent 34%),
+    radial-gradient(circle at 94% 14%, rgba(35, 190, 177, 0.10), transparent 34%),
+    linear-gradient(135deg, rgba(31, 28, 75, 0.96), rgba(7, 18, 27, 0.92));
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
+}
+
+.playlist-editor-page .playlist-editor-hero::before {
+  content: "";
+  position: absolute;
+  background: radial-gradient(circle, rgba(255,255,255,0.09) 0 1px, transparent 1.5px);
+  background-size: 22px 22px;
+  transform: rotate(-7deg);
+  pointer-events: none;
+}
+
+.playlist-editor-page .playlist-editor-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(255,255,255,0.055), transparent 26%, transparent 72%, rgba(53, 217, 149, 0.035));
+  pointer-events: none;
+}
+
+.playlist-editor-page .back-link,
+.playlist-editor-page .playlist-editor-heading,
+.playlist-editor-page .playlist-editor-actions {
+  position: relative;
+  z-index: 1;
+}
+
+.playlist-editor-page .back-link {
+  top: 1rem;
+  left: 1.35rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgba(214, 224, 255, 0.82);
+  font-size: 0.86rem;
+  letter-spacing: 0.01em;
+}
+
+.playlist-editor-page .back-link:hover {
+  color: white;
+}
+
+.playlist-editor-heading {
+  gap: 1.15rem;
+  padding-top: 0.95rem;
+}
+
+.playlist-editor-heading .artwork-md {
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.16);
+  box-shadow: 0 18px 36px rgba(0,0,0,0.28),
+    0 0 0 5px rgba(255,255,255,0.035);
+}
+
+.playlist-editor-heading .eyebrow {
+  color: rgba(181, 196, 224, 0.88);
+  letter-spacing: 0.16em;
+}
+
+.playlist-editor-heading h1 {
+  margin: 0 0 0.25rem;
+  font-size: clamp(2.45rem, 4.8vw, 4.15rem);
+  line-height: 0.88;
+  letter-spacing: -0.075em;
+  text-shadow: 0 10px 28px rgba(0,0,0,0.22);
+}
+
+.playlist-editor-heading p {
+  margin: 0;
+  color: rgba(207, 218, 239, 0.88);
+}
+
+.playlist-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.7rem;
+  padding-left: 1rem;
+}
+
+.playlist-editor-actions button {
+  min-height: 46px;
+  border-radius: 16px;
+  padding-inline: 1.05rem;
+}
+
+.playlist-editor-actions .primary {
+  box-shadow: 0 16px 34px rgba(184, 106, 31, 0.28);
+}
+
+@media (max-width: 860px) {
+  .playlist-editor-page .playlist-editor-hero {
+    min-height: 0;
+    align-items: flex-start;
+    flex-direction: column;
+    padding: 1.15rem;
+  }
+
+  .playlist-editor-page .back-link {
+    position: relative;
+    top: auto;
+    left: auto;
+    margin-bottom: 0.4rem;
+  }
+
+  .playlist-editor-heading {
+    padding-top: 0;
+    align-items: flex-start;
+  }
+
+  .playlist-editor-actions {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .playlist-editor-heading {
+    flex-direction: column;
+  }
+
+  .playlist-editor-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .playlist-editor-actions button {
+    width: 100%;
+  }
+}
+
+/* Playlist editor hero alignment fix: make the header feel intentional instead of scattered. */
+
+.playlist-editor-page .playlist-editor-hero {
+  min-height: 184px;
+  display: grid;
+  grid-template-columns: minmax(92px, 140px) minmax(0, 1fr) auto;
+  grid-template-areas: "back title actions";
+  column-gap: clamp(1.15rem, 2vw, 2rem);
+  align-items: center;
+  padding: 1.25rem 1.65rem;
+}
+
+.playlist-editor-page .back-link {
+  grid-area: back;
+  position: static;
+  transform: none;
+  align-self: center;
+  justify-self: start;
+  margin: 0;
+  padding: 0.45rem 0;
+  white-space: nowrap;
+}
+
+.playlist-editor-page .playlist-editor-heading {
+  grid-area: title;
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 1.2rem;
+  min-width: 0;
+  padding-top: 0;
+}
+
+.playlist-editor-page .playlist-editor-heading > div:last-child {
+  min-width: 0;
+}
+
+.playlist-editor-heading .artwork-md {
+  width: 92px;
+  min-width: 92px;
+  height: 92px;
+  justify-self: center;
+}
+
+.playlist-editor-heading .eyebrow {
+  margin-bottom: 0.28rem;
+}
+
+.playlist-editor-heading h1 {
+  max-width: 760px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playlist-editor-heading p {
+  font-size: 1rem;
+}
+
+.playlist-editor-page .playlist-editor-actions {
+  grid-area: actions;
+  justify-self: end;
+  align-self: center;
+  padding-left: 0;
+  min-width: max-content;
+}
+
+.playlist-editor-page .playlist-editor-hero::before {
+  inset: -55% 20% -65% 2%;
+  opacity: 0.10;
+}
+
+@media (max-width: 920px) {
+  .playlist-editor-page .playlist-editor-hero {
+    grid-template-columns: 1fr;
+    grid-template-areas: "back"
+      "title"
+      "actions";
+    row-gap: 0.95rem;
+    align-items: start;
+  }
+
+  .playlist-editor-page .playlist-editor-actions {
+    justify-self: start;
+  }
+
+  .playlist-editor-heading h1 {
+    white-space: normal;
+  }
+}
+
+@media (max-width: 560px) {
+  .playlist-editor-page .playlist-editor-heading {
+    grid-template-columns: 1fr;
+  }
+
+  .playlist-editor-heading .artwork-md {
+    justify-self: start;
+  }
+}
+
+/* S+ add-to-Subsonic button centering fix */
+
+.subsonic-add-action {
+  display: inline-grid;
+  place-items: center;
+  text-align: center;
+  padding: 0 !important;
+  line-height: 1;
+}
+
+.subsonic-add-action span {
+  display: inline-grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  line-height: 1;
+  transform: translateY(-0.02em);
+}
+
+.top-result-actions .subsonic-add-action,
+.album-result-row .subsonic-add-action,
+.search-result-row .subsonic-add-action,
+.compact-action.subsonic-add-action {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  border-radius: 999px;
+}
+
+/* S+ add-to-Subsonic button centering fix v2: center the glyph independent of button text flow. */
+
+button.subsonic-add-action,
+.icon-button.subsonic-add-action,
+.compact-action.subsonic-add-action {
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+button.subsonic-add-action > span,
+.icon-button.subsonic-add-action > span,
+.compact-action.subsonic-add-action > span {
+  align-items: center !important;
+  justify-content: center !important;
+}
+
+/* S+ add-to-Subsonic button centering fix v3:
+   The glyph itself is visually right-heavy, so center the rendered pair rather
+   than relying on the text box center. Also keep the top-result action group
+   from pushing the final circle into the card edge. */
+
+.top-result-actions {
+  padding-right: 0.45rem;
+}
+
+button.subsonic-add-action,
+.icon-button.subsonic-add-action,
+.compact-action.subsonic-add-action {
+  text-indent: 0 !important;
+}
+
+button.subsonic-add-action > span,
+.icon-button.subsonic-add-action > span,
+.compact-action.subsonic-add-action > span {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-weight: 900 !important;
+  text-align: center !important;
+}
+
+/* S+ add-to-Subsonic button centering fix v4:
+   Render the visible S+ with a pseudo-element centered in the circle. This avoids
+   browser/font glyph metrics and inherited button text layout entirely while
+   preserving the existing tooltip pseudo-elements on the button itself. */
+
+button.subsonic-add-action > span,
+.icon-button.subsonic-add-action > span,
+.compact-action.subsonic-add-action > span {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  letter-spacing: 0 !important;
+  transform: none !important;
+  pointer-events: none !important;
+}
+
+button.subsonic-add-action > span::after,
+.icon-button.subsonic-add-action > span::after,
+.compact-action.subsonic-add-action > span::after {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -52%);
+  display: block;
+  color: #ddd7ff;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: -0.055em;
+  line-height: 1;
+  text-align: center;
+  white-space: nowrap;
+}
+
+button.subsonic-add-action:hover > span::after,
+.icon-button.subsonic-add-action:hover > span::after,
+.compact-action.subsonic-add-action:hover > span::after,
+button.subsonic-add-action:focus-visible > span::after,
+.icon-button.subsonic-add-action:focus-visible > span::after,
+.compact-action.subsonic-add-action:focus-visible > span::after {
+  color: white;
+}
+
+/* S+ add-to-Subsonic button centering final: use an SVG glyph so browser text metrics cannot offset it. */
+
+button.subsonic-add-action,
+.icon-button.subsonic-add-action,
+.compact-action.subsonic-add-action {
+  place-items: center !important;
+}
+
+button.subsonic-add-action > span,
+.icon-button.subsonic-add-action > span,
+.compact-action.subsonic-add-action > span {
+  display: none !important;
+}
+
+button.subsonic-add-action > span::after,
+.icon-button.subsonic-add-action > span::after,
+.compact-action.subsonic-add-action > span::after {
+  content: none !important;
+}
+
+/* S+ SVG size correction: previous SVG was centered but far too small. */
+
+.splus-glyph {
+  width: 27px !important;
+  height: 27px !important;
+  display: block !important;
+  overflow: visible !important;
+  color: inherit !important;
+  transform: translateY(-0.5px) !important;
+}
+
+.splus-glyph text {
+  fill: currentColor !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.075em !important;
+}
+
+/* S+ add-to-Subsonic button centering final v2:
+   Stop using font/SVG text metrics. Position S and + manually inside the circle. */
+
+button.subsonic-add-action,
+.icon-button.subsonic-add-action,
+.compact-action.subsonic-add-action {
+  position: relative !important;
+  box-sizing: border-box !important;
+  display: inline-block !important;
+  flex: 0 0 42px !important;
+  width: 42px !important;
+  min-width: 42px !important;
+  max-width: 42px !important;
+  height: 42px !important;
+  min-height: 42px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  overflow: hidden !important;
+  text-align: initial !important;
+  line-height: 1 !important;
+}
+
+button.subsonic-add-action > .splus-mark,
+.icon-button.subsonic-add-action > .splus-mark,
+.compact-action.subsonic-add-action > .splus-mark {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 42px !important;
+  height: 42px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  transform: none !important;
+  font-size: 0 !important;
+  line-height: 0 !important;
+  pointer-events: none !important;
+}
+
+button.subsonic-add-action > .splus-mark::after,
+.icon-button.subsonic-add-action > .splus-mark::after,
+.compact-action.subsonic-add-action > .splus-mark::after,
+.splus-glyph,
+.splus-glyph text {
+  content: none !important;
+  display: none !important;
+}
+
+.splus-s,
+.splus-plus {
+  position: absolute !important;
+  top: 50% !important;
+  display: block !important;
+  color: currentColor !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  text-align: center !important;
+  transform: translate(-50%, -53%) !important;
+}
+
+.splus-s {
+  left: 18px !important;
+  font-size: 12px !important;
+}
+
+.splus-plus {
+  left: 25px !important;
+  font-size: 12px !important;
+}
+
+.lobby-setting-block {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.lobby-setting-block > div:first-child > strong,
+.lobby-setting-block > div:first-child > span {
+  display: block;
+}
+
+.lobby-setting-block > div:first-child > span {
+  margin-top: 0.2rem;
+  color: var(--muted);
+  font-size: 0.86rem;
+}
+
+.lobby-queue-limit-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lobby-queue-limit-control input {
+  width: 78px;
+  text-align: center;
+}
+
+.member-dashboard-entry {
+  display: grid;
+  gap: 0;
+}
+
+.member-dashboard-entry.editing {
+  border: 1px solid rgba(184, 106, 31, 0.22);
+  border-radius: 16px;
+  background: rgba(184, 106, 31, 0.045);
+}
+
+.member-dashboard-entry.editing .member-dashboard-row {
+  border-color: transparent;
+  background: transparent;
+}
+
+.member-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.member-manage-button {
+  padding: 0.42rem 0.65rem;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 900;
+}
+
+.member-editor {
+  display: grid;
+  gap: 0.8rem;
+  padding: 0 0.75rem 0.8rem;
+}
+
+.member-nickname-editor {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 0.55rem;
+}
+
+.member-nickname-editor label {
+  display: grid;
+  gap: 0.3rem;
+  color: var(--muted);
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.member-permission-editor {
+  display: grid;
+  gap: 0.15rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255,255,255,0.07);
+}
+
+.member-permission-editor .permission-row {
+  padding: 0.48rem 0;
+}
+
+@media (max-width: 640px) {
+  .lobby-setting-block,
+  .member-nickname-editor {
+    grid-template-columns: 1fr;
+  }
+
+  .lobby-queue-limit-control {
+    justify-content: flex-start;
+  }
+
+  .member-dashboard-row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+
+  .member-row-actions {
+    grid-column: 2 / -1;
+    justify-content: flex-start;
+  }
+}
+
+.lobby-history-list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.lobby-history-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.lobby-history-row:last-child {
+  border-bottom: 0;
+}
+
+.lobby-history-copy {
+  min-width: 0;
+  display: grid;
+  gap: 0.12rem;
+}
+
+.lobby-history-copy strong,
+.lobby-history-copy span,
+.lobby-history-copy small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lobby-history-copy span,
+.lobby-history-copy small {
+  color: var(--muted);
+}
+
+.lobby-station-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.lobby-station-controls select {
+  flex: 1 1 15rem;
+  min-width: 0;
+}
+
+.lobby-station-card .info-banner {
+  margin-bottom: 0.8rem;
+}

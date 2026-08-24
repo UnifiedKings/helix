@@ -9,13 +9,17 @@ from typing import Iterable
 
 from .base import StationProvider
 from .models import StationConfigOption, StationProviderInfo
-from .builtins.listenbrainz_similar import ListenBrainzSimilarArtistProvider
+from .builtins.similar_artist import SimilarArtistProvider
 from .builtins.artist_collection import ArtistCollectionProvider
 from .builtins.tag_radio import TagRadioProvider
+from .builtins.song_radio import SongRadioProvider
 
 LOG = logging.getLogger("helix.station_providers")
 
-DEFAULT_STATION_TYPE = "listenbrainz_similar_artist"
+DEFAULT_STATION_TYPE = "similar_artist"
+LEGACY_STATION_TYPE_ALIASES = {
+    "listenbrainz_similar_artist": "similar_artist",
+}
 
 def _subsonic_configured_from_env_or_settings() -> bool:
     """Best-effort check for UI option exposure.
@@ -84,9 +88,10 @@ def register_station_provider(provider: StationProvider) -> None:
 
 
 def _load_builtin_providers() -> None:
-    register_station_provider(ListenBrainzSimilarArtistProvider())
+    register_station_provider(SimilarArtistProvider())
     register_station_provider(ArtistCollectionProvider())
     register_station_provider(TagRadioProvider())
+    register_station_provider(SongRadioProvider())
 
 
 def _custom_plugins_enabled() -> bool:
@@ -166,9 +171,15 @@ def _ensure_loaded() -> None:
         reload_station_providers()
 
 
+
+def canonical_station_type(station_type: str | None) -> str:
+    key = (station_type or DEFAULT_STATION_TYPE).strip() or DEFAULT_STATION_TYPE
+    return LEGACY_STATION_TYPE_ALIASES.get(key, key)
+
+
 def get_station_provider(station_type: str | None) -> StationProvider:
     _ensure_loaded()
-    key = (station_type or DEFAULT_STATION_TYPE).strip() or DEFAULT_STATION_TYPE
+    key = canonical_station_type(station_type)
     provider = _PROVIDERS.get(key)
     if provider:
         return provider
