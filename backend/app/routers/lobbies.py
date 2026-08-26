@@ -16,7 +16,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, update
 from sqlalchemy.orm import Session
 from yt_dlp import YoutubeDL
 
@@ -26,6 +26,7 @@ from ..models import SessionToken, User, Station
 from ..lobby_models import SharedLobby, SharedLobbyHistoryItem, SharedLobbyMember, SharedLobbyQueueItem
 from ..api_schemas.lobbies import (
     LobbyCreateRequest,
+    LobbyEndedRequest,
     LobbyJoinRequest,
     LobbyJoinResponse,
     LobbyHistoryItemResponse,
@@ -1547,6 +1548,72 @@ def lobby_seek(lobby_id: str, payload: LobbySeekRequest, request: Request, db: S
     lobby.position_updated_at = _now()
     _touch_lobby(lobby)
     return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+
+@router.post("/{lobby_id}/ended", response_model=LobbyStateResponse)
+def lobby_ended(lobby_id: str, payload: LobbyEndedRequest, request: Request, db: Session = Depends(get_db)):
+    """Advance only if the reported queue item is still current and has actually ended."""
+    lobby = _get_lobby(db, lobby_id)
+    _, actor = _actor_for_lobby(db, request, lobby)
+    rows = _queue_rows(db, lobby.id)
+    current_index = int(lobby.current_index or 0)
+    current = rows[current_index] if 0 <= current_index < len(rows) else None
+
+    # This endpoint is intentionally available to any authenticated lobby member:
+    # it reports completion of a specific item rather than granting skip control.
+    # Stale/duplicate reports are no-ops.
+    if current is None or current.id != (payload.item_id or "").strip() or not lobby.is_playing:
+        return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+    duration_ms = max(0, int(current.duration_ms or 0))
+    if duration_ms > 0:
+        effective_position_ms = _effective_position_ms(lobby)
+        if effective_position_ms < max(0, duration_ms - 5000):
+            return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+    elif not (_member_permissions(actor).can_skip or _member_permissions(actor).can_control_playback):
+        # Without a known duration the server cannot verify natural completion,
+        # so fall back to the existing skip/control permission boundary.
+        return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+    if rows and current_index < len(rows) - 1:
+        next_index = current_index + 1
+        next_is_playing = True
+    else:
+        next_index = max(0, min(current_index, len(rows) - 1)) if rows else 0
+        next_is_playing = False
+
+    now = _now()
+    expected_updated_at = lobby.updated_at
+    result = db.execute(
+        update(SharedLobby)
+        .where(
+            SharedLobby.id == lobby.id,
+            SharedLobby.current_index == current_index,
+            SharedLobby.updated_at == expected_updated_at,
+        )
+        .values(
+            current_index=next_index,
+            position_ms=0,
+            is_playing=next_is_playing,
+            position_updated_at=now,
+            updated_at=now,
+        )
+    )
+
+    # A simultaneous client may have already advanced this exact item. Re-read
+    # instead of advancing again, making duplicate end reports race-safe.
+    if result.rowcount != 1:
+        db.rollback()
+        lobby = _get_lobby(db, lobby_id)
+        _, actor = _actor_for_lobby(db, request, lobby)
+        return _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+
+    db.refresh(lobby)
+    _record_now_playing_history(db, lobby)
+    response = _commit_lobby_state(db, lobby, actor, include_invite=(actor.role == "host"))
+    if (getattr(lobby, "active_station_id", "") or "").strip():
+        schedule_lobby_station_fill(lobby.id)
+    return response
 
 
 @router.post("/{lobby_id}/next", response_model=LobbyStateResponse)

@@ -334,6 +334,7 @@ export function LobbyPage() {
     if (preloadedTrackIdRef.current !== nextItem.id) {
       preloadedTrackIdRef.current = nextItem.id;
       preload.pause();
+      preload.dataset.lobbyItemId = nextItem.id;
       preload.src = streamUrl(state.id, nextItem.id);
       preload.load();
     }
@@ -366,6 +367,7 @@ export function LobbyPage() {
       if (preloaded && preloadedTrackIdRef.current === now.id) {
         oldActive.pause();
         oldActive.removeAttribute("src");
+        delete oldActive.dataset.lobbyItemId;
         oldActive.load();
         activeAudioKeyRef.current =
           activeAudioKeyRef.current === "a" ? "b" : "a";
@@ -373,6 +375,7 @@ export function LobbyPage() {
         preloadedTrackIdRef.current = "";
         setPositionTick((tick) => tick + 1);
       } else {
+        audio.dataset.lobbyItemId = now.id;
         audio.src = streamUrl(state.id, now.id);
         audio.load();
       }
@@ -1017,9 +1020,10 @@ export function LobbyPage() {
           if (activeAudioKeyRef.current === "a")
             setAudioError("Audio stream failed for this lobby track");
         }}
-        onEnded={() => {
-          if (activeAudioKeyRef.current === "a" && canSkip)
-            void run(() => api.lobbyNext(lobbyId));
+        onEnded={(event) => {
+          const itemId = event.currentTarget.dataset.lobbyItemId || "";
+          if (activeAudioKeyRef.current === "a" && itemId)
+            void run(() => api.lobbyEnded(lobbyId, itemId));
         }}
       />
       <audio
@@ -1030,9 +1034,10 @@ export function LobbyPage() {
           if (activeAudioKeyRef.current === "b")
             setAudioError("Audio stream failed for this lobby track");
         }}
-        onEnded={() => {
-          if (activeAudioKeyRef.current === "b" && canSkip)
-            void run(() => api.lobbyNext(lobbyId));
+        onEnded={(event) => {
+          const itemId = event.currentTarget.dataset.lobbyItemId || "";
+          if (activeAudioKeyRef.current === "b" && itemId)
+            void run(() => api.lobbyEnded(lobbyId, itemId));
         }}
       />
     </div>

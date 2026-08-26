@@ -406,6 +406,7 @@ export const api = {
   lobbyPlay: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/play`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
   lobbyPause: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/pause`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
   lobbySeek: (lobbyId: string, positionMs: number) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/seek`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({ position_ms: positionMs }) }),
+  lobbyEnded: (lobbyId: string, itemId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/ended`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({ item_id: itemId }) }),
   lobbyNext: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/next`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
   lobbyPrevious: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/previous`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
   lobbyUpdateSelf: (lobbyId: string, payload: { nickname?: string }) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/me`, { method: 'PATCH', headers: lobbyHeaders(lobbyId), body: JSON.stringify(payload) }),

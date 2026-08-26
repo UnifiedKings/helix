@@ -59,6 +59,10 @@ class LobbySeekRequest(BaseModel):
     position_ms: int = 0
 
 
+class LobbyEndedRequest(BaseModel):
+    item_id: str = Field(min_length=1, max_length=36)
+
+
 class LobbyMemberUpdateRequest(BaseModel):
     nickname: Optional[str] = None
     is_active: Optional[bool] = None
