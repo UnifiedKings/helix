@@ -309,4 +309,6 @@ Unless you want to use the custom station feature.
 
 ## License
 
-TBD
+Helix is licensed under the [GNU Affero General Public License v3.0](LICENSE) (**AGPL-3.0-only**).
+
+You may use, modify, and redistribute Helix under the terms of the AGPL. If you modify Helix and make that modified version available to users over a network, the corresponding source code must also be made available as required by the license.
