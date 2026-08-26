@@ -342,7 +342,32 @@ export function LobbyPage() {
 
   useEffect(() => {
     let audio = activeAudio();
-    if (!audio || !state || !now) return;
+    if (!audio || !state) return;
+
+    if (!now) {
+      audio.pause();
+      audio.removeAttribute("src");
+      delete audio.dataset.lobbyItemId;
+      audio.load();
+
+      const preload = preloadAudio();
+      if (preload) {
+        preload.pause();
+        preload.removeAttribute("src");
+        delete preload.dataset.lobbyItemId;
+        preload.load();
+      }
+
+      lastTrackIdRef.current = "";
+      preloadedTrackIdRef.current = "";
+      lastPlaybackSnapshotRef.current = null;
+      smoothTrackStartTrackIdRef.current = "";
+      smoothTrackStartUntilRef.current = 0;
+      setNeedsManualSync(false);
+      setPositionTick((tick) => tick + 1);
+      return;
+    }
+
     audio.volume = volume;
 
     const previousSnapshot = lastPlaybackSnapshotRef.current;

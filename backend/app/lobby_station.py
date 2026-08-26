@@ -83,11 +83,12 @@ async def fill_lobby_station(lobby_id: str, *, start_if_empty: bool = False) -> 
             return 0
         context, station_name, settings, tracks_ahead, queue_len = built
         need = max(0, _target_ahead() - tracks_ahead)
-        # With an empty queue there is no current track yet. Generate one
-        # current track plus the configured number ahead so starting a station
-        # on an empty lobby immediately establishes the same invariant.
+        # Empty-lobby startup is latency-sensitive: resolve only the first
+        # playable track here so it can be committed/broadcast immediately.
+        # The normal background refill then establishes the configured ahead
+        # buffer without making the initial Play station request wait for it.
         if start_if_empty and queue_len == 0:
-            need = _target_ahead() + 1
+            need = 1
         if need <= 0:
             return 0
 

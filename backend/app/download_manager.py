@@ -710,15 +710,14 @@ class DownloadManager:
                 if not vid:
                     continue
 
-                # Finalize just this one vid using the existing batch pipeline.
-                saved = list(self._downloaded_since_finalize)
-                try:
-                    self._downloaded_since_finalize = [vid]
-                    await self.finalize_batch()
-                finally:
-                    # Restore and ensure the finalized vid isn't left pending.
-                    self._downloaded_since_finalize = [x for x in saved if x != vid]
+                # Finalize only this video id without swapping out the shared
+                # pending list. Album imports can finish downloading additional
+                # tracks while this await is in progress; replacing/restoring the
+                # whole list here used to silently discard those newly completed
+                # tracks and leave albums partially imported.
+                await finalize_video_ids(self, [vid])
             except Exception:
+                LOG.exception("Finalize worker failed for video_id=%s", vid if 'vid' in locals() else None)
                 continue
     async def finalize_batch(self):
         async with self._finalize_lock:
@@ -1023,6 +1022,7 @@ async def finalize_video_ids(self, vids: List[str]) -> None:
         if not vids:
             return
         ensure_beets_config()
+        from .integrations.ytmusic import get_album_full
         # Deduplicate, preserve order
         vids = list(dict.fromkeys([v for v in vids if v]))
 
@@ -1157,47 +1157,74 @@ async def finalize_video_ids(self, vids: List[str]) -> None:
                 except Exception:
                     pass
 
-            # Import only this file (not the whole inbound folder).
-            import_ok = False
+            # Import only this file (not the whole inbound folder). Beets can
+            # legitimately return success while deciding to skip a duplicate, in
+            # which case the inbound file is still present. Treat "source file is
+            # gone" as the actual success condition. If Beets does not move it,
+            # use Helix's deterministic library move so explicit album imports
+            # cannot end up with only cover.jpg in the destination folder.
+            beets_moved = False
             try:
                 cmd = ["beet", "-c", BEETS_CONFIG, "import", "-q", "-s", path]
                 r = subprocess.run(cmd, check=False, capture_output=True, text=True)
-                import_ok = (r.returncode == 0)
+                beets_moved = r.returncode == 0 and not os.path.exists(path)
                 try:
                     log_path = os.path.join(os.path.dirname(BEETS_CONFIG), "import.log")
                     with open(log_path, "a", encoding="utf-8") as f:
                         f.write(r.stdout or "")
                         f.write(r.stderr or "")
-                        if not import_ok:
+                        if r.returncode != 0:
                             f.write(f"\n[helix] beets import failed for {vid} rc={r.returncode} path={path}\n")
+                        elif os.path.exists(path):
+                            f.write(
+                                f"\n[helix] beets import completed but did not move {vid}; "
+                                f"using Helix fallback move path={path}\n"
+                            )
                 except Exception:
                     pass
             except FileNotFoundError as e:
-                # Beets is missing in the environment; keep the job so we can retry after fix.
                 try:
                     log_path = os.path.join(os.path.dirname(BEETS_CONFIG), "import.log")
                     with open(log_path, "a", encoding="utf-8") as f:
                         f.write(f"\n[helix] beets executable not found for {vid}: {e!r}\n")
                 except Exception:
                     pass
-                import_ok = False
-            except Exception:
-                import_ok = False
+            except Exception as e:
+                try:
+                    log_path = os.path.join(os.path.dirname(BEETS_CONFIG), "import.log")
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(f"\n[helix] beets import exception for {vid}: {e!r} path={path}\n")
+                except Exception:
+                    pass
 
-            if not import_ok:
+            finalized = beets_moved
+            if not finalized and os.path.exists(path):
+                try:
+                    moved_to = self._fallback_library_move(job, path)
+                    finalized = bool(moved_to and os.path.exists(moved_to))
+                    try:
+                        log_path = os.path.join(os.path.dirname(BEETS_CONFIG), "import.log")
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(f"\n[helix] fallback moved {vid} to {moved_to}\n")
+                    except Exception:
+                        pass
+                except Exception as e:
+                    try:
+                        log_path = os.path.join(os.path.dirname(BEETS_CONFIG), "import.log")
+                        with open(log_path, "a", encoding="utf-8") as f:
+                            f.write(f"\n[helix] fallback move failed for {vid}: {e!r} path={path}\n")
+                    except Exception:
+                        pass
+
+            if not finalized:
                 # Record failure and keep the job/ready pointers so finalize can retry later.
                 fc, _ft = self._finalize_fail.get(vid, (0, 0.0))
                 self._finalize_fail[vid] = (fc + 1, time.time())
-                # Move this vid to the end so one bad file doesn't block others.
-                try:
-                    self._downloaded_since_finalize = [v for v in self._downloaded_since_finalize if v != vid] + [vid]
-                except Exception:
-                    pass
+                self._downloaded_since_finalize = [v for v in self._downloaded_since_finalize if v != vid] + [vid]
                 continue
 
-            # Success: clear any failure state.
+            # Success: clear any failure state and stale inbound pointers.
             self._finalize_fail.pop(vid, None)
-            # After import, the inbound file is moved; clear stale pointers so future requests can re-enqueue if needed.
             self._ready.pop(vid, None)
             self._jobs.pop(vid, None)
             self._downloaded_since_finalize = [v for v in self._downloaded_since_finalize if v != vid]

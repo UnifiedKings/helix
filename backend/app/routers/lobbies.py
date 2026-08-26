@@ -1465,6 +1465,11 @@ async def play_lobby_station(lobby_id: str, station_id: str, request: Request, d
     schedule_lobby_state_broadcast(lobby.id)
     try:
         await fill_lobby_station(lobby.id, start_if_empty=queue_was_empty)
+        # On an empty lobby, fill_lobby_station intentionally resolves only the
+        # first playable track so startup is fast. Fill the configured queue-
+        # ahead buffer asynchronously after that first track is visible/playing.
+        if queue_was_empty:
+            schedule_lobby_station_fill(lobby.id)
     except StationSeedArtistNotFound as exc:
         # An empty lobby cannot start without a generated current track.
         # Existing queues may keep playing while the station monitor retries.

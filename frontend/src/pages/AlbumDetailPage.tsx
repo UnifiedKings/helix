@@ -49,6 +49,13 @@ export function AlbumDetailPage() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState<{ message: string; item: string } | null>(null)
   const [loading, setLoading] = useState(true)
+  const [albumImportQueued, setAlbumImportQueued] = useState(false)
+  const [queuedTrackImports, setQueuedTrackImports] = useState<Set<string>>(() => new Set())
+
+  useEffect(() => {
+    setAlbumImportQueued(false)
+    setQueuedTrackImports(new Set())
+  }, [browseId, albumSource])
 
   useEffect(() => {
     let cancelled = false
@@ -77,9 +84,31 @@ export function AlbumDetailPage() {
   }, [album])
 
   async function addAlbumToSubsonic() {
-    if (!album) return
-    await api.addAlbumToSubsonic(album)
-    setStatus({ message: 'Queued album for Subsonic import', item: album.title })
+    if (!album || albumImportQueued) return
+    setAlbumImportQueued(true)
+    try {
+      await api.addAlbumToSubsonic(album)
+      setStatus({ message: 'Queued album for Subsonic import', item: album.title })
+    } catch (err) {
+      setAlbumImportQueued(false)
+      setError(err instanceof Error ? err.message : 'Could not queue album for Subsonic import')
+    }
+  }
+
+  async function addTrackToSubsonic(song: SearchSong, key: string) {
+    if (queuedTrackImports.has(key)) return
+    setQueuedTrackImports((current) => new Set(current).add(key))
+    try {
+      await api.addSongToSubsonic(song)
+      setStatus({ message: 'Queued track for Subsonic import', item: song.title })
+    } catch (err) {
+      setQueuedTrackImports((current) => {
+        const next = new Set(current)
+        next.delete(key)
+        return next
+      })
+      setError(err instanceof Error ? err.message : 'Could not queue track for Subsonic import')
+    }
   }
 
   if (loading) return <div className="page-stack"><p className="muted">Loading album…</p></div>
@@ -115,7 +144,7 @@ export function AlbumDetailPage() {
                 <button className="primary" onClick={() => player.run(() => api.playAlbum(album), 'play')}>▶ <span>Play album</span></button>
                 <button onClick={() => player.run(() => api.queueAlbum(album))}>＋ <span>Queue album</span></button>
                 {!albumIsInSubsonic ? (
-                  <button className="album-subsonic-action" onClick={() => void addAlbumToSubsonic()}>S+ <span>Add to Subsonic</span></button>
+                  <button className="album-subsonic-action" disabled={albumImportQueued} onClick={() => void addAlbumToSubsonic()}>S+ <span>{albumImportQueued ? 'Queued' : 'Add to Subsonic'}</span></button>
                 ) : null}
                 <Link className="album-back-link" to="/search" state={searchReturnState}>Back to search</Link>
               </div>
@@ -140,6 +169,8 @@ export function AlbumDetailPage() {
               {album.tracks.map((track, index) => {
                 const song = trackToSong(track, album)
                 const songIsInSubsonic = Boolean(song.subsonic_song_id || song.source === 'subsonic')
+                const importKey = song.yt_video_id || song.video_id || song.subsonic_song_id || `${song.artist}-${song.title}-${index}`
+                const trackImportQueued = queuedTrackImports.has(importKey)
                 return (
                   <article className="album-track-row" key={`${song.title}-${song.yt_video_id || song.video_id || song.subsonic_song_id}-${index}`}>
                     <span className="album-track-number">{index + 1}</span>
@@ -150,7 +181,7 @@ export function AlbumDetailPage() {
                       <button className="album-icon-action" aria-label={`Play ${song.title}`} title="Play" onClick={() => player.run(() => api.playSong(song), 'play')}>▶</button>
                       <button className="album-icon-action" aria-label={`Add ${song.title} to queue`} title="Add to queue" onClick={() => player.run(() => api.queueSong(song))}>＋</button>
                       {!songIsInSubsonic ? (
-                        <button className="album-icon-action album-track-subsonic" aria-label={`Add ${song.title} to Subsonic`} title="Add to Subsonic" onClick={() => void api.addSongToSubsonic(song).then(() => setStatus({ message: 'Queued track for Subsonic import', item: song.title }))}>S+</button>
+                        <button className="album-icon-action album-track-subsonic" disabled={trackImportQueued} aria-label={trackImportQueued ? `${song.title} queued for Subsonic import` : `Add ${song.title} to Subsonic`} title={trackImportQueued ? 'Queued for Subsonic' : 'Add to Subsonic'} onClick={() => void addTrackToSubsonic(song, importKey)}>S+</button>
                       ) : null}
                     </div>
                   </article>

@@ -79,15 +79,26 @@ function TopResultCard({ result, player, onStatus, searchReturn, canImportToSubs
     ? `${result.item.artist ?? 'Unknown artist'}${result.item.year ? ` • ${result.item.year}` : ''}`
     : `${result.item.artist}${result.item.album ? ` • ${result.item.album}` : ''}`
   const topResultStyle = artwork ? ({ '--search-feature-art': `url(${JSON.stringify(artwork)})` } as CSSProperties) : undefined
+  const [subsonicQueued, setSubsonicQueued] = useState(false)
+
+  useEffect(() => {
+    setSubsonicQueued(false)
+  }, [result.kind, item.title, 'artist' in item ? item.artist : '', item.source])
 
   async function addToSubsonic() {
-    if (!isYt) return
-    if (result.kind === 'album') {
-      await api.addAlbumToSubsonic(result.item)
-      onStatus(`Queued album for Subsonic import: ${result.item.title}`)
-    } else {
-      await api.addSongToSubsonic(result.item)
-      onStatus(`Queued track for Subsonic import: ${result.item.title}`)
+    if (!isYt || subsonicQueued) return
+    setSubsonicQueued(true)
+    try {
+      if (result.kind === 'album') {
+        await api.addAlbumToSubsonic(result.item)
+        onStatus(`Queued album for Subsonic import: ${result.item.title}`)
+      } else {
+        await api.addSongToSubsonic(result.item)
+        onStatus(`Queued track for Subsonic import: ${result.item.title}`)
+      }
+    } catch {
+      setSubsonicQueued(false)
+      onStatus(`Could not queue ${result.kind} for Subsonic import: ${result.item.title}`)
     }
   }
 
@@ -104,7 +115,7 @@ function TopResultCard({ result, player, onStatus, searchReturn, canImportToSubs
           <div className="top-result-actions">
             <button className="primary" onClick={() => result.kind === 'album' ? player.run(() => api.playAlbum(result.item), 'play') : player.run(() => api.playSong(result.item), 'play')}>▶ Play</button>
             <button onClick={() => result.kind === 'album' ? player.run(() => api.queueAlbum(result.item)) : player.run(() => api.queueSong(result.item))}>＋ Add to Queue</button>
-            {isYt && canImportToSubsonic ? <button onClick={() => void addToSubsonic()}>S+ Add to Subsonic</button> : null}
+            {isYt && canImportToSubsonic ? <button disabled={subsonicQueued} onClick={() => void addToSubsonic()}>S+ {subsonicQueued ? 'Queued' : 'Add to Subsonic'}</button> : null}
             {result.kind === 'album' && albumDetailPath(result.item) ? <Link className="button-link" to={albumDetailPath(result.item)} state={{ searchReturn }}>Open album</Link> : null}
           </div>
         </div>
@@ -115,10 +126,18 @@ function TopResultCard({ result, player, onStatus, searchReturn, canImportToSubs
 function SongRow({ song, player, onStatus, canImportToSubsonic }: { song: SearchSong; player: PlayerContext; onStatus: (message: string) => void; canImportToSubsonic: boolean }) {
   const duration = durationLabel(song)
   const canAdd = song.source === 'ytmusic' || Boolean(song.yt_video_id || song.video_id || song.videoId)
+  const [subsonicQueued, setSubsonicQueued] = useState(false)
 
   async function addToSubsonic() {
-    await api.addSongToSubsonic(song)
-    onStatus(`Queued track for Subsonic import: ${song.title}`)
+    if (subsonicQueued) return
+    setSubsonicQueued(true)
+    try {
+      await api.addSongToSubsonic(song)
+      onStatus(`Queued track for Subsonic import: ${song.title}`)
+    } catch {
+      setSubsonicQueued(false)
+      onStatus(`Could not queue track for Subsonic import: ${song.title}`)
+    }
   }
 
   return (
@@ -130,7 +149,7 @@ function SongRow({ song, player, onStatus, canImportToSubsonic }: { song: Search
       <div className="search-row-actions">
         <button className="search-row-icon" aria-label={`Play ${song.title}`} data-tooltip="Play" title="Play" onClick={() => player.run(() => api.playSong(song), 'play')}>▶</button>
         <button className="search-row-icon search-queue-icon" aria-label={`Add ${song.title} to queue`} data-tooltip="Add to queue" title="Add to queue" onClick={() => player.run(() => api.queueSong(song))}>＋</button>
-        {canAdd && canImportToSubsonic && song.source !== 'subsonic' ? <button className="search-row-icon search-library-icon" aria-label={`Add ${song.title} to Subsonic`} data-tooltip="Add to Subsonic" title="Add to Subsonic" onClick={() => void addToSubsonic()}>S+</button> : <span className="search-row-icon-spacer" aria-hidden="true" />}
+        {canAdd && canImportToSubsonic && song.source !== 'subsonic' ? <button className="search-row-icon search-library-icon" disabled={subsonicQueued} aria-label={subsonicQueued ? `${song.title} queued for Subsonic import` : `Add ${song.title} to Subsonic`} data-tooltip={subsonicQueued ? 'Queued for Subsonic' : 'Add to Subsonic'} title={subsonicQueued ? 'Queued for Subsonic' : 'Add to Subsonic'} onClick={() => void addToSubsonic()}>S+</button> : <span className="search-row-icon-spacer" aria-hidden="true" />}
       </div>
     </article>
   )
@@ -140,6 +159,7 @@ function AlbumCard({ album, player, onStatus, searchReturn, canImportToSubsonic 
   const browseId = albumBrowseId(album)
   const albumPath = browseId ? albumDetailPath(album) : ''
   const canAdd = album.source === 'ytmusic' || Boolean(browseId)
+  const [subsonicQueued, setSubsonicQueued] = useState(false)
 
   function openAlbum() {
     if (albumPath) navigate(albumPath, { state: { searchReturn } })
@@ -154,8 +174,15 @@ function AlbumCard({ album, player, onStatus, searchReturn, canImportToSubsonic 
   }
 
   async function addToSubsonic() {
-    await api.addAlbumToSubsonic(album)
-    onStatus(`Queued album for Subsonic import: ${album.title}`)
+    if (subsonicQueued) return
+    setSubsonicQueued(true)
+    try {
+      await api.addAlbumToSubsonic(album)
+      onStatus(`Queued album for Subsonic import: ${album.title}`)
+    } catch {
+      setSubsonicQueued(false)
+      onStatus(`Could not queue album for Subsonic import: ${album.title}`)
+    }
   }
 
   return (
@@ -179,7 +206,7 @@ function AlbumCard({ album, player, onStatus, searchReturn, canImportToSubsonic 
           <summary className="icon-button compact-action album-more-button" aria-label={`More options for ${album.title}`} title="More options">⋯</summary>
           <div className="album-card-menu-popover">
             <button type="button" onClick={() => player.run(() => api.queueAlbum(album))}>Queue</button>
-            {canAdd && canImportToSubsonic && album.source !== 'subsonic' ? <button type="button" className="compact-action library-add-action library-add-icon-action" aria-label={`Add ${album.title} to Subsonic`} data-tooltip="Add to Subsonic" title="Add to Subsonic" onClick={() => void addToSubsonic()}><span className="splus-mark" aria-hidden="true"><span className="splus-s">S</span><span className="splus-plus">+</span></span></button> : null}
+            {canAdd && canImportToSubsonic && album.source !== 'subsonic' ? <button type="button" className="compact-action library-add-action library-add-icon-action" disabled={subsonicQueued} aria-label={subsonicQueued ? `${album.title} queued for Subsonic import` : `Add ${album.title} to Subsonic`} data-tooltip={subsonicQueued ? 'Queued for Subsonic' : 'Add to Subsonic'} title={subsonicQueued ? 'Queued for Subsonic' : 'Add to Subsonic'} onClick={() => void addToSubsonic()}><span className="splus-mark" aria-hidden="true"><span className="splus-s">S</span><span className="splus-plus">+</span></span></button> : null}
           </div>
         </details>
       </div>

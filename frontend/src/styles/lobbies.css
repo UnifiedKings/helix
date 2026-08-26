@@ -55,27 +55,15 @@
 .lobby-add-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 0.45rem;
-  padding: 0.35rem;
-  margin: 0.9rem 0;
   border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--bg) 22%, transparent);
 }
 
 .lobby-add-tabs button {
   border: 0;
-  border-radius: 12px;
   background: transparent;
-  padding: 0.7rem 0.75rem;
-  color: var(--muted);
-  font-weight: 850;
 }
 
 .lobby-add-tabs button.active {
-  color: var(--text);
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 55%, transparent), color-mix(in srgb, var(--accent) 22%, transparent));
-  box-shadow: 0 12px 30px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 .lobby-youtube-form {
@@ -91,7 +79,6 @@
 }
 
 .lobby-search-results button {
-  border-radius: 14px;
   background: color-mix(in srgb, var(--text) 4.5%, transparent);
   border-color: color-mix(in srgb, var(--text) 7%, transparent);
 }
@@ -153,27 +140,12 @@
 
 .lobby-dashboard-main {
   display: grid;
-  gap: 1rem;
-  padding: 1.25rem;
 }
 
 .lobby-dashboard-hero {
   position: relative;
   isolation: isolate;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 1.25rem;
-  min-height: 176px;
-  overflow: hidden;
-  padding: clamp(1.25rem, 2.3vw, 2.15rem);
-  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
-  border-radius: 28px;
-  background: radial-gradient(circle at 4% 0%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 34%),
-    radial-gradient(circle at 96% 50%, color-mix(in srgb, var(--good) 18%, transparent), transparent 33%),
-    linear-gradient(135deg, color-mix(in srgb, var(--surface-raised) 90%, var(--accent) 10%), color-mix(in srgb, var(--surface) 96%, transparent) 58%, color-mix(in srgb, var(--surface) 90%, var(--accent) 10%));
-  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 .lobby-dashboard-hero::before {
@@ -213,22 +185,17 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.62rem;
 }
 
 .lobby-dashboard-title-row {
   display: flex;
   align-items: center;
-  gap: 0.78rem;
   flex-wrap: wrap;
   margin-top: 0.05rem;
 }
 
 .lobby-dashboard-title-row h1 {
   margin: 0;
-  font-size: clamp(2.65rem, 4.3vw, 4.8rem);
-  letter-spacing: -0.045em;
-  line-height: 0.98;
 }
 
 .lobby-dashboard-hero .eyebrow {
@@ -264,23 +231,12 @@
 .lobby-meta-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.55rem;
-  margin-top: 0.42rem;
   color: var(--muted);
-  font-weight: 850;
 }
 
 .lobby-meta-chip {
   display: inline-flex;
   align-items: center;
-  gap: 0.42rem;
-  min-height: 40px;
-  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
-  border-radius: 14px;
-  padding: 0.55rem 0.75rem;
-  background: color-mix(in srgb, var(--surface) 34%, transparent);
-  color: var(--muted);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
 }
 
 .lobby-meta-chip strong {
@@ -288,22 +244,16 @@
 }
 
 .lobby-status-dot {
-  width: 0.55rem;
-  height: 0.55rem;
   border-radius: 999px;
   background: var(--danger);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 11%, transparent);
 }
 
 .lobby-status-dot.active {
   background: var(--good);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 11%, transparent);
 }
 
 .lobby-hero-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 0.7rem;
   flex-wrap: wrap;
   align-items: center;
 }
@@ -324,9 +274,6 @@
 
 .lobby-dashboard-grid {
   display: grid;
-  grid-template-columns: minmax(300px, 0.85fr) minmax(440px, 1.18fr) minmax(380px, 1fr);
-  gap: 1rem;
-  align-items: stretch;
 }
 
 .lobby-left-stack,
@@ -334,7 +281,6 @@
 .lobby-right-stack {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
   min-width: 0;
 }
 
@@ -346,21 +292,13 @@
 }
 
 .lobby-now-dashboard-card {
-  min-height: 268px;
 }
 
 .lobby-now-dashboard-body {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: 1rem;
-  align-items: center;
-  margin: 0.9rem 0 1rem;
 }
 
 .lobby-now-dashboard-body .artwork-md {
-  width: 112px;
-  height: 112px;
-  border-radius: 18px;
 }
 
 .lobby-now-dashboard-copy {
@@ -369,7 +307,6 @@
 
 .lobby-now-dashboard-copy strong {
   display: block;
-  font-size: 1.25rem;
   margin-bottom: 0.25rem;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -379,9 +316,7 @@
 .lobby-inline-controls {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 0.75rem;
-  margin: 0.4rem 0 0.8rem;
 }
 
 .icon-button {
@@ -412,7 +347,6 @@
 
 .lobby-progress-row.compact {
   grid-template-columns: minmax(0, 1fr);
-  margin: 0.6rem 0;
 }
 
 .lobby-volume-row,
@@ -451,12 +385,10 @@
 }
 
 .lobby-queue-dashboard-card {
-  min-height: 438px;
 }
 
 .lobby-queue-table {
   display: grid;
-  gap: 0.25rem;
   min-width: 0;
 }
 
@@ -469,10 +401,8 @@
 }
 
 .lobby-queue-table-head {
-  padding: 0.3rem 0.65rem;
   color: var(--faint);
   font-size: 0.75rem;
-  font-weight: 900;
 }
 
 .lobby-queue-scroll {
@@ -501,10 +431,6 @@
 }
 
 .lobby-queue-table-row {
-  min-height: 54px;
-  padding: 0.42rem 0.65rem;
-  border-radius: 14px;
-  border: 1px solid transparent;
   color: var(--muted);
   transition: transform 140ms ease,
     border-color 140ms ease,
@@ -519,18 +445,9 @@
 
 .lobby-queue-table-row.interactive:hover,
 .lobby-queue-table-row.interactive:focus-visible {
-  color: var(--text);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, var(--good) 4.5%, transparent));
-  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
-  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 95%, transparent);
-  transform: translateX(4px);
-  outline: none;
 }
 
 .lobby-queue-table-row.active {
-  color: var(--text);
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .lobby-queue-table-row.dragging {
@@ -539,10 +456,6 @@
 }
 
 .lobby-queue-table-row.drag-over {
-  border-color: color-mix(in srgb, var(--good) 72%, transparent);
-  box-shadow: inset 0 2px 0 color-mix(in srgb, var(--good) 86%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--good) 14%, transparent);
-  background: color-mix(in srgb, var(--good) 8%, transparent);
 }
 
 .queue-track-cell {
@@ -622,8 +535,6 @@
 }
 
 .lobby-permissions-card {
-  display: grid;
-  gap: 0.35rem;
 }
 
 .permission-row {
@@ -632,7 +543,6 @@
   align-items: center;
   gap: 0.8rem;
   width: 100%;
-  padding: 0.65rem 0;
   border: 0;
   border-radius: 0;
   background: transparent;
@@ -681,7 +591,6 @@
 }
 
 .lobby-members-dashboard-card {
-  min-height: 438px;
 }
 
 .member-section {
@@ -703,11 +612,6 @@
   grid-template-columns: auto minmax(0, 1fr) auto auto;
   gap: 0.7rem;
   align-items: center;
-  min-height: 48px;
-  padding: 0.55rem 0.65rem;
-  border: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
-  border-radius: 14px;
-  background: color-mix(in srgb, var(--text) 2.5%, transparent);
 }
 
 .member-avatar {
@@ -716,7 +620,6 @@
   display: inline-grid;
   place-items: center;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent), var(--accent-bright));
   font-weight: 950;
 }
 
@@ -739,7 +642,6 @@
 
 .member-kick-button {
   padding: 0.42rem 0.65rem;
-  border-radius: 999px;
   font-size: 0.78rem;
   font-weight: 900;
   background: color-mix(in srgb, var(--danger) 8%, transparent);
@@ -753,22 +655,16 @@
 
 .lobby-room-info-card,
 .lobby-activity-card {
-  min-height: 160px;
 }
 
 .room-stat-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.75rem;
-  margin-top: 0.8rem;
 }
 
 .room-stat-grid span {
   display: grid;
   gap: 0.2rem;
-  padding: 0.8rem;
-  border-radius: 16px;
-  background: color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 
 .room-stat-grid strong {
@@ -801,7 +697,6 @@
   align-items: center;
   padding: 0.75rem 1.25rem;
   border-top: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  background: color-mix(in srgb, var(--surface) 95%, transparent);
   backdrop-filter: blur(22px);
   z-index: 30;
 }
@@ -848,30 +743,22 @@
   overflow: hidden;
   border: 0;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--text) 16%, transparent);
 }
 
 .lobby-mini-progress progress::-webkit-progress-bar {
-  background: color-mix(in srgb, var(--text) 16%, transparent);
 }
 
 .lobby-mini-progress progress::-webkit-progress-value {
-  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--text)));
 }
 
 .lobby-mini-progress progress::-moz-progress-bar {
-  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--text)));
 }
 
 @media (max-width: 1320px) {
   .lobby-dashboard-grid {
-    grid-template-columns: 1fr 1fr;
   }
 
   .lobby-right-stack {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: 1.3fr 0.7fr;
   }
 }
 
@@ -887,12 +774,10 @@
 
   .lobby-dashboard-grid,
   .lobby-right-stack {
-    grid-template-columns: 1fr;
   }
 
   .lobby-dashboard-hero {
     flex-direction: column;
-    align-items: flex-start;
   }
 
   .lobby-mini-player {
@@ -907,7 +792,6 @@
 
 @media (max-width: 700px) {
   .lobby-dashboard-main {
-    padding: 0.75rem;
   }
 
   .lobby-queue-table-head {
@@ -924,13 +808,11 @@
   }
 
   .lobby-now-dashboard-body {
-    grid-template-columns: 1fr;
   }
 }
 
 @media (max-width: 980px) {
   .lobby-dashboard-hero {
-    grid-template-columns: 1fr;
   }
 
   .lobby-dashboard-shell.guest .lobby-dashboard-hero {
@@ -985,16 +867,11 @@
 
 /* 2026 lobby visual refresh: music-room hierarchy, reduced dashboard chrome. */
 .lobby-dashboard-main {
-  gap: 0.9rem;
-  padding: 1.1rem 1.25rem 1.35rem;
 }
 
 .lobby-dashboard-hero {
-  min-height: auto;
   grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
   gap: 1.25rem;
-  padding: 0.45rem 0.15rem 1rem;
   overflow: visible;
   border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
@@ -1030,9 +907,6 @@
 }
 
 .lobby-dashboard-title-row h1 {
-  font-size: clamp(2.35rem, 3.8vw, 4rem);
-  line-height: 1;
-  letter-spacing: -0.035em;
 }
 
 .lobby-dashboard-hero p.muted {
@@ -1050,29 +924,18 @@
 }
 
 .lobby-meta-row {
-  gap: 0;
-  margin-top: 0.35rem;
   font-weight: 600;
 }
 
 .lobby-meta-chip {
-  min-height: 0;
-  gap: 0.4rem;
-  padding: 0 0.85rem;
-  border: 0;
   border-right: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
-  border-radius: 0;
-  background: transparent;
   box-shadow: none;
-  color: var(--muted);
 }
 
 .lobby-meta-chip:first-child {
-  padding-left: 0;
 }
 
 .lobby-meta-chip:last-child {
-  border-right: 0;
 }
 
 .lobby-meta-chip strong {
@@ -1090,14 +953,9 @@
 }
 
 .lobby-hero-actions {
-  align-self: center;
-  gap: 0.55rem;
 }
 
 .lobby-hero-actions button {
-  min-height: 38px;
-  padding: 0.55rem 0.8rem;
-  border-radius: 8px;
   background: transparent;
   border-color: color-mix(in srgb, var(--text) 13%, transparent);
   box-shadow: none;
@@ -1115,8 +973,6 @@
 }
 
 .lobby-dashboard-grid {
-  grid-template-columns: minmax(300px, 0.82fr) minmax(440px, 1.35fr) minmax(320px, 0.9fr);
-  gap: 0.75rem;
   align-items: start;
 }
 
@@ -1130,14 +986,11 @@
 .lobby-queue-panel-redesign,
 .lobby-add-panel-redesign,
 .lobby-member-panel-redesign {
-  border-radius: 10px;
   border-color: color-mix(in srgb, var(--text) 9%, transparent);
-  background: color-mix(in srgb, var(--surface) 72%, transparent);
   box-shadow: none;
 }
 
 .lobby-control-card.panel {
-  padding: 0.9rem 1rem;
 }
 
 .lobby-control-card h2 {
@@ -1152,26 +1005,17 @@
 }
 
 .lobby-now-dashboard-body {
-  grid-template-columns: 116px minmax(0, 1fr);
-  gap: 0.95rem;
   align-items: center;
-  margin: 0.8rem 0 0.6rem;
 }
 
 .lobby-now-dashboard-body .artwork-md {
-  width: 116px;
-  height: 116px;
-  border-radius: 8px;
 }
 
 .lobby-now-dashboard-copy strong {
-  font-size: 1.12rem;
   font-weight: 700;
 }
 
 .lobby-inline-controls {
-  justify-content: flex-start;
-  margin: 0.5rem 0 0.7rem 126px;
 }
 
 .lobby-inline-controls .icon-button,
@@ -1182,18 +1026,14 @@
 }
 
 .lobby-inline-controls .round-control:not(:disabled) {
-  width: 48px;
-  height: 48px;
   color: var(--accent-contrast);
   background: var(--accent);
 }
 
 .lobby-progress-row.compact {
-  margin: 0.5rem 0;
 }
 
 .lobby-volume-row {
-  margin-top: 0.25rem;
 }
 
 .lobby-queue-dashboard-card {
@@ -1202,7 +1042,6 @@
 
 .lobby-queue-table {
   gap: 0;
-  margin-top: 0.65rem;
 }
 
 .lobby-queue-table-head {
@@ -1213,41 +1052,27 @@
 }
 
 .lobby-queue-table-row {
-  min-height: 52px;
-  padding: 0.45rem;
-  border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
-  border-radius: 0;
 }
 
 .lobby-queue-table-row:last-child {
-  border-bottom: 0;
 }
 
 .lobby-queue-table-row.interactive:hover,
 .lobby-queue-table-row.interactive:focus-visible {
   transform: none;
-  border-color: color-mix(in srgb, var(--text) 7%, transparent);
-  box-shadow: inset 2px 0 0 var(--accent);
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
 }
 
 .lobby-queue-table-row.active {
-  border-color: color-mix(in srgb, var(--text) 7%, transparent);
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
-  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .lobby-add-panel-redesign {
-  min-height: 0;
 }
 
 .lobby-add-tabs {
   gap: 0;
   padding: 0;
-  margin: 0.7rem 0;
   overflow: hidden;
-  border-radius: 7px;
   background: transparent;
 }
 
@@ -1264,8 +1089,6 @@
 }
 
 .lobby-add-tabs button.active {
-  background: color-mix(in srgb, var(--accent) 15%, transparent);
-  box-shadow: inset 0 -2px 0 var(--accent);
 }
 
 .lobby-search-form,
@@ -1282,16 +1105,10 @@
 }
 
 .member-dashboard-row {
-  min-height: 46px;
-  padding: 0.5rem 0;
-  border: 0;
   border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
-  border-radius: 0;
-  background: transparent;
 }
 
 .member-avatar {
-  background: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .member-kick-button {
@@ -1303,17 +1120,14 @@
 }
 
 .lobby-setting-block {
-  border-top: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   padding-top: 0.75rem;
   margin-top: 0.55rem;
 }
 
 .permission-row {
-  padding: 0.52rem 0;
 }
 
 .lobby-history-card {
-  min-height: 0;
 }
 
 .lobby-history-list {
@@ -1321,9 +1135,7 @@
 }
 
 .lobby-history-row {
-  grid-template-columns: 38px minmax(0, 1fr);
   gap: 0.65rem;
-  padding: 0.45rem 0;
   border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
   border-radius: 0;
   background: transparent;
@@ -1370,13 +1182,9 @@
 
 @media (max-width: 1320px) {
   .lobby-dashboard-grid {
-    grid-template-columns: minmax(280px, 0.9fr) minmax(400px, 1.25fr);
   }
 
   .lobby-right-stack {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
 
@@ -1556,7 +1364,6 @@
 }
 
 .lobby-queue-dashboard-card .section-heading {
-  align-items: start;
 }
 
 .lobby-queue-table {
@@ -1569,7 +1376,6 @@
   padding: 0.5rem 0.65rem;
   border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--text) 1.8%, transparent);
 }
 
 .lobby-queue-table-row:last-child {
@@ -1577,15 +1383,10 @@
 }
 
 .lobby-queue-table-row.active {
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-  border-left-color: color-mix(in srgb, var(--accent) 88%, transparent);
-  background: color-mix(in srgb, var(--accent) 9%, transparent);
 }
 
 .lobby-queue-table-row.interactive:hover,
 .lobby-queue-table-row.interactive:focus-visible {
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .lobby-add-panel-redesign {
@@ -1612,7 +1413,6 @@
   padding: 0.55rem 0.65rem;
   border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   border-radius: 7px;
-  background: color-mix(in srgb, var(--text) 1.8%, transparent);
 }
 
 .member-section + .member-section {
@@ -1625,7 +1425,6 @@
 }
 
 .lobby-permissions-card {
-  min-height: 350px;
 }
 
 .lobby-setting-block {
@@ -1779,113 +1578,69 @@
 .lobby-permissions-card {
   display: block;
   min-height: 0;
-  padding: 1rem 1.05rem;
 }
 
 .lobby-permissions-card > h2 {
-  margin: 0 0 0.85rem;
-  font-size: 1rem;
-  line-height: 1.2;
 }
 
 .lobby-permissions-card .lobby-setting-block {
   min-height: 48px;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 1rem;
-  padding: 0.62rem 0;
   border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .lobby-permissions-card .lobby-setting-block > div:first-child > strong,
 .lobby-permissions-card .permission-row strong {
-  font-size: 0.86rem;
-  line-height: 1.2;
-  font-weight: 650;
 }
 
 /* Keep the owner panel readable without turning every setting into a paragraph. */
 .lobby-permissions-card .lobby-setting-block > div:first-child > span,
 .lobby-permissions-card .permission-row > span:first-child > span {
-  margin-top: 0.16rem;
-  font-size: 0.72rem;
-  line-height: 1.25;
-  color: var(--muted);
 }
 
 .lobby-permissions-card .lobby-queue-limit-control {
   display: grid;
-  grid-template-columns: 74px auto;
-  align-items: center;
-  gap: 0.45rem;
 }
 
 .lobby-permissions-card .lobby-queue-limit-control input {
-  width: 74px;
-  min-width: 74px;
-  height: 36px;
-  padding: 0.35rem 0.55rem;
   text-align: center;
-  border-radius: 7px;
 }
 
 .lobby-permissions-card .lobby-queue-limit-control button {
-  min-height: 36px;
-  padding: 0.4rem 0.7rem;
-  border-radius: 7px;
 }
 
 .lobby-permissions-card .lobby-setting-block select {
-  width: 118px;
-  min-width: 118px;
-  height: 34px;
-  padding: 0.25rem 1.8rem 0.25rem 0.55rem;
-  border-radius: 6px;
 }
 
 /* Treat the permission switches as a compact settings list, like the concept. */
 .lobby-permissions-card .permission-row {
-  min-height: 44px;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 1rem;
-  padding: 0.55rem 0;
   border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .lobby-permissions-card .permission-row > span:first-child {
-  min-width: 0;
 }
 
 .lobby-permissions-card .toggle-pill {
-  width: 38px;
-  height: 22px;
-  padding: 3px;
   flex: 0 0 auto;
 }
 
 .lobby-permissions-card .toggle-pill span {
-  width: 16px;
-  height: 16px;
 }
 
 .lobby-permissions-card .toggle-pill.on span {
-  transform: translateX(16px);
 }
 
 .lobby-permissions-card .permission-subsetting {
-  margin: 0;
   padding: 0 0 0 0.9rem;
-  border-left: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .lobby-permissions-card .permission-subsetting .permission-row {
-  min-height: 42px;
-  padding: 0.48rem 0;
 }
 
 @media (min-width: 1321px) {
   /* The right column is intentionally terse at desktop sizes. */
   .lobby-permissions-card .permission-row > span:first-child > span {
-    max-width: 250px;
   }
 }
 
@@ -1934,8 +1689,6 @@
 
 .lobby-permissions-card .lobby-queue-limit-control {
   align-self: start;
-  grid-template-columns: 66px auto;
-  gap: 0.4rem;
 }
 
 .lobby-permissions-card .lobby-queue-limit-control input {
@@ -1976,25 +1729,15 @@
 }
 
 .lobby-permissions-card .toggle-pill {
-  width: 40px;
-  height: 22px;
-  padding: 3px;
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  background: color-mix(in srgb, var(--text) 10%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
 }
 
 .lobby-permissions-card .toggle-pill span {
-  width: 16px;
-  height: 16px;
 }
 
 .lobby-permissions-card .toggle-pill.on {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 78%, transparent), color-mix(in srgb, var(--accent-bright) 28%, transparent));
 }
 
 .lobby-permissions-card .toggle-pill.on span {
-  transform: translateX(16px);
 }
 
 .lobby-permissions-card .permission-subsetting {
@@ -2028,7 +1771,6 @@
 .lobby-permissions-card .lobby-queue-limit-stepper {
   display: inline-grid;
   grid-template-columns: 34px 58px 34px;
-  align-items: center;
   height: 36px;
   border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   border-radius: 12px;
@@ -2045,7 +1787,6 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  text-align: center;
   font-size: 1rem;
   font-weight: 650;
   color: var(--text);
@@ -2060,19 +1801,16 @@
 }
 
 .lobby-permissions-card .lobby-queue-limit-arrow {
-  display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 34px;
   height: 100%;
   padding: 0;
-  border: 0;
   border-radius: 0;
   background: transparent;
   color: color-mix(in srgb, var(--text) 90%, transparent);
   font-size: 1.12rem;
   font-weight: 700;
-  line-height: 1;
 }
 
 .lobby-permissions-card .lobby-queue-limit-arrow:hover:not(:disabled) {
@@ -2131,38 +1869,18 @@
 
 /* Guest permission toggle polish: solid amber track with centered thumb */
 .lobby-permissions-card .toggle-pill {
-  box-sizing: border-box;
-  width: 40px;
-  height: 22px;
-  padding: 2px;
-  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--text) 13%, transparent);
   box-shadow: none;
-  overflow: hidden;
 }
 
 .lobby-permissions-card .toggle-pill span {
   box-sizing: border-box;
-  width: 16px;
-  height: 16px;
-  margin: 0;
-  border: 0;
-  border-radius: 50%;
-  background: var(--text);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
-  transform: translateX(0);
 }
 
 .lobby-permissions-card .toggle-pill.on {
-  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
-  background: var(--accent);
   box-shadow: none;
 }
 
 .lobby-permissions-card .toggle-pill.on span {
-  transform: translateX(18px);
-  background: var(--text);
 }
 
 /* Final toggle geometry fix: pin the thumb to the track instead of translating it. */
@@ -2266,7 +1984,6 @@
   padding: 1rem 1.05rem 0.95rem;
   border-radius: 10px;
   border-color: color-mix(in srgb, var(--text) 8%, transparent);
-  background: color-mix(in srgb, var(--surface) 74%, transparent);
   box-shadow: none;
 }
 

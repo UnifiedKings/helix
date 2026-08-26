@@ -2,7 +2,7 @@
 
 Helix is a self-hosted music player, discovery tool, and shared listening system built around a Subsonic-compatible music library.
 
-It is meant for people who run their own music server but still want a more modern experience: search, queues, generated stations, playlists, and optional fulfillment for tracks that are not already in the library.
+It is meant for people who run their own music server but still want a more modern experience: search, queues, generated stations, playlists, shared listening, and optional fulfillment for tracks that are not already in the library.
 
 Helix is still early software. It is usable, but expect rough edges, breaking changes, and setup work.
 
@@ -11,7 +11,9 @@ Helix is still early software. It is usable, but expect rough edges, breaking ch
 - Search and play music from a Subsonic-compatible library
 - Play tracks, albums, playlists, and generated stations
 - Create stations from artists, artist collections, and tags
-- Run shared listening lobbies with guest queue controls
+- Run shared listening lobbies with guest queue and playback controls
+- Join lobbies with simple 5-letter codes and optional password protection
+- Mirror a Helix lobby into Discord voice with the optional [HelixBot](https://github.com/UnifiedKings/helixbot) companion project
 - Add missing music to your library through optional fulfillment providers
 - Repair metadata before finalized imports
 - Use custom station providers through a plugin system
@@ -19,23 +21,75 @@ Helix is still early software. It is usable, but expect rough edges, breaking ch
 
 ## Demo
 
-Add your GIFs to `docs/gifs/` and replace these placeholders as needed.
+### Search
 
-### Search and playback
+Search across your configured music sources and jump directly into playback, albums, artists, or queue actions.
 
-![Search and playback demo](docs/gifs/search-playback.gif)
+![Search demo](docs/gifs/search.gif)
 
 ### Stations
 
-![Station demo](docs/gifs/stations.gif)
+Create a generated station from the music you want to build around.
+
+![Station creation demo](docs/gifs/station_creation.gif)
+
+Start a station and let Helix begin filling the queue.
+
+![Station playback demo](docs/gifs/station_play.gif)
+
+Tune supported stations without rebuilding them from scratch.
+
+![Station tuning demo](docs/gifs/station_tune.gif)
+
+Stations continue filling ahead of playback automatically.
+
+![Station queue autofill demo](docs/gifs/queue_station_autofill.gif)
+
+### Queue control
+
+Add a result to the end of the current queue:
+
+![Add to end of queue demo](docs/gifs/add_to_queue_end.gif)
+
+Or insert it as the next track to play:
+
+![Play next demo](docs/gifs/add_to_queue_next.gif)
+
+Queue items can also be reordered directly:
+
+![Queue reordering demo](docs/gifs/queue_order_changing.gif)
+
+### Add to Subsonic
+
+If fulfillment is enabled, missing music can be requested from Helix and added back into the configured Subsonic library.
+
+![Add to Subsonic demo](docs/gifs/add_to_subsonic.gif)
+
+After fulfillment and metadata repair, the imported music appears in the library:
+
+![Imported album proof](docs/gifs/add_to_subsonic_proof.gif)
+
+Additional library views:
+
+![Imported album library view](docs/gifs/add_to_subsonic_proof_2.png)
+
+![Imported album track view](docs/gifs/add_to_subsonic_proof_3.png)
 
 ### Shared lobbies
 
-![Lobby demo](docs/gifs/lobbies.gif)
+Create a lobby and share its 5-letter join code with other listeners.
 
-### Add to library
+![Lobby creation demo](docs/gifs/lobby_creation.gif)
 
-![Add to library demo](docs/gifs/add-to-library.gif)
+Lobby hosts can configure guest permissions and other lobby behavior.
+
+![Lobby settings](docs/gifs/lobby_settings.png)
+
+Stations can be started directly inside a lobby and will populate its shared queue.
+
+![Lobby station demo](docs/gifs/lobby_stations.gif)
+
+Lobby playback itself is synchronized between connected clients. Everyone shares the same current track, play/pause state, seek position, and queue, with clients automatically following the lobby's authoritative playback position.
 
 ## How it works
 
@@ -45,7 +99,7 @@ Helix has three main parts:
 - **Frontend**: Web UI for search, playback, stations, playlists, lobbies, and settings.
 - **Music library**: A Subsonic-compatible server such as Navidrome.
 
-Helix is built with subsonic in mind. Helix can search it, stream from it, and optionally add requested tracks/albums back into it.
+Helix is built with Subsonic in mind. Helix can search it, stream from it, and optionally add requested tracks/albums back into it.
 
 ## Important behavior
 
@@ -179,7 +233,9 @@ Custom station providers are trusted code. They run inside the Helix container. 
 
 ## Lobbies
 
-Lobbies let other people join a shared listening session from an invite link.
+Lobbies are shared listening sessions where multiple people can join the same queue and playback state.
+
+Each lobby has a simple 5-letter join code and can optionally be password-protected. Hosts can share the code or a direct invite link with other listeners.
 
 Depending on permissions, guests can:
 
@@ -190,6 +246,17 @@ Depending on permissions, guests can:
 - seek within the current track
 - paste supported music links into the lobby queue
 
+Lobby playback state is synchronized between connected clients so everyone can listen along from the same position.
+
+## HelixBot
+
+[HelixBot](https://github.com/UnifiedKings/helixbot) is an optional companion project that connects a Helix lobby to a Discord voice channel.
+
+HelixBot links a Discord server to a Helix lobby using its 5-letter join code, joins Discord voice, and mirrors the lobby's current playback. Helix remains the source of truth: the bot follows track changes, pause/resume, seeks, and queue advancement rather than exposing separate Discord playback controls.
+
+HelixBot runs in its own Docker container and can be configured to connect to any reachable Helix instance.
+
+> **Project link:** [HelixBot](https://github.com/UnifiedKings/helixbot)
 
 ## Security notes
 
