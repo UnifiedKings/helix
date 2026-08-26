@@ -89,7 +89,7 @@ Stations can be started directly inside a lobby and will populate its shared que
 
 ![Lobby station demo](docs/gifs/lobby_stations.gif)
 
-Lobby playback itself is synchronized between connected clients. Everyone shares the same current track, play/pause state, seek position, and queue, with clients automatically following the lobby's authoritative playback position.
+Lobbies maintain synchronized playback state across connected clients.
 
 ## How it works
 
@@ -256,7 +256,6 @@ HelixBot links a Discord server to a Helix lobby using its 5-letter join code, j
 
 HelixBot runs in its own Docker container and can be configured to connect to any reachable Helix instance.
 
-> **Project link:** [HelixBot](https://github.com/UnifiedKings/helixbot)
 
 ## Security notes
 
