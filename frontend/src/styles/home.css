@@ -14,11 +14,11 @@
   align-items: center;
   min-height: clamp(285px, 28vw, 330px);
   padding: clamp(1.45rem, 2.2vw, 2rem);
-  border: 1px solid rgba(255,255,255,0.10);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   border-radius: 22px;
   background:
     radial-gradient(circle at 78% 48%, var(--accent-soft), transparent 33%),
-    #0a0e12;
+    var(--bg);
   box-shadow: 0 18px 45px rgba(0,0,0,0.18);
 }
 
@@ -30,12 +30,12 @@
   pointer-events: none;
   background:
     linear-gradient(90deg,
-      rgba(7,10,13,0.98) 0%,
-      rgba(7,10,13,0.94) 20%,
-      rgba(7,10,13,0.74) 48%,
-      rgba(7,10,13,0.38) 73%,
-      rgba(7,10,13,0.56) 100%),
-    linear-gradient(0deg, rgba(7,10,13,0.38), transparent 48%);
+      color-mix(in srgb, var(--bg) 98%, transparent) 0%,
+      color-mix(in srgb, var(--bg) 94%, transparent) 20%,
+      color-mix(in srgb, var(--bg) 74%, transparent) 48%,
+      color-mix(in srgb, var(--bg) 38%, transparent) 73%,
+      color-mix(in srgb, var(--bg) 56%, transparent) 100%),
+    linear-gradient(0deg, color-mix(in srgb, var(--bg) 38%, transparent), transparent 48%);
 }
 
 .home-session-card::after {
@@ -71,9 +71,9 @@
   max-width: 250px;
   aspect-ratio: 1;
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.16);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
   border-radius: 17px;
-  background: rgba(5,9,16,0.55);
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
   box-shadow:
     0 18px 44px rgba(0,0,0,0.46),
     0 0 0 1px rgba(0,0,0,0.28);
@@ -114,27 +114,46 @@
   text-transform: uppercase;
 }
 
+.home-session-title-row {
+  width: 100%;
+  min-width: 0;
+  overflow: visible;
+}
+
 .home-session-title-row h1 {
   margin: 0;
-  /*
-   * Long soundtrack titles can get absurdly tall here. Keep the hero headline
-   * prominent, but cap its maximum size and never let it consume the entire
-   * banner.
-   */
-  font-size: clamp(2.45rem, 3.8vw, 4.25rem);
-  letter-spacing: -0.045em;
-  line-height: 0.98;
+  padding: 0.06em 0 0.10em;
+  font-size: clamp(2rem, 2.8vw, 3.3rem);
+  letter-spacing: -0.035em;
+  line-height: 1.10;
   text-wrap: balance;
-  overflow: hidden;
+  overflow: visible;
+}
+
+/* Only genuinely long titles are clamped. Normal titles are never put inside
+   an overflow-hidden line clamp, which was clipping descenders such as g/y/p. */
+.home-session-title-row h1.is-long,
+.home-session-title-row h1.is-very-long {
   display: -webkit-box;
   -webkit-box-orient: vertical;
+  overflow: hidden;
   -webkit-line-clamp: 3;
   line-clamp: 3;
+  padding-bottom: 0.14em;
+}
+
+.home-session-title-row h1.is-long {
+  font-size: clamp(1.9rem, 2.55vw, 3rem);
+}
+
+.home-session-title-row h1.is-very-long {
+  font-size: clamp(1.75rem, 2.25vw, 2.65rem);
+  line-height: 1.12;
 }
 
 .home-session-copy > .muted {
   margin: 0;
-  color: rgba(242,244,246,0.80);
+  color: color-mix(in srgb, var(--text) 80%, transparent);
   font-size: clamp(0.98rem, 1.15vw, 1.12rem);
 }
 
@@ -148,15 +167,15 @@
 .home-session-actions .button-link {
   min-height: 44px;
   padding: 0.65rem 1.15rem;
-  border: 1px solid rgba(255,255,255,0.16);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
   border-radius: 10px;
-  background: rgba(8,12,16,0.48);
+  background: color-mix(in srgb, var(--bg) 48%, transparent);
   backdrop-filter: blur(10px);
 }
 
 .home-session-actions .button-link:hover {
-  border-color: rgba(255,255,255,0.26);
-  background: rgba(255,255,255,0.08);
+  border-color: color-mix(in srgb, var(--text) 26%, transparent);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .home-session-actions .button-link.primary {
@@ -179,7 +198,7 @@
 
 .home-session-meta span {
   padding: 0 1rem;
-  color: rgba(232,237,243,0.90);
+  color: color-mix(in srgb, var(--text) 90%, transparent);
   font-size: 0.86rem;
   font-weight: 800;
 }
@@ -190,7 +209,7 @@
 }
 
 .home-session-meta span + span {
-  border-left: 1px solid rgba(255,255,255,0.15);
+  border-left: 1px solid color-mix(in srgb, var(--text) 15%, transparent);
 }
 
 .home-quick-actions {
@@ -198,9 +217,9 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 0;
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.075);
+  border: 1px solid color-mix(in srgb, var(--text) 7.5%, transparent);
   border-radius: 14px;
-  background: rgba(255,255,255,0.018);
+  background: color-mix(in srgb, var(--text) 1.8%, transparent);
 }
 
 .home-quick-actions .home-quick-action {
@@ -219,7 +238,7 @@
 }
 
 .home-quick-actions .home-quick-action + .home-quick-action {
-  border-left: 1px solid rgba(255,255,255,0.09);
+  border-left: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
 }
 
 .home-quick-actions .home-quick-action:hover {
@@ -262,9 +281,9 @@
 
 .home-activity-section {
   overflow: hidden;
-  border: 1px solid rgba(255,255,255,0.075);
+  border: 1px solid color-mix(in srgb, var(--text) 7.5%, transparent);
   border-radius: 16px;
-  background: rgba(255,255,255,0.014);
+  background: color-mix(in srgb, var(--text) 1.4%, transparent);
 }
 
 .home-section-heading {
@@ -306,11 +325,11 @@
 }
 
 .home-activity-item + .home-activity-item {
-  border-top: 1px solid rgba(255,255,255,0.065);
+  border-top: 1px solid color-mix(in srgb, var(--text) 6.5%, transparent);
 }
 
 .home-activity-item:hover {
-  background: rgba(255,255,255,0.022);
+  background: color-mix(in srgb, var(--text) 2.2%, transparent);
 }
 
 .home-activity-item .artwork-sm {
@@ -326,7 +345,7 @@
   height: 40px;
   border-radius: 7px;
   color: var(--accent-strong);
-  background: rgba(184,106,31,0.10);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .home-activity-copy {
@@ -364,11 +383,11 @@
 
   .home-quick-actions .home-quick-action:nth-child(3) {
     border-left: 0;
-    border-top: 1px solid rgba(255,255,255,0.07);
+    border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
   }
 
   .home-quick-actions .home-quick-action:nth-child(4) {
-    border-top: 1px solid rgba(255,255,255,0.07);
+    border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
   }
 }
 
@@ -389,14 +408,20 @@
   }
 
   .home-session-title-row h1 {
-    font-size: clamp(2rem, 9vw, 3rem);
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
+    font-size: clamp(1.85rem, 8vw, 2.7rem);
+  }
+
+  .home-session-title-row h1.is-long {
+    font-size: clamp(1.7rem, 7vw, 2.35rem);
+  }
+
+  .home-session-title-row h1.is-very-long {
+    font-size: clamp(1.55rem, 6.3vw, 2.1rem);
   }
 
   .home-quick-actions .home-quick-action + .home-quick-action {
     border-left: 0;
-    border-top: 1px solid rgba(255,255,255,0.07);
+    border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
   }
 }
 
@@ -419,7 +444,7 @@
 
 .home-session-station {
   margin: -0.25rem 0 0;
-  color: rgba(232, 237, 243, 0.72);
+  color: color-mix(in srgb, var(--text) 72%, transparent);
   font-size: 0.92rem;
 }
 
@@ -434,7 +459,7 @@
 }
 
 .home-subsonic-action {
-  color: rgba(244, 246, 248, 0.94);
+  color: color-mix(in srgb, var(--text) 94%, transparent);
 }
 
 .home-subsonic-state {
@@ -443,10 +468,10 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.65rem 0.9rem;
-  border: 1px solid rgba(255,255,255,0.13);
+  border: 1px solid color-mix(in srgb, var(--text) 13%, transparent);
   border-radius: 10px;
-  color: rgba(235, 239, 243, 0.88);
-  background: rgba(8,12,16,0.42);
+  color: color-mix(in srgb, var(--text) 88%, transparent);
+  background: color-mix(in srgb, var(--bg) 42%, transparent);
   backdrop-filter: blur(10px);
   font-size: 0.86rem;
   font-weight: 800;
@@ -457,7 +482,7 @@
   place-items: center;
   width: 22px;
   height: 22px;
-  border: 1px solid rgba(214,125,38,0.42);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
   border-radius: 999px;
   color: var(--accent-strong);
 }

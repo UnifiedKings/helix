@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import secrets
+import string
 import time
 import urllib.parse
 
@@ -42,6 +43,7 @@ from ..api_schemas.lobbies import (
     LobbyUpdateRequest,
  )
 from ..settings_store import get_settings
+from ..security import hash_password, verify_password
 from ..art_sources import is_allowed_art_url
 from ..integrations.ytmusic import find_track
 from ..routers.search import (
@@ -135,7 +137,7 @@ def _lobby_art_url(lobby_id: str, item: SharedLobbyQueueItem | None) -> str:
 
 
 def _new_invite_code() -> str:
-    return secrets.token_urlsafe(18)
+    return "".join(secrets.choice(string.ascii_uppercase) for _ in range(5))
 
 
 def _new_guest_token() -> str:
@@ -543,6 +545,7 @@ def _to_lobby_state(db: Session, lobby: SharedLobby, actor: SharedLobbyMember | 
         name=lobby.name or "Shared Lobby",
         host_user_id=lobby.host_user_id,
         invite_code=lobby.invite_code if include_invite else None,
+        has_password=bool(lobby.password_hash),
         is_open=bool(lobby.is_open),
         guest_permissions=_load_permissions(lobby.permissions_json),
         guest_queue_limit=max(0, int(lobby.guest_queue_limit or 0)),
@@ -596,6 +599,7 @@ def create_lobby(payload: LobbyCreateRequest, db: Session = Depends(get_db), use
         host_user_id=user.id,
         name=name,
         invite_code=invite,
+        password_hash=hash_password(payload.password) if (payload.password or "").strip() else "",
         permissions_json=_dump_permissions(payload.guest_permissions),
         is_open=True,
         guest_queue_limit=max(0, int(payload.guest_queue_limit or 0)),
@@ -642,16 +646,20 @@ def list_host_lobbies(db: Session = Depends(get_db), user: User = Depends(get_cu
 
 @router.post("/join", response_model=LobbyJoinResponse)
 def join_lobby(payload: LobbyJoinRequest, response: Response, db: Session = Depends(get_db)):
-    invite = _clean_text(payload.invite_code, 128)
+    invite = _clean_text(payload.invite_code, 128).upper()
     nickname = _clean_text(payload.nickname, 80)
-    if not invite:
-        raise HTTPException(status_code=400, detail="invite_code is required")
+    if not re.fullmatch(r"[A-Z]{5}", invite):
+        raise HTTPException(status_code=400, detail="Lobby code must be exactly 5 letters")
     if not nickname:
         raise HTTPException(status_code=400, detail="nickname is required")
 
     lobby = db.execute(select(SharedLobby).where(SharedLobby.invite_code == invite)).scalar_one_or_none()
     if not lobby or not lobby.is_open:
         raise HTTPException(status_code=404, detail="Lobby not found or closed")
+    if lobby.password_hash:
+        supplied_password = payload.password or ""
+        if not supplied_password or not verify_password(supplied_password, lobby.password_hash):
+            raise HTTPException(status_code=403, detail="Incorrect lobby password")
 
     member = SharedLobbyMember(
         lobby_id=lobby.id,
@@ -674,7 +682,7 @@ def join_lobby(payload: LobbyJoinRequest, response: Response, db: Session = Depe
 
 @router.get("/join/{invite_code}/resume", response_model=LobbyStateResponse)
 def resume_joined_lobby(invite_code: str, request: Request, db: Session = Depends(get_db)):
-    invite = _clean_text(invite_code, 128)
+    invite = _clean_text(invite_code, 128).upper()
     if not invite:
         raise HTTPException(status_code=400, detail="invite_code is required")
 
@@ -1039,6 +1047,9 @@ def update_lobby(lobby_id: str, payload: LobbyUpdateRequest, db: Session = Depen
         lobby.guest_queue_limit = max(0, int(payload.guest_queue_limit))
     if payload.cleanup_after_days is not None:
         lobby.cleanup_after_days = max(0, min(365, int(payload.cleanup_after_days)))
+    if "password" in payload.model_fields_set:
+        password = (payload.password or "").strip()
+        lobby.password_hash = hash_password(password) if password else ""
     _touch_lobby(lobby)
     db.add(lobby)
     db.commit()

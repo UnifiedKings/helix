@@ -1,14 +1,14 @@
 /* Polished music-player shell pass, modeled after the approved mockup. */
 
 :root {
-  --danger: #ff647d;
-  --good: #35e09b;
+  --danger: var(--danger);
+  --good: var(--good);
 }
 
 .topbar {
   height: 64px;
-  background: rgba(5, 8, 15, 0.82);
-  border-bottom-color: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  border-bottom-color: color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 nav {
@@ -18,14 +18,14 @@ nav {
 nav a {
   padding: 0.55rem 0.95rem;
   font-size: 0.95rem;
-  color: rgba(248, 251, 255, 0.72);
+  color: color-mix(in srgb, var(--text) 72%, transparent);
 }
 
 nav a.active {
-  background: rgba(184, 106, 31, 0.18);
-  border: 1px solid rgba(184, 106, 31, 0.42);
-  color: white;
-  box-shadow: 0 0 28px rgba(184, 106, 31, 0.18);
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  color: var(--text);
+  box-shadow: 0 0 28px color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 .main-grid {
@@ -39,8 +39,8 @@ nav a.active {
 .queue-panel,
 .panel,
 .login-card {
-  background: linear-gradient(180deg, rgba(14, 20, 31, 0.92), rgba(8, 12, 20, 0.92));
-  border-color: rgba(255, 255, 255, 0.075);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 92%, transparent), color-mix(in srgb, var(--surface) 92%, transparent));
+  border-color: color-mix(in srgb, var(--text) 7.5%, transparent);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.30);
 }
 
@@ -63,8 +63,8 @@ nav a.active {
 .page-stack > div:first-child {
   padding: 1.65rem;
   border-radius: 24px;
-  background: linear-gradient(135deg, rgba(184, 106, 31, 0.30), rgba(10, 28, 30, 0.66)),
-    radial-gradient(circle at 20% 10%, rgba(255, 255, 255, 0.10), transparent 26%);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 30%, transparent), color-mix(in srgb, var(--surface) 88%, var(--accent) 12%)),
+    radial-gradient(circle at 20% 10%, color-mix(in srgb, var(--text) 10%, transparent), transparent 26%);
 }
 
 .queue-row {
@@ -75,14 +75,14 @@ nav a.active {
 }
 
 .queue-row.active {
-  background: linear-gradient(135deg, rgba(184, 106, 31, 0.25), rgba(184, 106, 31, 0.10));
-  border-color: rgba(184, 106, 31, 0.46);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.04);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 25%, transparent), color-mix(in srgb, var(--accent) 10%, transparent));
+  border-color: color-mix(in srgb, var(--accent) 46%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 4%, transparent);
 }
 
 .queue-row .danger {
-  background: rgba(255, 255, 255, 0.035);
-  border-color: rgba(255, 100, 125, 0.22);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 22%, transparent);
   border-radius: 14px;
 }
 
@@ -94,7 +94,7 @@ nav a.active {
 .tile-card {
   padding: 1rem;
   border-radius: 24px;
-  background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.035));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--text) 6%, transparent), color-mix(in srgb, var(--text) 3.5%, transparent));
 }
 
 .tile-card .primary {
@@ -106,7 +106,7 @@ nav a.active {
 }
 
 .playback-bar {
-  border-top-color: rgba(255, 255, 255, 0.09);
+  border-top-color: color-mix(in srgb, var(--text) 9%, transparent);
 }
 
 .now-playing {
@@ -152,20 +152,20 @@ nav a.active {
 
 .icon-button {
   min-width: 54px;
-  color: rgba(248, 251, 255, 0.88);
+  color: color-mix(in srgb, var(--text) 88%, transparent);
   background: transparent;
   border-color: transparent;
   box-shadow: none;
 }
 
 .icon-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+  border-color: color-mix(in srgb, var(--text) 8%, transparent);
   transform: translateY(-1px) scale(1.03);
 }
 
 .rating-button {
-  color: rgba(248, 251, 255, 0.78);
+  color: color-mix(in srgb, var(--text) 78%, transparent);
 }
 
 .transport-main {
@@ -182,7 +182,7 @@ nav a.active {
 }
 
 .scrub-row {
-  color: rgba(248, 251, 255, 0.72);
+  color: color-mix(in srgb, var(--text) 72%, transparent);
 }
 
 .scrub-input,
@@ -213,7 +213,7 @@ nav a.active {
 }
 
 .audio-error {
-  color: #ffb8c3;
+  color: color-mix(in srgb, var(--danger) 45%, var(--text));
 }
 
 @media (max-width: 1100px) {

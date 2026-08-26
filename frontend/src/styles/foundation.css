@@ -1,8 +1,8 @@
 :root {
   color-scheme: dark;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #070a10;
-  color: #f5f7fb;
+  background: var(--bg);
+  color: var(--text);
 }
 
 * {
@@ -25,7 +25,7 @@ button, input, select, textarea {
 
 button {
   border: 1px solid var(--border-soft);
-  background: rgba(255, 255, 255, 0.055);
+  background: color-mix(in srgb, var(--text) 5.5%, transparent);
   color: var(--text);
   padding: 0.7rem 0.95rem;
   cursor: pointer;
@@ -56,15 +56,15 @@ button.danger, .danger {
 input {
   width: 100%;
   border: 1px solid var(--border-soft);
-  background: rgba(7, 10, 16, 0.7);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
   color: var(--text);
   border-radius: 16px;
   padding: 0.9rem 1rem;
 }
 
 input:focus {
-  outline: 2px solid rgba(184, 106, 31, 0.28);
-  border-color: rgba(184, 106, 31, 0.85);
+  outline: 2px solid color-mix(in srgb, var(--accent) 28%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 85%, transparent);
 }
 
 a {
@@ -90,7 +90,7 @@ h2 {
 
 pre {
   overflow: auto;
-  background: rgba(7, 10, 16, 0.7);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
   border: 1px solid var(--border-soft);
   border-radius: 18px;
   padding: 1rem;
@@ -129,7 +129,7 @@ nav a {
 }
 
 nav a.active, nav a:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
   color: var(--text);
 }
 
@@ -139,7 +139,7 @@ nav a.active, nav a:hover {
 }
 
 .content-card, .queue-panel, .panel, .login-card {
-  background: rgba(15, 20, 29, 0.82);
+  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
   border: 1px solid var(--border-soft);
   border-radius: 28px;
   box-shadow: var(--shadow);
@@ -176,21 +176,21 @@ nav a.active, nav a:hover {
 }
 
 .error-banner {
-  background: rgba(255, 101, 122, 0.13);
-  border: 1px solid rgba(255, 101, 122, 0.45);
-  color: #ffd6dc;
+  background: color-mix(in srgb, var(--danger) 13%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 45%, transparent);
+  color: color-mix(in srgb, var(--danger) 28%, var(--text));
   padding: 0.75rem 1rem;
   border-radius: 16px;
 }
 
 .info-banner {
-  border: 1px solid rgba(184, 106, 31, 0.45);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   padding: 0.75rem 1rem;
   border-radius: 16px;
 }
 
 .info-banner a {
-  color: white;
+  color: var(--text);
   font-weight: 800;
   text-decoration: underline;
 }
@@ -204,7 +204,7 @@ nav a.active, nav a:hover {
 .search-form {
   padding: 0.35rem;
   border: 1px solid var(--border-soft);
-  background: rgba(7, 10, 16, 0.38);
+  background: color-mix(in srgb, var(--bg) 38%, transparent);
   border-radius: 20px;
 }
 
@@ -235,13 +235,13 @@ nav a.active, nav a:hover {
   gap: 0.9rem;
   padding: 0.85rem;
   border: 1px solid var(--border-soft);
-  background: rgba(255, 255, 255, 0.045);
+  background: color-mix(in srgb, var(--text) 4.5%, transparent);
   border-radius: 22px;
 }
 
 .media-card:hover {
-  border-color: rgba(184, 106, 31, 0.45);
-  background: rgba(255, 255, 255, 0.065);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--text) 6.5%, transparent);
 }
 
 .media-title, .title {
@@ -282,14 +282,14 @@ nav a.active, nav a:hover {
 
 .badge.good {
   color: var(--good);
-  border-color: rgba(58, 214, 143, 0.4);
-  background: rgba(58, 214, 143, 0.08);
+  border-color: color-mix(in srgb, var(--good) 40%, transparent);
+  background: color-mix(in srgb, var(--good) 8%, transparent);
 }
 
 .artwork {
   object-fit: cover;
   border-radius: 16px;
-  background: #101722;
+  background: var(--surface-soft);
   border: 1px solid var(--border-soft);
   display: grid;
   place-items: center;
@@ -464,7 +464,7 @@ nav a.active, nav a:hover {
   aspect-ratio: 1;
   border-radius: 20px;
   border: 1px solid var(--border-soft);
-  background: linear-gradient(135deg, #222e42, #171d28);
+  background: linear-gradient(135deg, var(--surface-raised), var(--surface));
   display: grid;
   place-items: center;
   font-size: 3rem;
@@ -570,8 +570,8 @@ nav a.active, nav a:hover {
 }
 
 .tab-button {
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
   color: inherit;
   border-radius: 999px;
   padding: 0.55rem 0.9rem;
@@ -579,8 +579,8 @@ nav a.active, nav a:hover {
 }
 
 .tab-button.active {
-  border-color: rgba(127, 220, 164, 0.7);
-  background: rgba(127, 220, 164, 0.18);
+  border-color: color-mix(in srgb, var(--good) 70%, transparent);
+  background: color-mix(in srgb, var(--good) 18%, transparent);
 }
 
 .mode-description {
@@ -592,10 +592,10 @@ nav a.active, nav a:hover {
 }
 
 .icon-button[data-active="true"] {
-  color: white;
-  border-color: rgba(184, 106, 31, 0.65);
-  background: linear-gradient(135deg, rgba(184, 106, 31, 0.45), rgba(0, 230, 168, 0.2));
-  box-shadow: 0 12px 30px rgba(184, 106, 31, 0.2);
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 45%, transparent), color-mix(in srgb, var(--good) 20%, transparent));
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--accent) 20%, transparent);
 }
 
 .transport-main {

@@ -20,6 +20,7 @@ class SharedLobby(Base):
 
     name: Mapped[str] = mapped_column(Text, nullable=False, default="")
     invite_code: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False, default="")
     is_open: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # Maximum number of pending queue items each guest may have. 0 = unlimited.
     guest_queue_limit: Mapped[int] = mapped_column(nullable=False, default=0)

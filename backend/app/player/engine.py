@@ -27,7 +27,7 @@ from ..user_settings_store import station_queue_ahead_for_user, queue_add_positi
 from ..integrations.subsonic import SubsonicClient
 from ..integrations.ytmusic import get_album_full, find_track
 from ..download_manager import DOWNLOAD_MANAGER, DownloadJob
-from ..stations_engine import generate_and_append_station_track
+from ..stations_engine import generate_and_append_station_track, generate_and_append_station_tracks
 from ..validators import is_valid_yt_video_id
 
 
@@ -461,17 +461,20 @@ async def _prefetch_next_station_item(user_id: str, station_id: str) -> None:
         finally:
             db.close()
 
-        # External I/O: generate missing items without holding DB.
-        for pos in missing_positions:
-            await generate_and_append_station_track(
+        # External I/O: fill the entire ahead window in one provider call. This
+        # avoids resolving the station seed/related pool again for each missing slot.
+        if missing_positions:
+            appended = await generate_and_append_station_tracks(
                 user_id,
                 station_id,
                 settings=settings,
+                count=len(missing_positions),
                 advance_to_new_item=False,
-                position=pos,
+                positions=missing_positions,
             )
-            from ..realtime import schedule_player_state_broadcast
-            schedule_player_state_broadcast(user_id)
+            if appended:
+                from ..realtime import schedule_player_state_broadcast
+                schedule_player_state_broadcast(user_id)
     except Exception as e:
         LOG.warning("[station-prefetch] failed user=%s station=%s err=%r", user_id, station_id, e)
     finally:
@@ -1723,12 +1726,12 @@ def queue_remove_item(queue_item_id: str, db: Session = Depends(get_db), user: U
 
 
 def queue_reorder(payload: PlayerQueueReorderRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Reorder the main playback queue while preserving the current track.
+    """Reorder upcoming queue items while keeping playback anchored.
 
-    The main queue drives fulfillment, so this endpoint only rewrites queue
-    positions and updates current_index to keep the same QueueItem playing. It
-    does not enqueue downloads directly; the normal state/stream fulfillment
-    path will consider only the new current/front item after the reorder.
+    Everything through the currently-playing item is an immutable prefix. Only
+    future items may change order. This keeps playback/history semantics stable
+    and also makes the server authoritative if the client sends a stale full
+    queue while station prefetch appends another item concurrently.
     """
     sess = _get_or_create_session(db, user.id)
 
@@ -1745,8 +1748,6 @@ def queue_reorder(payload: PlayerQueueReorderRequest, db: Session = Depends(get_
         raise HTTPException(status_code=400, detail="Reorder payload must include queue item ids")
 
     try:
-        # Hold a SQLite write lock while reading the queue and renumbering positions.
-        # This avoids collisions with concurrent station prefetch / append requests.
         db.rollback()
         db.connection().exec_driver_sql("BEGIN IMMEDIATE")
 
@@ -1761,22 +1762,29 @@ def queue_reorder(payload: PlayerQueueReorderRequest, db: Session = Depends(get_
             return _changed_state(db=db, user=user)
 
         by_id = {row.id: row for row in rows}
-        for item_id in requested_ids:
-            if item_id not in by_id:
-                db.rollback()
-                raise HTTPException(status_code=400, detail="Reorder payload contains an unknown queue item")
+        unknown = [item_id for item_id in requested_ids if item_id not in by_id]
+        if unknown:
+            db.rollback()
+            raise HTTPException(status_code=400, detail="Reorder payload contains an unknown queue item")
 
-        current_index = int(sess.current_index or 0)
-        current_item_id = rows[current_index].id if 0 <= current_index < len(rows) else ""
+        current_index = max(0, min(int(sess.current_index or 0), len(rows) - 1))
+        fixed_prefix = rows[: current_index + 1]
+        future_rows = rows[current_index + 1 :]
+        future_ids = {row.id for row in future_rows}
 
-        ordered_rows = [by_id[item_id] for item_id in requested_ids]
-        # Preserve items appended while the UI drag was in progress.
-        ordered_rows.extend(row for row in rows if row.id not in seen)
+        requested_future = [by_id[item_id] for item_id in requested_ids if item_id in future_ids]
+        requested_future_ids = {row.id for row in requested_future}
 
-        # Unique(session_user_id, position) means direct swaps can collide. Move
-        # everything out of the way first, then assign final contiguous positions.
+        # Preserve items appended by station generation while the drag was in
+        # progress, placing them after the explicitly ordered future items.
+        ordered_future = requested_future + [row for row in future_rows if row.id not in requested_future_ids]
+        ordered_rows = fixed_prefix + ordered_future
+
+        # QueueItem has UNIQUE(session_user_id, position), so first move every
+        # row to a collision-free range before assigning contiguous positions.
+        temporary_base = 1_000_000 + len(rows)
         for offset, row in enumerate(rows):
-            row.position = 100000 + offset
+            row.position = temporary_base + offset
             db.add(row)
         db.flush()
 
@@ -1784,16 +1792,22 @@ def queue_reorder(payload: PlayerQueueReorderRequest, db: Session = Depends(get_
             row.position = position
             db.add(row)
 
-        if current_item_id:
-            sess.current_index = next(
-                (index for index, row in enumerate(ordered_rows) if row.id == current_item_id),
-                min(current_index, len(ordered_rows) - 1),
-            )
-        else:
-            sess.current_index = min(current_index, len(ordered_rows) - 1)
-
+        sess.current_index = current_index
         db.add(sess)
         db.commit()
+        db.expire_all()
+
+        # Verify the database really contains the requested order. A failed
+        # persistence must be visible to the client instead of silently looking
+        # like a successful drag followed by a snap-back.
+        persisted = db.execute(
+            select(QueueItem)
+            .where(QueueItem.session_user_id == user.id)
+            .order_by(QueueItem.position.asc(), QueueItem.created_at.asc())
+        ).scalars().all()
+        if [row.id for row in persisted] != [row.id for row in ordered_rows]:
+            raise HTTPException(status_code=500, detail="Queue reorder did not persist")
+
     except HTTPException:
         raise
     except (IntegrityError, OperationalError) as exc:
@@ -1918,7 +1932,6 @@ async def ended(payload: Optional[PlayerActionRequest] = None, db: Session = Dep
     if bool(getattr(sess, "autoplay_enabled", True)) and (getattr(sess, "active_station_id", "") or ""):
         try:
             await generate_and_append_station_track(
-                db,
                 user.id,
                 str(getattr(sess, "active_station_id", "") or ""),
                 settings=settings,

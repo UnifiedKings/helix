@@ -6,7 +6,7 @@
   border: 1px solid var(--border-soft);
   border-radius: 24px;
   padding: 1rem;
-  background: linear-gradient(180deg, rgba(14, 20, 31, 0.92), rgba(8, 12, 20, 0.92));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 92%, transparent), color-mix(in srgb, var(--surface) 92%, transparent));
 }
 
 .station-builder-header,
@@ -40,14 +40,14 @@
   text-align: left;
   border-radius: 18px;
   border: 1px solid var(--border-soft);
-  background: rgba(255, 255, 255, 0.045);
+  background: color-mix(in srgb, var(--text) 4.5%, transparent);
 }
 
 .station-type-card:hover,
 .station-type-card.active {
   transform: translateY(-1px);
-  border-color: rgba(184, 106, 31, 0.52);
-  background: rgba(184, 106, 31, 0.12);
+  border-color: color-mix(in srgb, var(--accent) 52%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .station-type-card span {
@@ -90,7 +90,7 @@
   padding: 0.85rem;
   border: 1px solid var(--border-soft);
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.035);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 
 .station-config-label {
@@ -105,9 +105,9 @@
 .station-config-label strong {
   border-radius: 999px;
   padding: 0.12rem 0.45rem;
-  color: #fff1f3;
-  background: rgba(255, 101, 122, 0.18);
-  border: 1px solid rgba(255, 101, 122, 0.35);
+  color: color-mix(in srgb, var(--danger) 18%, var(--text));
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, transparent);
   font-size: 0.72rem;
   line-height: 1.4;
 }
@@ -137,7 +137,7 @@
   padding: 0.55rem 0.7rem;
   border: 1px solid var(--border-soft);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
   color: var(--muted);
   font-weight: 800;
 }
@@ -175,10 +175,10 @@
   align-items: center;
   margin: 0 0 0.85rem;
   padding: 0.75rem 0.85rem;
-  border: 1px solid rgba(184, 106, 31, 0.26);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
   border-radius: 16px;
-  background: radial-gradient(circle at 100% 0%, rgba(53, 217, 149, 0.11), transparent 42%),
-    rgba(184, 106, 31, 0.08);
+  background: radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--good) 11%, transparent), transparent 42%),
+    color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .queue-station-context strong,
@@ -209,7 +209,7 @@
   display: grid;
   place-items: center;
   padding: 1.25rem;
-  background: rgba(3, 6, 12, 0.62);
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
   backdrop-filter: blur(7px);
 }
 
@@ -220,10 +220,10 @@
   align-items: center;
   width: min(420px, 100%);
   padding: 1.15rem;
-  border: 1px solid rgba(184, 106, 31, 0.36);
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, transparent);
   border-radius: 24px;
-  background: radial-gradient(circle at 0% 0%, rgba(184, 106, 31, 0.28), transparent 42%),
-    linear-gradient(180deg, rgba(18, 24, 38, 0.98), rgba(8, 12, 20, 0.98));
+  background: radial-gradient(circle at 0% 0%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 42%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 98%, transparent), color-mix(in srgb, var(--surface) 98%, transparent));
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.5);
 }
 
@@ -253,7 +253,7 @@
   width: 3rem;
   height: 3rem;
   border-radius: 999px;
-  border: 3px solid rgba(255, 255, 255, 0.12);
+  border: 3px solid color-mix(in srgb, var(--text) 12%, transparent);
   border-top-color: var(--accent);
   border-right-color: var(--good);
   animation: station-start-spin 850ms linear infinite;

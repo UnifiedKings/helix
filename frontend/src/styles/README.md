@@ -15,5 +15,3 @@
 - `history.css` – history page
 - `tokens.css` – current theme variables; this is the first place to edit colors
 - `theme-amber.css` – final application-wide dark theme rules
-
-The files intentionally remain imported in the same cascade order as the former monolithic `styles.css`, so this refactor changes organization without intentionally changing appearance.

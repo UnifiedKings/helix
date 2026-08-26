@@ -37,7 +37,7 @@
   width: 150px;
   height: 150px;
   border-radius: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   object-fit: cover;
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.24);
 }
@@ -127,19 +127,19 @@
 }
 
 .playlist-editor-track-row:hover {
-  background: rgba(255, 255, 255, 0.026);
+  background: color-mix(in srgb, var(--text) 2.6%, transparent);
 }
 
 .playlist-editor-track-row.dragging {
   z-index: 2;
   opacity: 0.72;
-  background: rgba(201, 112, 24, 0.1);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
   transform: translateY(-2px) scale(1.002);
 }
 
 .playlist-editor-track-row.drop-target:not(.dragging) {
-  background: rgba(201, 112, 24, 0.07);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
@@ -147,7 +147,7 @@
   display: grid;
   place-items: center;
   width: 1.2rem;
-  color: rgba(248, 251, 255, 0.56);
+  color: color-mix(in srgb, var(--text) 56%, transparent);
   cursor: grab;
   user-select: none;
   font-size: 1rem;
@@ -221,7 +221,7 @@
 
 .playlist-track-menu-button:hover,
 .playlist-track-menu-button[aria-expanded="true"] {
-  background: rgba(255, 255, 255, 0.055);
+  background: color-mix(in srgb, var(--text) 5.5%, transparent);
   color: var(--text);
 }
 
@@ -234,7 +234,7 @@
   padding: 0.35rem;
   border: 1px solid var(--border-soft);
   border-radius: 9px;
-  background: rgba(12, 15, 18, 0.98);
+  background: color-mix(in srgb, var(--surface) 98%, transparent);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.42);
 }
 
@@ -246,12 +246,12 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #ff7d8f;
+  color: var(--danger);
   text-align: left;
 }
 
 .playlist-track-menu-popover button:hover {
-  background: rgba(255, 87, 113, 0.09);
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
 }
 
 .playlist-editor-add-panel {
@@ -261,7 +261,7 @@
   padding: 1rem;
   border: 1px solid var(--border-soft);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.018);
+  background: color-mix(in srgb, var(--text) 1.8%, transparent);
 }
 
 .playlist-editor-add-header {
@@ -503,9 +503,9 @@
 .playlists-new-button {
   min-height: 42px;
   padding: 0.65rem 1rem;
-  border: 1px solid rgba(201, 112, 24, 0.65);
+  border: 1px solid var(--accent-border);
   border-radius: 9px;
-  background: rgba(201, 112, 24, 0.04);
+  background: color-mix(in srgb, var(--accent) 4%, transparent);
   color: var(--text);
   font: inherit;
   font-weight: 650;
@@ -514,7 +514,7 @@
 }
 
 .playlists-new-button:hover {
-  background: rgba(201, 112, 24, 0.11);
+  background: var(--accent-soft);
   border-color: var(--accent);
 }
 
@@ -574,7 +574,7 @@
   position: relative;
   overflow: hidden;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.035);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 
 .playlist-library-art-link {
@@ -605,10 +605,10 @@
   width: 46px;
   height: 46px;
   padding: 0 0 0 2px;
-  border: 1px solid rgba(255, 255, 255, 0.13);
+  border: 1px solid color-mix(in srgb, var(--text) 13%, transparent);
   border-radius: 50%;
-  background: rgba(10, 12, 14, 0.88);
-  color: #fff;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  color: var(--text);
   font-size: 1rem;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
   cursor: pointer;
@@ -677,7 +677,7 @@
 
 .playlist-library-menu > summary:hover,
 .playlist-library-menu[open] > summary {
-  background: rgba(255, 255, 255, 0.055);
+  background: color-mix(in srgb, var(--text) 5.5%, transparent);
   color: var(--text);
 }
 

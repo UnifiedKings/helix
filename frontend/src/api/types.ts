@@ -346,6 +346,7 @@ export type LobbyState = {
   name: string
   host_user_id: string
   invite_code?: string | null
+  has_password: boolean
   is_open: boolean
   guest_permissions: LobbyPermissions
   guest_queue_limit: number
@@ -415,6 +416,8 @@ export type AdminUser = {
   username: string
   role: 'admin' | 'user' | string
   is_active: boolean
+  subsonic_import_override: boolean
+  can_import_subsonic: boolean
 }
 
 

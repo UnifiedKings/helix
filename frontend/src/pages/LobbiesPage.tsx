@@ -49,6 +49,7 @@ export function LobbiesPage() {
   const [lobbies, setLobbies] = useState<LobbyState[]>([])
   const [name, setName] = useState('Shared Lobby')
   const [guestCanAdd, setGuestCanAdd] = useState(false)
+  const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [error, setError] = useState('')
@@ -87,8 +88,9 @@ export function LobbiesPage() {
     setStatus('')
     try {
       const perms = { ...DEFAULT_GUEST_PERMISSIONS, can_add_to_queue: guestCanAdd }
-      const lobby = await api.createLobby(name.trim(), perms)
+      const lobby = await api.createLobby(name.trim(), perms, undefined, password)
       setLobbies((existing) => [lobby, ...existing.filter((item) => item.id !== lobby.id)])
+      setPassword('')
 
       if (autoCopyInvite && lobby.invite_code) {
         const url = inviteUrl(lobby)
@@ -125,7 +127,13 @@ export function LobbiesPage() {
     const url = inviteUrl(lobby)
     if (!url) return
     await navigator.clipboard.writeText(url)
-    setStatus('Invite link copied')
+    setStatus('Join link copied')
+  }
+
+  async function copyJoinCode(lobby: LobbyState) {
+    if (!lobby.invite_code) return
+    await navigator.clipboard.writeText(lobby.invite_code)
+    setStatus('Join code copied')
   }
 
   return (
@@ -145,6 +153,7 @@ export function LobbiesPage() {
         <h2>Create lobby</h2>
         <form className="lobby-create-form" onSubmit={create}>
           <input value={name} onChange={(event) => setName(event.target.value)} placeholder="Lobby name" />
+          <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password (optional)" autoComplete="new-password" maxLength={128} />
           <label className="lobby-checkbox">
             <input type="checkbox" checked={guestCanAdd} onChange={(event) => setGuestCanAdd(event.target.checked)} />
             <span>Guests can add to queue</span>
@@ -180,7 +189,7 @@ export function LobbiesPage() {
 
                 <div className="lobby-card-actions">
                   <Link className="button-link primary" to={`/lobby/${encodeURIComponent(lobby.id)}`}>Open</Link>
-                  <button type="button" onClick={() => void copyInvite(lobby)} disabled={!lobby.invite_code}>Copy invite</button>
+                  <button type="button" onClick={() => void copyInvite(lobby)} disabled={!lobby.invite_code}>Copy join link</button>
                   <button className="danger" type="button" onClick={() => void closeLobby(lobby)}>Close</button>
                 </div>
               </div>
@@ -188,10 +197,10 @@ export function LobbiesPage() {
               {lobby.invite_code ? (
                 <div className="lobby-invite-row">
                   <div>
-                    <span className="lobby-invite-label">Invite</span>
-                    <code className="lobby-invite-code">{inviteUrl(lobby)}</code>
+                    <span className="lobby-invite-label">Join code {lobby.has_password ? '• password protected' : ''}</span>
+                    <code className="lobby-invite-code lobby-short-code">{lobby.invite_code}</code>
                   </div>
-                  <button type="button" onClick={() => void copyInvite(lobby)}>Copy</button>
+                  <button type="button" onClick={() => void copyJoinCode(lobby)}>Copy code</button>
                 </div>
               ) : null}
             </article>

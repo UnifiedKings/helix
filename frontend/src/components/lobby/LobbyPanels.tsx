@@ -570,17 +570,20 @@ export function GuestPermissionsCard({
   onSetQueueLimit,
   onSetLobbyOpen,
   onSetCleanupAfterDays,
+  onSetPassword,
 }: {
   state: LobbyState | null;
   onToggle: (key: keyof LobbyPermissions) => void;
   onSetQueueLimit: (limit: number) => void;
   onSetLobbyOpen: (open: boolean) => void;
   onSetCleanupAfterDays: (days: number) => void;
+  onSetPassword: (password: string | null) => void;
 }) {
   const perms = state?.guest_permissions;
   const [queueLimitDraft, setQueueLimitDraft] = useState(
     String(state?.guest_queue_limit ?? 0),
   );
+  const [passwordDraft, setPasswordDraft] = useState("");
 
   useEffect(() => {
     setQueueLimitDraft(String(state?.guest_queue_limit ?? 0));
@@ -643,6 +646,51 @@ export function GuestPermissionsCard({
         </div>
       </div>
 
+
+      <div className="lobby-setting-block lobby-password-setting">
+        <div>
+          <strong>Lobby password</strong>
+          <span>
+            {state?.has_password
+              ? "This lobby requires a password for new guests. Enter a new one to change it, or remove protection."
+              : "Optionally require a password in addition to the 5-letter join code."}
+          </span>
+        </div>
+        <div className="lobby-password-control">
+          <input
+            type="password"
+            value={passwordDraft}
+            onChange={(event) => setPasswordDraft(event.target.value)}
+            placeholder={state?.has_password ? "New password" : "Set password"}
+            autoComplete="new-password"
+            maxLength={128}
+          />
+          <button
+            type="button"
+            className="secondary"
+            disabled={!passwordDraft.trim()}
+            onClick={() => {
+              onSetPassword(passwordDraft.trim());
+              setPasswordDraft("");
+            }}
+          >
+            {state?.has_password ? "Change" : "Set"}
+          </button>
+          {state?.has_password ? (
+            <button
+              type="button"
+              className="secondary"
+              onClick={() => {
+                onSetPassword(null);
+                setPasswordDraft("");
+              }}
+            >
+              Remove
+            </button>
+          ) : null}
+        </div>
+      </div>
+
       <div className="lobby-setting-block">
         <div>
           <strong>Automatic cleanup</strong>
@@ -664,7 +712,7 @@ export function GuestPermissionsCard({
         label="Allow new guests to join"
         description={
           state?.is_open
-            ? "New invite-link joins are currently allowed."
+            ? "New guests can currently join with this lobby code."
             : "Lobby is locked. Existing members can still reconnect."
         }
         checked={Boolean(state?.is_open)}

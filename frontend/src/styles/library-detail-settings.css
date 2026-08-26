@@ -6,7 +6,7 @@
   justify-content: center;
   min-height: 42px;
   border: 1px solid var(--border-soft);
-  background: rgba(255, 255, 255, 0.055);
+  background: color-mix(in srgb, var(--text) 5.5%, transparent);
   color: var(--text);
   border-radius: 14px;
   padding: 0.7rem 0.95rem;
@@ -14,8 +14,8 @@
 }
 
 .button-link:hover {
-  border-color: rgba(184, 106, 31, 0.85);
-  background: rgba(184, 106, 31, 0.13);
+  border-color: color-mix(in srgb, var(--accent) 85%, transparent);
+  background: color-mix(in srgb, var(--accent) 13%, transparent);
 }
 
 .compact-text-action {
@@ -43,7 +43,7 @@
   padding: 0.85rem;
   border-radius: 20px;
   border: 1px solid var(--border-soft);
-  background: rgba(255,255,255,0.045);
+  background: color-mix(in srgb, var(--text) 4.5%, transparent);
 }
 
 .artist-result-card > div {
@@ -53,8 +53,8 @@
 }
 
 .artist-result-card:hover {
-  border-color: rgba(184, 106, 31, 0.45);
-  background: rgba(255,255,255,0.07);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .artist-result-card strong,
@@ -82,8 +82,8 @@
   padding: 1.35rem;
   border-radius: 28px;
   border: 1px solid var(--border-soft);
-  background: radial-gradient(circle at 10% 10%, rgba(184, 106, 31, 0.24), transparent 34%),
-    linear-gradient(135deg, rgba(15, 23, 37, 0.95), rgba(6, 10, 17, 0.88));
+  background: radial-gradient(circle at 10% 10%, color-mix(in srgb, var(--accent) 24%, transparent), transparent 34%),
+    linear-gradient(135deg, color-mix(in srgb, var(--surface-raised) 95%, transparent), color-mix(in srgb, var(--bg) 88%, transparent));
   box-shadow: 0 24px 70px rgba(0,0,0,0.28);
 }
 
@@ -129,8 +129,8 @@
   align-items: center;
   padding: 0.65rem 0.75rem;
   border-radius: 18px;
-  border: 1px solid rgba(255,255,255,0.055);
-  background: rgba(255,255,255,0.035);
+  border: 1px solid color-mix(in srgb, var(--text) 5.5%, transparent);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 
 .detail-track-row:has(.artwork-sm) {
@@ -177,8 +177,8 @@
   gap: 0.5rem;
   padding: 0.85rem;
   border-radius: 18px;
-  border: 1px solid rgba(255,255,255,0.055);
-  background: rgba(255,255,255,0.035);
+  border: 1px solid color-mix(in srgb, var(--text) 5.5%, transparent);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 
 .setting-row span {
@@ -196,7 +196,7 @@
 .setting-row select {
   width: 100%;
   border: 1px solid var(--border-soft);
-  background: rgba(7, 10, 16, 0.7);
+  background: color-mix(in srgb, var(--bg) 70%, transparent);
   color: var(--text);
   border-radius: 14px;
   padding: 0.8rem 0.9rem;
@@ -243,14 +243,14 @@
 .lobby-page-stack .panel,
 .lobby-room-side .panel,
 .lobby-queue-panel {
-  background: linear-gradient(180deg, rgba(14, 20, 31, 0.94), rgba(8, 12, 20, 0.94));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 94%, transparent), color-mix(in srgb, var(--surface) 94%, transparent));
 }
 
 .lobby-hero {
   padding: 1.6rem;
   border-radius: 24px;
-  background: radial-gradient(circle at 80% 0%, rgba(53, 224, 155, 0.12), transparent 36%),
-    linear-gradient(135deg, rgba(184, 106, 31, 0.28), rgba(10, 28, 30, 0.66));
+  background: radial-gradient(circle at 80% 0%, color-mix(in srgb, var(--good) 12%, transparent), transparent 36%),
+    linear-gradient(135deg, color-mix(in srgb, var(--accent) 28%, transparent), color-mix(in srgb, var(--surface) 88%, var(--accent) 12%));
   border: 1px solid var(--border-soft);
 }
 
@@ -292,7 +292,7 @@
   border: 1px solid var(--border-soft);
   border-radius: 24px;
   padding: 1rem;
-  background: rgba(255,255,255,0.04);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
 }
 
 .lobby-card h3 {
@@ -312,13 +312,13 @@
   text-overflow: ellipsis;
   padding: 0.65rem;
   border-radius: 12px;
-  background: rgba(0,0,0,0.24);
+  background: color-mix(in srgb, var(--bg) 24%, transparent);
   color: var(--muted);
 }
 
 .lobby-join-page {
-  background: radial-gradient(circle at 12% 0%, rgba(184, 106, 31, 0.22), transparent 34%),
-    radial-gradient(circle at 100% 0%, rgba(53, 224, 155, 0.10), transparent 30%),
+  background: radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 34%),
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--good) 10%, transparent), transparent 30%),
     var(--bg);
 }
 
@@ -333,9 +333,9 @@
   gap: 1rem;
   padding: 1rem;
   padding-bottom: 1rem;
-  background: radial-gradient(circle at 3% 28%, rgba(184, 106, 31, 0.18), transparent 30%),
-    radial-gradient(circle at 100% 10%, rgba(53, 224, 155, 0.09), transparent 28%),
-    #05080f;
+  background: radial-gradient(circle at 3% 28%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 30%),
+    radial-gradient(circle at 100% 10%, color-mix(in srgb, var(--good) 9%, transparent), transparent 28%),
+    var(--bg);
 }
 
 .lobby-room-main,
@@ -354,7 +354,7 @@
   padding: 1rem 1.2rem;
   border: 1px solid var(--border-soft);
   border-radius: 26px;
-  background: rgba(12, 18, 29, 0.84);
+  background: color-mix(in srgb, var(--surface-raised) 84%, transparent);
 }
 
 .lobby-room-header h1 {
@@ -369,8 +369,8 @@
   padding: 1.25rem;
   border: 1px solid var(--border-soft);
   border-radius: 28px;
-  background: radial-gradient(circle at 70% 0%, rgba(184, 106, 31, 0.20), transparent 38%),
-    linear-gradient(180deg, rgba(14, 20, 31, 0.95), rgba(8, 12, 20, 0.95));
+  background: radial-gradient(circle at 70% 0%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 38%),
+    linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 95%, transparent), color-mix(in srgb, var(--surface) 95%, transparent));
   box-shadow: var(--shadow);
 }
 
@@ -421,7 +421,7 @@
 
 .lobby-queue-row.active {
   background: var(--accent-soft);
-  border-color: rgba(184, 106, 31, 0.34);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
 }
 
 .lobby-queue-row strong,
@@ -462,8 +462,8 @@
   height: 44px;
   border-radius: 12px;
   object-fit: cover;
-  background: rgba(255,255,255,0.06);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: color-mix(in srgb, var(--text) 6%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   box-shadow: 0 8px 20px rgba(0,0,0,0.22);
 }
 
@@ -500,7 +500,7 @@
   gap: 0.65rem;
   padding: 0.65rem;
   border-radius: 16px;
-  background: rgba(255,255,255,0.04);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
 }
 
 .lobby-member-row strong,
@@ -525,7 +525,7 @@
 
 .lobby-member-dot.active {
   background: var(--good);
-  box-shadow: 0 0 12px rgba(53, 224, 155, 0.45);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--good) 45%, transparent);
 }
 
 @media (max-width: 1020px) {
@@ -638,7 +638,7 @@
 }
 
 .album-import-notice-close:hover {
-  background: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
   color: var(--text);
 }
 
@@ -714,7 +714,7 @@
   align-items: center;
   gap: 0.45rem;
   margin-top: 0.8rem;
-  color: #67d69d;
+  color: var(--good);
   font-size: 0.88rem;
   font-weight: var(--weight-semibold);
 }
@@ -724,7 +724,7 @@
   width: 1.15rem;
   height: 1.15rem;
   place-items: center;
-  border: 1px solid rgba(74, 213, 143, 0.5);
+  border: 1px solid color-mix(in srgb, var(--good) 50%, transparent);
   border-radius: 50%;
   font-size: 0.72rem;
 }
@@ -749,7 +749,7 @@
 
 .album-subsonic-action {
   border-color: var(--border-soft);
-  background: rgba(255, 255, 255, 0.035);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 
 .album-back-link {
@@ -816,13 +816,13 @@
 .album-track-row {
   min-height: 3.25rem;
   padding: 0.45rem 0.8rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 5.5%, transparent);
   background: transparent;
   transition: background 120ms ease;
 }
 
 .album-track-row:hover {
-  background: rgba(255, 255, 255, 0.035);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 
 .album-track-number,
@@ -878,7 +878,7 @@
 }
 
 .album-icon-action:hover {
-  background: rgba(255, 255, 255, 0.065);
+  background: color-mix(in srgb, var(--text) 6.5%, transparent);
   color: var(--text);
 }
 

@@ -44,6 +44,30 @@ def init_db() -> None:
             conn.execute(text("ALTER TABLE shared_lobbies ADD COLUMN last_history_queue_item_id VARCHAR(36) NOT NULL DEFAULT ''"))
         if lobby_cols and "active_station_id" not in lobby_cols:
             conn.execute(text("ALTER TABLE shared_lobbies ADD COLUMN active_station_id VARCHAR(36) NOT NULL DEFAULT ''"))
+        if lobby_cols and "password_hash" not in lobby_cols:
+            conn.execute(text("ALTER TABLE shared_lobbies ADD COLUMN password_hash TEXT NOT NULL DEFAULT ''"))
+
+        # Human-friendly lobby codes are always five uppercase letters. Existing
+        # lobbies from older builds used long URL-safe invite tokens; migrate
+        # those in place while preserving the lobby/member records themselves.
+        if lobby_cols:
+            import secrets
+            import string
+            rows = conn.execute(text("SELECT id, invite_code FROM shared_lobbies")).fetchall()
+            used = {str(row[1] or "").upper() for row in rows if len(str(row[1] or "")) == 5 and str(row[1] or "").isalpha()}
+            alphabet = string.ascii_uppercase
+            for lobby_id, invite_code in rows:
+                current = str(invite_code or "")
+                if len(current) == 5 and current.isalpha() and current == current.upper():
+                    continue
+                for _ in range(100):
+                    code = "".join(secrets.choice(alphabet) for _ in range(5))
+                    if code not in used:
+                        used.add(code)
+                        conn.execute(text("UPDATE shared_lobbies SET invite_code = :code WHERE id = :id"), {"code": code, "id": lobby_id})
+                        break
+                else:
+                    raise RuntimeError("Could not generate unique five-letter lobby code during migration")
 
         lobby_queue_cols = {row[1] for row in conn.execute(text("PRAGMA table_info(shared_lobby_queue_items)")).fetchall()}
         if lobby_queue_cols and "station_id" not in lobby_queue_cols:

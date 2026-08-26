@@ -5,6 +5,7 @@ import logging
 import os
 import random
 import re
+import time
 from typing import Any
 
 from ...integrations.ytmusic import find_artist_by_name, get_artist_popular_songs, get_artist_related_artists
@@ -133,8 +134,41 @@ class SimilarArtistProvider(StationProvider):
     station_type = "similar_artist"
     display_name = "Similar Artist Radio"
     description = "Uses YouTube Music related artists and artist songs to recommend station tracks."
-    version = "1.2.0"
+    version = "1.2.1"
     builtin = True
+
+    def __init__(self) -> None:
+        # The registry keeps one provider instance alive, so a short-lived in-memory
+        # cache prevents repeated YTMusic lookups while a station fills its queue.
+        self._cache: dict[tuple[Any, ...], tuple[float, Any]] = {}
+
+    def _cache_ttl(self) -> float:
+        try:
+            return max(0.0, float(os.getenv("HELIX_YTMUSIC_STATION_CACHE_TTL_S", "600")))
+        except Exception:
+            return 600.0
+
+    def _cache_get(self, key: tuple[Any, ...]) -> Any:
+        row = self._cache.get(key)
+        if not row:
+            return None
+        expires_at, value = row
+        if expires_at <= time.monotonic():
+            self._cache.pop(key, None)
+            return None
+        return value
+
+    def _cache_put(self, key: tuple[Any, ...], value: Any) -> Any:
+        ttl = self._cache_ttl()
+        if ttl > 0:
+            # Bound cache growth for long-running self-hosted instances.
+            if len(self._cache) >= 512:
+                now = time.monotonic()
+                self._cache = {k: v for k, v in self._cache.items() if v[0] > now}
+                if len(self._cache) >= 512:
+                    self._cache.pop(next(iter(self._cache)), None)
+            self._cache[key] = (time.monotonic() + ttl, value)
+        return value
 
     def config_options(self) -> list[StationConfigOption]:
         return [
@@ -187,37 +221,63 @@ class SimilarArtistProvider(StationProvider):
         ]
 
     async def _yt_artist(self, artist: str) -> dict[str, Any]:
-        if not _clean(artist):
+        artist = _clean(artist)
+        if not artist:
             return {}
+        key = ("artist", _norm_artist(artist))
+        cached = self._cache_get(key)
+        if cached is not None:
+            return dict(cached)
         try:
-            return await asyncio.wait_for(
+            result = await asyncio.wait_for(
                 asyncio.to_thread(find_artist_by_name, artist, artist_limit=8),
                 timeout=float(os.getenv("HELIX_YTMUSIC_LOOKUP_TIMEOUT_S", "8")),
             ) or {}
+            if result:
+                self._cache_put(key, dict(result))
+            return result
         except Exception as exc:
             LOG.warning("Similar Artist YouTube Music lookup failed artist=%r err=%s", artist, exc)
             return {}
 
     async def _related_artists(self, browse_id: str, limit: int = 100) -> list[dict[str, Any]]:
+        browse_id = _clean(browse_id)
+        limit = max(1, int(limit))
         if not browse_id:
             return []
+        key = ("related", browse_id, limit)
+        cached = self._cache_get(key)
+        if cached is not None:
+            return [dict(row) for row in cached]
         try:
-            return await asyncio.wait_for(
-                asyncio.to_thread(get_artist_related_artists, browse_id, limit=max(1, int(limit))),
+            result = await asyncio.wait_for(
+                asyncio.to_thread(get_artist_related_artists, browse_id, limit=limit),
                 timeout=float(os.getenv("HELIX_YTMUSIC_RELATED_TIMEOUT_S", "10")),
             ) or []
+            if result:
+                self._cache_put(key, [dict(row) for row in result if isinstance(row, dict)])
+            return result
         except Exception as exc:
             LOG.warning("YouTube Music related artists failed browse_id=%s err=%s", browse_id, exc)
             return []
 
     async def _top_recordings(self, browse_id: str, limit: int) -> list[dict[str, Any]]:
+        browse_id = _clean(browse_id)
+        limit = max(1, int(limit))
         if not browse_id:
             return []
+        key = ("songs", browse_id, limit)
+        cached = self._cache_get(key)
+        if cached is not None:
+            return [dict(row) for row in cached]
         try:
-            return await asyncio.wait_for(
-                asyncio.to_thread(get_artist_popular_songs, browse_id, limit=max(1, int(limit))),
+            result = await asyncio.wait_for(
+                asyncio.to_thread(get_artist_popular_songs, browse_id, limit=limit),
                 timeout=float(os.getenv("HELIX_YTMUSIC_ARTIST_SONGS_TIMEOUT_S", "12")),
             ) or []
+            if result:
+                self._cache_put(key, [dict(row) for row in result if isinstance(row, dict)])
+            return result
         except Exception as exc:
             LOG.warning("YouTube Music artist songs failed browse_id=%s err=%s", browse_id, exc)
             return []

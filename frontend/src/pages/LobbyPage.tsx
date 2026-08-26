@@ -612,9 +612,14 @@ export function LobbyPage() {
     );
   }
 
+  async function setLobbyPassword(password: string | null) {
+    if (!state || !isHost) return;
+    await run(() => api.updateLobby(state.id, { password }));
+  }
+
   async function regenerateInvite() {
     if (!state || !isHost) return;
-    if (!window.confirm("Regenerate this lobby invite? The old invite will stop accepting new guests.")) return;
+    if (!window.confirm("Regenerate this lobby code? The old code and join link will stop accepting new guests.")) return;
     await run(() => api.regenerateLobbyInvite(state.id));
   }
 
@@ -814,6 +819,12 @@ export function LobbyPage() {
                   <strong>{queue.length}</strong>
                   in queue
                 </span>
+                {state?.invite_code ? (
+                  <span className="lobby-meta-chip lobby-code-chip" title="5-letter join code">
+                    <span aria-hidden="true">{state.has_password ? "🔒" : "#"}</span>
+                    <strong>{state.invite_code}</strong>
+                  </span>
+                ) : null}
                 <span className="lobby-meta-chip">
                   <span
                     className={`lobby-status-dot ${state?.is_open ? "active" : ""}`}
@@ -829,7 +840,7 @@ export function LobbyPage() {
                   type="button"
                   onClick={() => copyToClipboard(inviteLink)}
                 >
-                  Copy invite
+                  Copy join link
                 </button>
               ) : null}
               {isHost && inviteLink ? (
@@ -838,7 +849,7 @@ export function LobbyPage() {
                   className="secondary"
                   onClick={() => void regenerateInvite()}
                 >
-                  Regenerate invite
+                  Regenerate code
                 </button>
               ) : null}
               {isHost ? (
@@ -951,6 +962,7 @@ export function LobbyPage() {
                   onSetQueueLimit={(limit) => void setGuestQueueLimit(limit)}
                   onSetLobbyOpen={(open) => void setLobbyOpen(open)}
                   onSetCleanupAfterDays={(days) => void setCleanupAfterDays(days)}
+                  onSetPassword={(password) => void setLobbyPassword(password)}
                 />
               ) : (
                 <RoomInfoCard state={state} queueTotalMs={queueTotalMs} />

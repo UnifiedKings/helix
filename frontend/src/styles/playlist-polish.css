@@ -4,17 +4,17 @@
   position: relative;
   overflow: hidden;
   border-radius: 28px;
-  border: 1px solid rgba(184, 106, 31, 0.20);
-  background: radial-gradient(circle at 8% 50%, rgba(184, 106, 31, 0.28), transparent 34%),
-    radial-gradient(circle at 94% 14%, rgba(35, 190, 177, 0.10), transparent 34%),
-    linear-gradient(135deg, rgba(31, 28, 75, 0.96), rgba(7, 18, 27, 0.92));
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  background: radial-gradient(circle at 8% 50%, color-mix(in srgb, var(--accent) 28%, transparent), transparent 34%),
+    radial-gradient(circle at 94% 14%, color-mix(in srgb, var(--accent-bright) 10%, transparent), transparent 34%),
+    linear-gradient(135deg, color-mix(in srgb, var(--surface-raised) 88%, var(--accent) 12%), color-mix(in srgb, var(--surface) 92%, transparent));
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22);
 }
 
 .playlist-editor-page .playlist-editor-hero::before {
   content: "";
   position: absolute;
-  background: radial-gradient(circle, rgba(255,255,255,0.09) 0 1px, transparent 1.5px);
+  background: radial-gradient(circle, color-mix(in srgb, var(--text) 9%, transparent) 0 1px, transparent 1.5px);
   background-size: 22px 22px;
   transform: rotate(-7deg);
   pointer-events: none;
@@ -24,7 +24,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(255,255,255,0.055), transparent 26%, transparent 72%, rgba(53, 217, 149, 0.035));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--text) 5.5%, transparent), transparent 26%, transparent 72%, color-mix(in srgb, var(--good) 3.5%, transparent));
   pointer-events: none;
 }
 
@@ -41,13 +41,13 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  color: rgba(214, 224, 255, 0.82);
+  color: color-mix(in srgb, var(--muted) 82%, transparent);
   font-size: 0.86rem;
   letter-spacing: 0.01em;
 }
 
 .playlist-editor-page .back-link:hover {
-  color: white;
+  color: var(--text);
 }
 
 .playlist-editor-heading {
@@ -57,13 +57,13 @@
 
 .playlist-editor-heading .artwork-md {
   border-radius: 18px;
-  border: 1px solid rgba(255,255,255,0.16);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
   box-shadow: 0 18px 36px rgba(0,0,0,0.28),
-    0 0 0 5px rgba(255,255,255,0.035);
+    0 0 0 5px color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 
 .playlist-editor-heading .eyebrow {
-  color: rgba(181, 196, 224, 0.88);
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
   letter-spacing: 0.16em;
 }
 
@@ -77,7 +77,7 @@
 
 .playlist-editor-heading p {
   margin: 0;
-  color: rgba(207, 218, 239, 0.88);
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
 }
 
 .playlist-editor-actions {
@@ -95,7 +95,7 @@
 }
 
 .playlist-editor-actions .primary {
-  box-shadow: 0 16px 34px rgba(184, 106, 31, 0.28);
+  box-shadow: 0 16px 34px color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 @media (max-width: 860px) {
@@ -338,7 +338,7 @@ button.subsonic-add-action > span::after,
   top: 50%;
   transform: translate(-50%, -52%);
   display: block;
-  color: #ddd7ff;
+  color: color-mix(in srgb, var(--accent) 24%, var(--text));
   font-family: Arial, Helvetica, sans-serif;
   font-size: 0.78rem;
   font-weight: 900;
@@ -354,7 +354,7 @@ button.subsonic-add-action:hover > span::after,
 button.subsonic-add-action:focus-visible > span::after,
 .icon-button.subsonic-add-action:focus-visible > span::after,
 .compact-action.subsonic-add-action:focus-visible > span::after {
-  color: white;
+  color: var(--text);
 }
 
 /* S+ add-to-Subsonic button centering final: use an SVG glyph so browser text metrics cannot offset it. */
@@ -472,7 +472,7 @@ button.subsonic-add-action > .splus-mark::after,
   align-items: center;
   gap: 0.9rem;
   padding: 0.75rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.06);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 .lobby-setting-block > div:first-child > strong,
@@ -503,9 +503,9 @@ button.subsonic-add-action > .splus-mark::after,
 }
 
 .member-dashboard-entry.editing {
-  border: 1px solid rgba(184, 106, 31, 0.22);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-radius: 16px;
-  background: rgba(184, 106, 31, 0.045);
+  background: color-mix(in srgb, var(--accent) 4.5%, transparent);
 }
 
 .member-dashboard-entry.editing .member-dashboard-row {
@@ -552,7 +552,7 @@ button.subsonic-add-action > .splus-mark::after,
   display: grid;
   gap: 0.15rem;
   padding-top: 0.65rem;
-  border-top: 1px solid rgba(255,255,255,0.07);
+  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .member-permission-editor .permission-row {
@@ -590,7 +590,7 @@ button.subsonic-add-action > .splus-mark::after,
   align-items: center;
   gap: 0.7rem;
   padding: 0.55rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .lobby-history-row:last-child {

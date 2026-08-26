@@ -4,7 +4,7 @@
   width: min(100%, 1380px);
   margin: 0 auto;
   padding: 1.25rem 1.5rem 2rem;
-  color: var(--text, #f5f5f5);
+  color: var(--text);
 }
 
 .history-page-header {
@@ -13,13 +13,13 @@
   justify-content: space-between;
   gap: 2rem;
   padding: .2rem .1rem 1rem;
-  border-bottom: 1px solid rgba(255,255,255,.095);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 9.5%, transparent);
 }
 
 .history-page-header .eyebrow {
   display: block;
   margin-bottom: .32rem;
-  color: var(--accent, #c97822);
+  color: var(--accent);
 }
 
 .history-page-header h1 {
@@ -33,13 +33,13 @@
   display: flex;
   align-items: baseline;
   gap: .48rem;
-  color: var(--muted, #9aa1aa);
+  color: var(--muted);
   white-space: nowrap;
   padding-bottom: .28rem;
 }
 
 .history-page-count strong {
-  color: var(--text, #f5f5f5);
+  color: var(--text);
   font-size: 1.55rem;
   font-weight: 650;
 }
@@ -54,7 +54,7 @@
   gap: .8rem .9rem;
   align-items: end;
   padding: 1rem .1rem 1.05rem;
-  border-bottom: 1px solid rgba(255,255,255,.095);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 9.5%, transparent);
 }
 
 /* Keep the filter area deliberately two-tiered on desktop so none of the
@@ -77,7 +77,7 @@
 }
 
 .history-field > span {
-  color: var(--muted, #9aa1aa);
+  color: var(--muted);
   font-size: .72rem;
   font-weight: 650;
   letter-spacing: .015em;
@@ -89,10 +89,10 @@
   min-width: 0;
   height: 42px;
   padding: 0 .78rem;
-  border: 1px solid rgba(255,255,255,.13);
+  border: 1px solid color-mix(in srgb, var(--text) 13%, transparent);
   border-radius: 6px;
-  background: rgba(8,11,14,.72);
-  color: var(--text, #f5f5f5);
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  color: var(--text);
   font: inherit;
   font-size: .9rem;
   outline: none;
@@ -101,12 +101,12 @@
 
 .history-field input:focus,
 .history-field select:focus {
-  border-color: color-mix(in srgb, var(--accent, #c97822) 72%, transparent);
-  background: rgba(12,15,19,.92);
+  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
 }
 
 .history-field input::placeholder {
-  color: color-mix(in srgb, var(--muted, #9aa1aa) 85%, transparent);
+  color: color-mix(in srgb, var(--muted) 85%, transparent);
 }
 
 .history-filter-actions {
@@ -125,13 +125,13 @@
 .history-clear-button {
   border-color: transparent !important;
   background: transparent !important;
-  color: var(--muted, #9aa1aa) !important;
+  color: var(--muted) !important;
   padding-inline: .55rem !important;
 }
 
 .history-clear-button:not(:disabled):hover {
-  color: var(--text, #f5f5f5) !important;
-  background: rgba(255,255,255,.035) !important;
+  color: var(--text) !important;
+  background: color-mix(in srgb, var(--text) 3.5%, transparent) !important;
 }
 
 .history-log-section {
@@ -154,7 +154,7 @@
 }
 
 .history-list-heading span {
-  color: var(--muted, #9aa1aa);
+  color: var(--muted);
   font-size: .8rem;
 }
 
@@ -173,8 +173,8 @@
 .history-table-head {
   min-height: 32px;
   padding: 0 .45rem;
-  border-bottom: 1px solid rgba(255,255,255,.10);
-  color: var(--muted, #9aa1aa);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  color: var(--muted);
   font-size: .68rem;
   font-weight: 650;
   letter-spacing: .055em;
@@ -185,12 +185,12 @@
   position: relative;
   min-height: 60px;
   padding: .55rem .45rem;
-  border-bottom: 1px solid rgba(255,255,255,.075);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 7.5%, transparent);
   transition: background .14s ease;
 }
 
 .history-table-row:hover {
-  background: rgba(255,255,255,.025);
+  background: color-mix(in srgb, var(--text) 2.5%, transparent);
 }
 
 .history-track-cell {
@@ -222,22 +222,22 @@
 .history-track-cell strong {
   font-size: .88rem;
   font-weight: 650;
-  color: var(--text, #f5f5f5);
+  color: var(--text);
 }
 
 .history-track-cell span {
   margin-top: .12rem;
-  color: var(--muted, #9aa1aa);
+  color: var(--muted);
   font-size: .76rem;
 }
 
 .history-source-badge {
   justify-self: start;
   padding: .22rem .46rem;
-  border: 1px solid rgba(255,255,255,.10);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   border-radius: 999px;
-  background: rgba(255,255,255,.035);
-  color: #c4c9cf;
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
+  color: var(--muted);
   font-size: .7rem;
   white-space: nowrap;
 }
@@ -247,7 +247,7 @@
 .history-date-cell,
 .history-station-cell {
   min-width: 0;
-  color: var(--muted, #9aa1aa);
+  color: var(--muted);
   font-size: .76rem;
 }
 
@@ -260,7 +260,7 @@
 }
 
 .history-duration-cell {
-  color: #b8bec5;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -286,30 +286,30 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: #c6cbd1;
+  color: var(--muted);
   font-size: .75rem;
   font-weight: 550;
   white-space: nowrap;
 }
 
 .history-icon-action > span:first-child {
-  color: #d7dbe0;
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
   font-size: 1rem;
   line-height: 1;
 }
 
 .history-icon-action:not(:disabled):hover,
 .history-icon-action:not(:disabled):focus-visible {
-  color: var(--text, #fff);
+  color: var(--text);
   background: transparent;
 }
 
 .history-import-action {
-  color: #d8c1a8;
+  color: color-mix(in srgb, var(--accent) 28%, var(--text));
 }
 
 .history-import-action > span:first-child {
-  color: var(--accent, #c97822);
+  color: var(--accent);
 }
 
 .history-icon-action:disabled {
@@ -319,7 +319,7 @@
 
 .history-empty-state {
   margin: 1.5rem 0;
-  color: var(--muted, #9aa1aa);
+  color: var(--muted);
 }
 
 .history-load-more {

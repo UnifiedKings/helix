@@ -15,6 +15,7 @@ class LobbyPermissions(BaseModel):
 
 class LobbyCreateRequest(BaseModel):
     name: str = "Shared Lobby"
+    password: Optional[str] = Field(default=None, max_length=128)
     guest_permissions: LobbyPermissions = Field(default_factory=LobbyPermissions)
     guest_queue_limit: int = Field(default=0, ge=0, le=100)
     cleanup_after_days: int = Field(default=0, ge=0, le=365)
@@ -22,6 +23,7 @@ class LobbyCreateRequest(BaseModel):
 
 class LobbyUpdateRequest(BaseModel):
     name: Optional[str] = None
+    password: Optional[str] = Field(default=None, max_length=128)
     is_open: Optional[bool] = None
     guest_permissions: Optional[LobbyPermissions] = None
     guest_queue_limit: Optional[int] = Field(default=None, ge=0, le=100)
@@ -31,6 +33,7 @@ class LobbyUpdateRequest(BaseModel):
 class LobbyJoinRequest(BaseModel):
     invite_code: str
     nickname: str
+    password: Optional[str] = Field(default=None, max_length=128)
 
 
 class LobbyQueueAddRequest(BaseModel):
@@ -118,6 +121,7 @@ class LobbyStateResponse(BaseModel):
     name: str
     host_user_id: str
     invite_code: Optional[str] = None
+    has_password: bool = False
     is_open: bool
     guest_permissions: LobbyPermissions
     guest_queue_limit: int = 0

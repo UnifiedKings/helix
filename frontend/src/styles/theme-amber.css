@@ -15,26 +15,26 @@ button {
 
 button:hover:not(:disabled) {
   border-color: var(--accent-border);
-  background: rgba(184, 106, 31, 0.10);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 button.primary {
   color: var(--accent-contrast);
   background: var(--accent);
-  border-color: rgba(226, 151, 70, 0.35);
-  box-shadow: 0 8px 20px rgba(96, 48, 10, 0.24);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 button.primary:hover:not(:disabled) {
   background: var(--accent-strong);
-  border-color: rgba(236, 171, 99, 0.50);
+  border-color: color-mix(in srgb, var(--accent-bright) 50%, transparent);
 }
 
 input:focus,
 select:focus,
 textarea:focus {
-  outline: 2px solid rgba(184, 106, 31, 0.20);
-  border-color: rgba(209, 132, 50, 0.70);
+  outline: 2px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 70%, transparent);
 }
 
 .app-shell-with-sidebar {
@@ -72,7 +72,7 @@ textarea:focus {
 }
 
 .sidebar-account-panel {
-  border-top-color: rgba(255,255,255,0.07) !important;
+  border-top-color: color-mix(in srgb, var(--text) 7%, transparent) !important;
 }
 
 .dashboard-content-card {
@@ -115,7 +115,7 @@ textarea:focus {
 .stations-hero p {
   margin: 0;
   max-width: 650px;
-  color: #a9aaa7;
+  color: var(--muted);
   line-height: 1.5;
 }
 
@@ -143,13 +143,13 @@ textarea:focus {
 }
 
 .station-toolbar .station-toolbar-actions label {
-  color: #969793;
+  color: var(--muted);
   font-size: 0.86rem;
 }
 
 .station-toolbar select {
   border-radius: 9px;
-  border-color: rgba(255,255,255,0.10);
+  border-color: color-mix(in srgb, var(--text) 10%, transparent);
 }
 
 .station-grid-redesign {
@@ -159,7 +159,7 @@ textarea:focus {
 .station-card-redesign {
   position: relative;
   overflow: visible;
-  border: 1px solid rgba(255,255,255,0.085);
+  border: 1px solid color-mix(in srgb, var(--text) 8.5%, transparent);
   box-shadow: none;
   transition: transform 150ms ease, border-color 150ms ease, background 150ms ease;
 }
@@ -178,12 +178,12 @@ textarea:focus {
 
 .station-art-wrap::after {
   inset: 58% 0 0;
-  background: linear-gradient(180deg, transparent, rgba(9,11,14,0.60));
+  background: linear-gradient(180deg, transparent, color-mix(in srgb, var(--bg) 60%, transparent));
 }
 
 .station-floating-play {
-  border: 1px solid rgba(238, 170, 98, 0.35);
-  color: #fff9f0;
+  border: 1px solid color-mix(in srgb, var(--accent-bright) 35%, transparent);
+  color: var(--accent-contrast);
   opacity: 0.94;
 }
 
@@ -199,7 +199,7 @@ textarea:focus {
 .station-type-badge {
   align-self: flex-start;
   margin: 0 0 0.55rem;
-  border: 1px solid rgba(209, 132, 50, 0.28);
+  border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
   border-radius: 5px;
   font-size: 0.64rem;
   font-weight: 800;
@@ -250,7 +250,7 @@ textarea:focus {
 
 .station-card-menu summary:hover {
   color: var(--accent-bright);
-  background: rgba(184, 106, 31, 0.09);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
 }
 
 .station-card-menu-popover {
@@ -260,7 +260,7 @@ textarea:focus {
   z-index: 8;
   width: 150px;
   padding: 0.35rem;
-  border: 1px solid rgba(255,255,255,0.10);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   border-radius: 10px;
   background: var(--surface-raised);
   box-shadow: 0 16px 38px rgba(0,0,0,0.42);
@@ -277,12 +277,12 @@ textarea:focus {
 
 .station-card-menu-popover button:hover:not(:disabled) {
   transform: none;
-  background: rgba(255,255,255,0.055);
+  background: color-mix(in srgb, var(--text) 5.5%, transparent);
 }
 
 .queue-panel-redesign {
   top: 1rem;
-  border: 1px solid rgba(255,255,255,0.085);
+  border: 1px solid color-mix(in srgb, var(--text) 8.5%, transparent);
   box-shadow: none;
 }
 
@@ -321,7 +321,7 @@ textarea:focus {
 
 .queue-row-redesign.active .queue-main strong,
 .queue-row-redesign.active .queue-duration {
-  color: #e6a35c;
+  color: var(--accent-bright);
 }
 
 .queue-row-redesign .artwork-sm {
@@ -349,13 +349,13 @@ textarea:focus {
 }
 
 .queue-summary {
-  border-top-color: rgba(255,255,255,0.06) !important;
+  border-top-color: color-mix(in srgb, var(--text) 6%, transparent) !important;
   color: var(--faint) !important;
 }
 
 .playback-bar {
   row-gap: 0.52rem;
-  border-top: 1px solid rgba(255,255,255,0.085);
+  border-top: 1px solid color-mix(in srgb, var(--text) 8.5%, transparent);
   box-shadow: 0 -14px 38px rgba(0,0,0,0.30);
 }
 
@@ -376,31 +376,31 @@ textarea:focus {
 }
 
 .rating-button[data-active="true"] {
-  color: #e7a35e;
-  background: rgba(184, 106, 31, 0.12);
-  border-color: rgba(209, 132, 50, 0.24);
+  color: var(--accent-bright);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 24%, transparent);
   box-shadow: none;
 }
 
 .transport-main {
-  border-color: rgba(234, 165, 94, 0.38);
-  box-shadow: 0 8px 24px rgba(103, 52, 9, 0.32);
+  border-color: color-mix(in srgb, var(--accent-bright) 38%, transparent);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .info-banner {
-  background: rgba(184, 106, 31, 0.10);
-  border-color: rgba(209, 132, 50, 0.28);
-  color: #e6c4a1;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: color-mix(in srgb, var(--accent) 45%, var(--text));
 }
 
 .station-modal {
-  border-color: rgba(209, 132, 50, 0.18);
+  border-color: color-mix(in srgb, var(--accent) 18%, transparent);
   background: var(--surface);
 }
 
 .station-type-card.active {
-  border-color: rgba(209, 132, 50, 0.48);
-  background: rgba(184, 106, 31, 0.12);
+  border-color: color-mix(in srgb, var(--accent) 48%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 @media (max-width: 1450px) {
@@ -513,7 +513,7 @@ textarea:focus {
 }
 
 body {
-  background: #090b0d;
+  background: var(--bg);
 }
 
 .app-shell-with-sidebar {
@@ -541,7 +541,7 @@ body {
 
 .stations-hero {
   padding: 0.2rem 0.65rem 1.05rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .stations-hero h1 {
@@ -549,7 +549,7 @@ body {
   font-size: clamp(2.55rem, 3.65vw, 3.35rem);
   line-height: 0.95;
   letter-spacing: -0.058em;
-  color: #f6f3ee;
+  color: var(--text);
 }
 
 .stations-meta-row {
@@ -584,7 +584,7 @@ body {
 
 .station-stat-card span:last-child {
   grid-area: label;
-  color: #92938f;
+  color: var(--faint);
 }
 
 .station-header-actions {
@@ -601,8 +601,8 @@ body {
 
 .station-header-actions .primary {
   padding-inline: 1.15rem;
-  background: linear-gradient(180deg, #c67620, #a95814);
-  border-color: rgba(229,156,72,0.3);
+  background: linear-gradient(180deg, var(--accent-strong), var(--accent));
+  border-color: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .station-toolbar {
@@ -613,7 +613,7 @@ body {
 .station-toolbar select {
   min-width: 162px;
   padding: 0.58rem 0.75rem;
-  background: #0e1013;
+  background: var(--surface);
 }
 
 .station-grid-redesign {
@@ -623,14 +623,14 @@ body {
 
 .station-card-redesign {
   border-radius: 11px;
-  background: #0e1115;
-  border-color: rgba(255,255,255,0.08);
+  background: var(--surface);
+  border-color: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .station-card-redesign:hover {
   transform: translateY(-1px);
-  background: #101318;
-  border-color: rgba(201,120,34,0.27);
+  background: var(--surface-soft);
+  border-color: color-mix(in srgb, var(--accent) 27%, transparent);
 }
 
 .station-art-wrap {
@@ -649,8 +649,8 @@ body {
   height: 38px;
   right: 0.62rem;
   bottom: 0.62rem;
-  background: linear-gradient(180deg, #be741f, #9b5414);
-  border-color: rgba(236,171,99,0.26);
+  background: linear-gradient(180deg, var(--accent-strong), var(--accent));
+  border-color: color-mix(in srgb, var(--accent-bright) 26%, transparent);
   box-shadow: 0 7px 18px rgba(0,0,0,0.32);
 }
 
@@ -662,9 +662,9 @@ body {
 .station-type-badge {
   margin-bottom: 0.52rem;
   padding: 0.17rem 0.4rem;
-  background: rgba(169,95,24,0.10);
-  border-color: rgba(201,120,34,0.25);
-  color: #d78931;
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 25%, transparent);
+  color: var(--accent-bright);
 }
 
 .station-card-body h3 {
@@ -693,7 +693,7 @@ body {
   height: calc(100vh - 145px);
   padding: 0.88rem 0.78rem 0.8rem;
   border-radius: 15px;
-  background: var(--queue-bg, #0d1013);
+  background: var(--queue-bg);
 }
 
 .queue-panel-redesign .queue-header {
@@ -724,7 +724,7 @@ body {
 }
 
 .queue-row-redesign:hover {
-  background: rgba(255,255,255,0.025);
+  background: color-mix(in srgb, var(--text) 2.5%, transparent);
 }
 
 .queue-row-redesign.active {
@@ -765,7 +765,7 @@ body {
   grid-template-columns: minmax(350px, 1fr) minmax(500px, 610px) minmax(260px, 1fr);
   grid-template-rows: 54px 28px;
   padding: 0.82rem 1.2rem 0.42rem;
-  background: var(--player-bg, #0b0d10);
+  background: var(--player-bg);
 }
 
 .now-playing .artwork-md,
@@ -832,8 +832,8 @@ body {
 
 .app-sidebar {
   padding: 22px 12px 14px;
-  background: var(--sidebar-bg, #0a0d10);
-  border-right: 1px solid rgba(255,255,255,0.075);
+  background: var(--sidebar-bg);
+  border-right: 1px solid color-mix(in srgb, var(--text) 7.5%, transparent);
 }
 
 .sidebar-brand {
@@ -867,16 +867,16 @@ body {
   font-size: 0.95rem;
   font-weight: 650;
   letter-spacing: -0.01em;
-  color: rgba(246,243,238,0.70);
+  color: color-mix(in srgb, var(--text) 70%, transparent);
 }
 
 .app-sidebar .side-link:hover:not(:disabled) {
-  color: rgba(255,255,255,0.94);
-  background: rgba(255,255,255,0.035);
+  color: color-mix(in srgb, var(--text) 94%, transparent);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 
 .app-sidebar .side-link.active {
-  color: #fff;
+  color: var(--text);
   background: linear-gradient(90deg, var(--accent-soft), transparent);
 }
 
@@ -889,7 +889,7 @@ body {
   width: 3px;
   border-radius: 8px 0 0 8px;
   background: var(--accent-bright);
-  box-shadow: 0 0 10px rgba(201,120,34,0.24);
+  box-shadow: 0 0 10px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 .side-icon {
@@ -898,7 +898,7 @@ body {
   flex: 0 0 20px;
   display: grid;
   place-items: center;
-  color: rgba(232,232,228,0.72);
+  color: color-mix(in srgb, var(--text) 72%, transparent);
   font-size: 0;
 }
 
@@ -915,7 +915,7 @@ body {
 .app-sidebar .sidebar-account-panel {
   margin: auto -12px 0;
   padding: 14px 12px 0;
-  border-top: 1px solid rgba(255,255,255,0.07);
+  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .app-sidebar .sidebar-account-card {
@@ -931,8 +931,8 @@ body {
   width: 42px;
   min-width: 42px;
   height: 42px;
-  border: 1px solid rgba(201,120,34,0.42);
-  background: radial-gradient(circle at 30% 20%, #e3b36f, #9e5c24 52%, #2f3322 100%);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, transparent);
+  background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--accent) 45%, var(--text)), var(--accent) 52%, color-mix(in srgb, var(--surface) 85%, var(--accent) 15%) 100%);
   box-shadow: none;
 }
 
@@ -941,7 +941,7 @@ body {
 }
 
 .sidebar-account-copy strong {
-  color: rgba(255,255,255,0.94);
+  color: color-mix(in srgb, var(--text) 94%, transparent);
   font-size: 0.92rem;
   font-weight: 720;
 }
@@ -959,7 +959,7 @@ body {
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: rgba(255,255,255,0.58);
+  color: color-mix(in srgb, var(--text) 58%, transparent);
   font-size: 1.65rem;
   line-height: 1;
   display: grid;
@@ -970,7 +970,7 @@ body {
   transform: none;
   border: 0;
   color: var(--accent-bright);
-  background: rgba(255,255,255,0.04);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
 }
 
 @media (max-width: 1200px) and (min-width: 1101px) {
@@ -1194,10 +1194,15 @@ button.primary svg,
   padding-bottom: 0.18rem !important;
 }
 
-/* Queue summary geometry.
-   Keep the summary pinned to the panel floor without creating a tall footer
-   strip. The labels sit a few pixels above the lower border, with comfortable
-   horizontal inset. */
+/* Keep the horizontal inset, but sit the summary closer to the bottom edge. */
+.queue-panel-redesign .queue-summary {
+  padding-left: 1.15rem !important;
+  padding-right: 1.15rem !important;
+  padding-bottom: 0.16rem !important;
+}
+
+
+/* Queue summary geometry */
 .queue-panel-redesign .queue-summary {
   box-sizing: border-box;
   width: auto;
@@ -1209,6 +1214,234 @@ button.primary svg,
   align-items: flex-end;
   justify-content: space-between;
   line-height: 1;
-  background: var(--queue-bg, #0d1013);
-  border-top: 1px solid var(--border-soft, rgba(255,255,255,0.06)) !important;
+  background: var(--queue-bg);
+  border-top: 1px solid var(--border-soft, color-mix(in srgb, var(--text) 6%, transparent)) !important;
+}
+
+/* Playback repeat state */
+.transport-extra[data-active="true"] {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  box-shadow: none;
+}
+
+.transport-extra[data-active="true"]:hover:not(:disabled) {
+  color: var(--accent-contrast);
+  background: var(--accent);
+}
+
+
+/* ========================================================================
+   PLAYBACK TRANSPORT — BALANCED CENTER
+   ------------------------------------------------------------------------
+   Keep the playback bar in its normal grid layout. The outer columns are made
+   symmetrical so the middle transport/seek column is the actual center of the
+   bar. The transport itself uses an empty grid slot to the left of Previous,
+   balancing the Repeat button on the right, so Play remains the true center.
+   ======================================================================== */
+
+@media (min-width: 1101px) {
+  .playback-bar {
+    grid-template-columns:
+      minmax(350px, 1fr)
+      minmax(500px, 610px)
+      minmax(350px, 1fr);
+  }
+
+  .playback-bar .transport-stack {
+    position: static;
+    width: 100%;
+    transform: translateY(0.08rem);
+    justify-self: stretch;
+    align-items: center;
+  }
+
+  .playback-bar .transport {
+    display: grid;
+    grid-template-columns: 42px 42px 52px 42px 42px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.55rem;
+    width: 100%;
+  }
+
+  .playback-bar .transport > .transport-side:first-child {
+    grid-column: 2;
+  }
+
+  .playback-bar .transport > .transport-main {
+    grid-column: 3;
+  }
+
+  .playback-bar .transport > .transport-main + .transport-side {
+    grid-column: 4;
+  }
+
+  .playback-bar .transport > .transport-extra {
+    grid-column: 5;
+  }
+
+  .playback-bar .transport > button {
+    position: static;
+    transform: none;
+    margin: 0;
+    justify-self: center;
+  }
+
+  .playback-bar .scrub-row {
+    position: static;
+    grid-column: 2;
+    grid-row: 2;
+    width: 100%;
+    min-width: 0;
+    transform: translateY(0.08rem);
+    justify-self: stretch;
+  }
+
+  .playback-bar .volume-row {
+    position: static;
+    grid-column: 3;
+    grid-row: 1 / span 2;
+    transform: translate(-1.5rem, 0.08rem);
+    justify-self: end;
+  }
+}
+
+/* Repeat-one active state. */
+.transport-extra[data-active="true"] {
+  color: var(--accent-bright);
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  box-shadow: none;
+}
+
+.transport-extra[data-active="true"]:hover:not(:disabled) {
+  color: var(--accent-contrast);
+  background: var(--accent);
+}
+
+
+/* ========================================================================
+   QUEUE ACTION POLISH
+   ------------------------------------------------------------------------
+   Keep row actions away from the scrollbar and make Clear visually read as
+   an actual queue action rather than low-emphasis helper text.
+   ======================================================================== */
+
+.queue-panel-redesign .queue-list-redesign {
+  /* Reserve breathing room between the remove action and browser scrollbar. */
+  padding-right: 0.48rem;
+  scrollbar-gutter: stable;
+}
+
+.queue-panel-redesign .queue-row-redesign {
+  /* The list owns the scrollbar inset; keep rows from stretching underneath it. */
+  width: auto;
+}
+
+.queue-panel-redesign .queue-remove-icon {
+  margin-right: 0.18rem;
+}
+
+/* Clear stays secondary to playback controls, but is now unmistakably clickable. */
+.queue-panel-redesign .queue-clear-placeholder {
+  min-height: 30px;
+  padding: 0.34rem 0.68rem;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--control-bg);
+  color: var(--muted);
+  opacity: 1;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.queue-panel-redesign .queue-clear-placeholder:hover:not(:disabled) {
+  color: var(--text);
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.queue-panel-redesign .queue-clear-placeholder:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 2px;
+}
+
+.queue-panel-redesign .queue-clear-placeholder:disabled {
+  opacity: 0.36;
+  cursor: default;
+}
+
+/* ========================================================================
+   QUEUE DRAG REORDER
+   ------------------------------------------------------------------------
+   Upcoming tracks can be reordered by dragging the existing grip. The
+   currently playing track remains anchored so reordering never changes what
+   is actively playing or moves future tracks into the already-played region.
+   ======================================================================== */
+
+.queue-drag-handle {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 34px;
+  min-width: 18px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--faint);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  opacity: 0.82;
+}
+
+.queue-drag-handle:hover {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.queue-drag-handle:active {
+  cursor: grabbing;
+}
+
+.queue-drag-handle span {
+  display: block;
+  line-height: 1;
+  letter-spacing: -0.18rem;
+  transform: translateX(-0.08rem);
+}
+
+.queue-list-redesign.is-reordering .queue-row-redesign {
+  transition: transform 130ms ease, background 130ms ease, opacity 130ms ease;
+}
+
+.queue-row-redesign.is-dragging {
+  opacity: 0.42;
+  background: color-mix(in srgb, var(--text) 5.5%, transparent);
+}
+
+.queue-row-redesign:has(.queue-drag-handle:hover) {
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
+}
+
+/* Queue reordering: the entire upcoming-track card is the drag surface. */
+.queue-panel-redesign .queue-row-redesign.queue-row-draggable {
+  cursor: grab;
+  user-select: none;
+}
+
+.queue-panel-redesign .queue-row-redesign.queue-row-draggable:active,
+.queue-panel-redesign .queue-row-redesign.is-dragging {
+  cursor: grabbing;
+}
+
+.queue-panel-redesign .queue-row-redesign.is-dragging {
+  opacity: 0.55;
+}
+
+.queue-panel-redesign .queue-drag-handle {
+  cursor: inherit;
+  pointer-events: none;
 }

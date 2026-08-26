@@ -59,11 +59,11 @@
 }
 
 .sidebar-footer strong {
-  color: white;
+  color: var(--text);
 }
 
 .sidebar-footer span {
-  color: rgba(248, 251, 255, 0.42);
+  color: color-mix(in srgb, var(--text) 42%, transparent);
 }
 
 .topbar-redesigned {
@@ -99,9 +99,9 @@
   border-radius: 999px;
   display: grid;
   place-items: center;
-  background: radial-gradient(circle at 30% 20%, #ffd1e8, #b86a1f 45%, #0d8b72 100%);
-  border-color: rgba(255, 255, 255, 0.15);
-  color: white;
+  background: radial-gradient(circle at 30% 20%, color-mix(in srgb, var(--accent) 20%, var(--text)), var(--accent) 45%, var(--accent-strong) 100%);
+  border-color: color-mix(in srgb, var(--text) 15%, transparent);
+  color: var(--text);
   font-weight: 950;
 }
 
@@ -116,8 +116,8 @@
   top: 8%;
   width: 68%;
   height: 84%;
-  background: radial-gradient(ellipse at 50% 50%, rgba(184, 106, 31, 0.32), transparent 40%),
-    repeating-radial-gradient(ellipse at 50% 50%, rgba(160, 85, 255, 0.22) 0 1px, transparent 2px 16px);
+  background: radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--accent) 32%, transparent), transparent 40%),
+    repeating-radial-gradient(ellipse at 50% 50%, color-mix(in srgb, var(--accent-bright) 22%, transparent) 0 1px, transparent 2px 16px);
   filter: blur(0.2px);
   opacity: 0.72;
   transform: rotate(-8deg);
@@ -161,8 +161,8 @@
 }
 
 .station-toolbar select {
-  color: white;
-  border: 1px solid rgba(255,255,255,0.10);
+  color: var(--text);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
 }
 
 .view-toggle {
@@ -176,8 +176,8 @@
 }
 
 .view-toggle.active {
-  background: rgba(184, 106, 31, 0.20);
-  border-color: rgba(184, 106, 31, 0.44);
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 44%, transparent);
 }
 
 .station-grid-redesign {
@@ -226,7 +226,7 @@
 }
 
 .station-edit-placeholder {
-  color: rgba(248,251,255,0.78);
+  color: color-mix(in srgb, var(--text) 78%, transparent);
   padding: 0.5rem 0.65rem;
   border-radius: 999px;
 }
@@ -266,7 +266,7 @@
 }
 
 .queue-drag-placeholder {
-  color: rgba(248,251,255,0.38);
+  color: color-mix(in srgb, var(--text) 38%, transparent);
   font-weight: 900;
   letter-spacing: -0.12em;
   padding-inline: 0.2rem;
@@ -279,7 +279,7 @@
 
 .queue-remove-icon {
   border-radius: 999px;
-  color: rgba(248,251,255,0.68);
+  color: color-mix(in srgb, var(--text) 68%, transparent);
   font-size: 1.35rem;
 }
 

@@ -6,18 +6,18 @@
 }
 
 .lobby-room-hero-card {
-  background: radial-gradient(circle at 8% 0%, rgba(184, 106, 31, 0.22), transparent 34%),
-    radial-gradient(circle at 100% 20%, rgba(53, 224, 155, 0.08), transparent 34%),
-    rgba(12, 18, 29, 0.92);
+  background: radial-gradient(circle at 8% 0%, color-mix(in srgb, var(--accent) 22%, transparent), transparent 34%),
+    radial-gradient(circle at 100% 20%, color-mix(in srgb, var(--good) 8%, transparent), transparent 34%),
+    color-mix(in srgb, var(--surface-raised) 92%, transparent);
   box-shadow: 0 22px 60px rgba(0, 0, 0, 0.28);
 }
 
 .lobby-pill {
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   border-radius: 999px;
   padding: 0.55rem 0.85rem;
   color: var(--muted);
-  background: rgba(255,255,255,0.04);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
   font-weight: 800;
 }
 
@@ -42,14 +42,14 @@
 .lobby-add-panel-redesign,
 .lobby-member-panel-redesign {
   border-radius: 24px;
-  border-color: rgba(255,255,255,0.08);
+  border-color: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .lobby-empty-state {
   padding: 1rem;
-  border: 1px dashed rgba(255,255,255,0.10);
+  border: 1px dashed color-mix(in srgb, var(--text) 10%, transparent);
   border-radius: 16px;
-  background: rgba(255,255,255,0.025);
+  background: color-mix(in srgb, var(--text) 2.5%, transparent);
 }
 
 .lobby-add-tabs {
@@ -58,9 +58,9 @@
   gap: 0.45rem;
   padding: 0.35rem;
   margin: 0.9rem 0;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   border-radius: 16px;
-  background: rgba(0,0,0,0.22);
+  background: color-mix(in srgb, var(--bg) 22%, transparent);
 }
 
 .lobby-add-tabs button {
@@ -73,9 +73,9 @@
 }
 
 .lobby-add-tabs button.active {
-  color: white;
-  background: linear-gradient(135deg, rgba(184, 106, 31, 0.55), rgba(184, 106, 31, 0.22));
-  box-shadow: 0 12px 30px rgba(184, 106, 31, 0.15);
+  color: var(--text);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 55%, transparent), color-mix(in srgb, var(--accent) 22%, transparent));
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--accent) 15%, transparent);
 }
 
 .lobby-youtube-form {
@@ -92,12 +92,12 @@
 
 .lobby-search-results button {
   border-radius: 14px;
-  background: rgba(255,255,255,0.045);
-  border-color: rgba(255,255,255,0.07);
+  background: color-mix(in srgb, var(--text) 4.5%, transparent);
+  border-color: color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .lobby-search-results button:hover:not(:disabled) {
-  border-color: rgba(184, 106, 31, 0.45);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
 @media (max-width: 1020px) {
@@ -128,9 +128,9 @@
   min-height: 100vh;
   display: grid;
   padding-bottom: 104px;
-  background: radial-gradient(circle at 8% 18%, rgba(184, 106, 31, 0.16), transparent 28%),
-    radial-gradient(circle at 100% 0%, rgba(53, 224, 155, 0.08), transparent 30%),
-    #05080f;
+  background: radial-gradient(circle at 8% 18%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 28%),
+    radial-gradient(circle at 100% 0%, color-mix(in srgb, var(--good) 8%, transparent), transparent 30%),
+    var(--bg);
 }
 
 .lobby-dashboard-sidebar {
@@ -167,13 +167,13 @@
   min-height: 176px;
   overflow: hidden;
   padding: clamp(1.25rem, 2.3vw, 2.15rem);
-  border: 1px solid rgba(184, 106, 31, 0.22);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   border-radius: 28px;
-  background: radial-gradient(circle at 4% 0%, rgba(184, 106, 31, 0.34), transparent 34%),
-    radial-gradient(circle at 96% 50%, rgba(53, 224, 155, 0.18), transparent 33%),
-    linear-gradient(135deg, rgba(18, 21, 45, 0.98), rgba(6, 13, 23, 0.96) 58%, rgba(8, 39, 36, 0.88));
+  background: radial-gradient(circle at 4% 0%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 34%),
+    radial-gradient(circle at 96% 50%, color-mix(in srgb, var(--good) 18%, transparent), transparent 33%),
+    linear-gradient(135deg, color-mix(in srgb, var(--surface-raised) 90%, var(--accent) 10%), color-mix(in srgb, var(--surface) 96%, transparent) 58%, color-mix(in srgb, var(--surface) 90%, var(--accent) 10%));
   box-shadow: 0 28px 90px rgba(0, 0, 0, 0.34),
-    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    inset 0 1px 0 color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 .lobby-dashboard-hero::before {
@@ -181,9 +181,9 @@
   position: absolute;
   inset: 0;
   z-index: -2;
-  background: repeating-radial-gradient(circle at 76% 47%, rgba(137, 120, 255, 0.13) 0 1px, transparent 2px 14px),
-    linear-gradient(110deg, transparent 0 52%, rgba(255,255,255,0.055) 52.2%, transparent 52.45%),
-    radial-gradient(circle at 82% 46%, rgba(53, 224, 155, 0.22), transparent 7%);
+  background: repeating-radial-gradient(circle at 76% 47%, color-mix(in srgb, var(--accent-bright) 13%, transparent) 0 1px, transparent 2px 14px),
+    linear-gradient(110deg, transparent 0 52%, color-mix(in srgb, var(--text) 5.5%, transparent) 52.2%, transparent 52.45%),
+    radial-gradient(circle at 82% 46%, color-mix(in srgb, var(--good) 22%, transparent), transparent 7%);
   opacity: 0.65;
 }
 
@@ -196,17 +196,17 @@
   width: 54%;
   height: 190%;
   border-radius: 50%;
-  background: repeating-radial-gradient(ellipse at center, rgba(53, 224, 155, 0.16) 0 1px, transparent 2px 23px);
+  background: repeating-radial-gradient(ellipse at center, color-mix(in srgb, var(--good) 16%, transparent) 0 1px, transparent 2px 23px);
   opacity: 0.28;
   transform: rotate(-9deg);
 }
 
 .lobby-dashboard-shell.guest .lobby-dashboard-hero {
-  border-color: rgba(184, 106, 31, 0.32);
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .lobby-dashboard-shell.owner .lobby-dashboard-hero {
-  border-color: rgba(255, 255, 255, 0.08);
+  border-color: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .lobby-hero-copy {
@@ -246,19 +246,19 @@
   display: inline-flex;
   align-items: center;
   width: fit-content;
-  border: 1px solid rgba(184, 106, 31, 0.45);
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
   border-radius: 999px;
   padding: 0.2rem 0.6rem;
-  color: #ddd7ff;
-  background: rgba(184, 106, 31, 0.18);
+  color: color-mix(in srgb, var(--accent) 24%, var(--text));
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
   font-size: 0.78rem;
   font-weight: 900;
 }
 
 .status-pill.good {
-  color: #b8ffd9;
-  border-color: rgba(53, 224, 155, 0.34);
-  background: rgba(53, 224, 155, 0.11);
+  color: color-mix(in srgb, var(--good) 35%, var(--text));
+  border-color: color-mix(in srgb, var(--good) 34%, transparent);
+  background: color-mix(in srgb, var(--good) 11%, transparent);
 }
 
 .lobby-meta-row {
@@ -275,16 +275,16 @@
   align-items: center;
   gap: 0.42rem;
   min-height: 40px;
-  border: 1px solid rgba(255,255,255,0.09);
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   border-radius: 14px;
   padding: 0.55rem 0.75rem;
-  background: rgba(7, 11, 20, 0.34);
-  color: #d8dfeb;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  background: color-mix(in srgb, var(--surface) 34%, transparent);
+  color: var(--muted);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 4%, transparent);
 }
 
 .lobby-meta-chip strong {
-  color: white;
+  color: var(--text);
 }
 
 .lobby-status-dot {
@@ -292,12 +292,12 @@
   height: 0.55rem;
   border-radius: 999px;
   background: var(--danger);
-  box-shadow: 0 0 0 4px rgba(255, 101, 122, 0.11);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 11%, transparent);
 }
 
 .lobby-status-dot.active {
   background: var(--good);
-  box-shadow: 0 0 0 4px rgba(53, 217, 149, 0.11);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 11%, transparent);
 }
 
 .lobby-hero-actions {
@@ -312,14 +312,14 @@
   align-self: center;
   min-width: min(230px, 100%);
   padding-left: clamp(1rem, 3vw, 3rem);
-  border-left: 1px solid rgba(255,255,255,0.08);
+  border-left: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .lobby-leave-button {
   min-width: 142px;
-  border-color: rgba(255, 101, 122, 0.45);
-  color: #ff8796;
-  background: rgba(255, 101, 122, 0.07);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 7%, transparent);
 }
 
 .lobby-dashboard-grid {
@@ -340,8 +340,8 @@
 
 .lobby-control-card {
   border-radius: 24px;
-  border: 1px solid rgba(255,255,255,0.08);
-  background: linear-gradient(180deg, rgba(14, 20, 31, 0.94), rgba(8, 12, 20, 0.94));
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface-raised) 94%, transparent), color-mix(in srgb, var(--surface) 94%, transparent));
   box-shadow: none;
 }
 
@@ -437,8 +437,8 @@
   margin-top: 0.8rem;
   padding: 1rem;
   border-radius: 18px;
-  border: 1px solid rgba(184, 106, 31, 0.18);
-  background: rgba(184, 106, 31, 0.10);
+  border: 1px solid color-mix(in srgb, var(--accent) 18%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
   color: var(--muted);
 }
 
@@ -480,7 +480,7 @@
   overflow-y: auto;
   padding-right: 0.25rem;
   scrollbar-width: thin;
-  scrollbar-color: rgba(166,177,194,0.75) rgba(255,255,255,0.06);
+  scrollbar-color: color-mix(in srgb, var(--muted) 75%, transparent) color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 .lobby-queue-scroll::-webkit-scrollbar,
@@ -490,13 +490,13 @@
 
 .lobby-queue-scroll::-webkit-scrollbar-track,
 .lobby-search-results::-webkit-scrollbar-track {
-  background: rgba(255,255,255,0.04);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
   border-radius: 999px;
 }
 
 .lobby-queue-scroll::-webkit-scrollbar-thumb,
 .lobby-search-results::-webkit-scrollbar-thumb {
-  background: rgba(166,177,194,0.55);
+  background: color-mix(in srgb, var(--muted) 55%, transparent);
   border-radius: 999px;
 }
 
@@ -520,17 +520,17 @@
 .lobby-queue-table-row.interactive:hover,
 .lobby-queue-table-row.interactive:focus-visible {
   color: var(--text);
-  background: linear-gradient(90deg, rgba(184, 106, 31, 0.16), rgba(53, 224, 155, 0.045));
-  border-color: rgba(184, 106, 31, 0.38);
-  box-shadow: inset 3px 0 0 rgba(184, 106, 31, 0.95);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, var(--good) 4.5%, transparent));
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent) 95%, transparent);
   transform: translateX(4px);
   outline: none;
 }
 
 .lobby-queue-table-row.active {
   color: var(--text);
-  background: rgba(184, 106, 31, 0.14);
-  border-color: rgba(184, 106, 31, 0.32);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .lobby-queue-table-row.dragging {
@@ -539,10 +539,10 @@
 }
 
 .lobby-queue-table-row.drag-over {
-  border-color: rgba(53, 224, 155, 0.72);
-  box-shadow: inset 0 2px 0 rgba(53, 224, 155, 0.86),
-    0 0 0 1px rgba(53, 224, 155, 0.14);
-  background: rgba(53, 224, 155, 0.08);
+  border-color: color-mix(in srgb, var(--good) 72%, transparent);
+  box-shadow: inset 0 2px 0 color-mix(in srgb, var(--good) 86%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--good) 14%, transparent);
+  background: color-mix(in srgb, var(--good) 8%, transparent);
 }
 
 .queue-track-cell {
@@ -603,7 +603,7 @@
 
 .queue-grip:hover {
   color: var(--text);
-  background: rgba(255,255,255,0.08);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .queue-grip:active {
@@ -659,7 +659,7 @@
   height: 24px;
   padding: 3px;
   border-radius: 999px;
-  background: rgba(255,255,255,0.16);
+  background: color-mix(in srgb, var(--text) 16%, transparent);
   transition: background 120ms ease;
 }
 
@@ -668,12 +668,12 @@
   width: 18px;
   height: 18px;
   border-radius: 999px;
-  background: #dce4f0;
+  background: var(--muted);
   transition: transform 120ms ease;
 }
 
 .toggle-pill.on {
-  background: linear-gradient(135deg, var(--accent), #6d96ff);
+  background: linear-gradient(135deg, var(--accent), var(--accent-bright));
 }
 
 .toggle-pill.on span {
@@ -705,9 +705,9 @@
   align-items: center;
   min-height: 48px;
   padding: 0.55rem 0.65rem;
-  border: 1px solid rgba(255,255,255,0.06);
+  border: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
   border-radius: 14px;
-  background: rgba(255,255,255,0.025);
+  background: color-mix(in srgb, var(--text) 2.5%, transparent);
 }
 
 .member-avatar {
@@ -716,7 +716,7 @@
   display: inline-grid;
   place-items: center;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent), #5f8dff);
+  background: linear-gradient(135deg, var(--accent), var(--accent-bright));
   font-weight: 950;
 }
 
@@ -742,13 +742,13 @@
   border-radius: 999px;
   font-size: 0.78rem;
   font-weight: 900;
-  background: rgba(255, 101, 122, 0.08);
-  border-color: rgba(255, 101, 122, 0.28);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 28%, transparent);
 }
 
 .member-kick-button:hover:not(:disabled) {
-  background: rgba(255, 101, 122, 0.16);
-  border-color: rgba(255, 101, 122, 0.55);
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  border-color: color-mix(in srgb, var(--danger) 55%, transparent);
 }
 
 .lobby-room-info-card,
@@ -768,7 +768,7 @@
   gap: 0.2rem;
   padding: 0.8rem;
   border-radius: 16px;
-  background: rgba(255,255,255,0.035);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 
 .room-stat-grid strong {
@@ -800,8 +800,8 @@
   gap: 1rem;
   align-items: center;
   padding: 0.75rem 1.25rem;
-  border-top: 1px solid rgba(255,255,255,0.08);
-  background: rgba(8, 12, 20, 0.95);
+  border-top: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  background: color-mix(in srgb, var(--surface) 95%, transparent);
   backdrop-filter: blur(22px);
   z-index: 30;
 }
@@ -848,19 +848,19 @@
   overflow: hidden;
   border: 0;
   border-radius: 999px;
-  background: rgba(255,255,255,0.16);
+  background: color-mix(in srgb, var(--text) 16%, transparent);
 }
 
 .lobby-mini-progress progress::-webkit-progress-bar {
-  background: rgba(255,255,255,0.16);
+  background: color-mix(in srgb, var(--text) 16%, transparent);
 }
 
 .lobby-mini-progress progress::-webkit-progress-value {
-  background: linear-gradient(90deg, var(--accent), #8aa8ff);
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--text)));
 }
 
 .lobby-mini-progress progress::-moz-progress-bar {
-  background: linear-gradient(90deg, var(--accent), #8aa8ff);
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 55%, var(--text)));
 }
 
 @media (max-width: 1320px) {
@@ -950,7 +950,7 @@
 
 .lobby-inline-controls .round-control:disabled,
 .lobby-mini-transport .round-control:disabled {
-  background: rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--text) 8%, transparent);
   border-color: var(--border-soft);
   box-shadow: none;
   color: var(--muted);
@@ -968,11 +968,11 @@
 .permission-subsetting {
   margin: -0.25rem 0 0.2rem 1.15rem;
   padding-left: 0.85rem;
-  border-left: 1px solid rgba(184, 106, 31, 0.28);
+  border-left: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
 .permission-subsetting .permission-row {
-  background: rgba(7, 11, 20, 0.28);
+  background: color-mix(in srgb, var(--surface) 28%, transparent);
 }
 
 .permission-subsetting .permission-row strong {
@@ -997,7 +997,7 @@
   padding: 0.45rem 0.15rem 1rem;
   overflow: visible;
   border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.09);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -1010,7 +1010,7 @@
 
 .lobby-dashboard-shell.owner .lobby-dashboard-hero,
 .lobby-dashboard-shell.guest .lobby-dashboard-hero {
-  border-color: rgba(255, 255, 255, 0.09);
+  border-color: color-mix(in srgb, var(--text) 9%, transparent);
 }
 
 .lobby-hero-copy {
@@ -1060,7 +1060,7 @@
   gap: 0.4rem;
   padding: 0 0.85rem;
   border: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.10);
+  border-right: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -1086,7 +1086,7 @@
 }
 
 .lobby-status-dot.active {
-  box-shadow: 0 0 0 3px rgba(53, 217, 149, 0.09);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 9%, transparent);
 }
 
 .lobby-hero-actions {
@@ -1099,19 +1099,19 @@
   padding: 0.55rem 0.8rem;
   border-radius: 8px;
   background: transparent;
-  border-color: rgba(255, 255, 255, 0.13);
+  border-color: color-mix(in srgb, var(--text) 13%, transparent);
   box-shadow: none;
 }
 
 .lobby-hero-actions button:hover:not(:disabled) {
-  border-color: rgba(184, 106, 31, 0.48);
-  background: rgba(184, 106, 31, 0.08);
+  border-color: color-mix(in srgb, var(--accent) 48%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
 }
 
 .lobby-hero-actions .danger {
-  color: #ff6f7f;
-  border-color: rgba(255, 101, 122, 0.28);
-  background: rgba(255, 101, 122, 0.035);
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 28%, transparent);
+  background: color-mix(in srgb, var(--danger) 3.5%, transparent);
 }
 
 .lobby-dashboard-grid {
@@ -1131,8 +1131,8 @@
 .lobby-add-panel-redesign,
 .lobby-member-panel-redesign {
   border-radius: 10px;
-  border-color: rgba(255, 255, 255, 0.09);
-  background: rgba(11, 16, 24, 0.72);
+  border-color: color-mix(in srgb, var(--text) 9%, transparent);
+  background: color-mix(in srgb, var(--surface) 72%, transparent);
   box-shadow: none;
 }
 
@@ -1184,7 +1184,7 @@
 .lobby-inline-controls .round-control:not(:disabled) {
   width: 48px;
   height: 48px;
-  color: #111;
+  color: var(--accent-contrast);
   background: var(--accent);
 }
 
@@ -1207,7 +1207,7 @@
 
 .lobby-queue-table-head {
   padding: 0.25rem 0.45rem 0.4rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   font-weight: 700;
   letter-spacing: 0.03em;
 }
@@ -1216,7 +1216,7 @@
   min-height: 52px;
   padding: 0.45rem;
   border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
   border-radius: 0;
 }
 
@@ -1227,14 +1227,14 @@
 .lobby-queue-table-row.interactive:hover,
 .lobby-queue-table-row.interactive:focus-visible {
   transform: none;
-  border-color: rgba(255, 255, 255, 0.07);
+  border-color: color-mix(in srgb, var(--text) 7%, transparent);
   box-shadow: inset 2px 0 0 var(--accent);
-  background: rgba(184, 106, 31, 0.07);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
 }
 
 .lobby-queue-table-row.active {
-  border-color: rgba(255, 255, 255, 0.07);
-  background: rgba(184, 106, 31, 0.09);
+  border-color: color-mix(in srgb, var(--text) 7%, transparent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
@@ -1254,7 +1254,7 @@
 .lobby-add-tabs button {
   min-height: 38px;
   border-radius: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-right: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   padding: 0.55rem 0.7rem;
   font-weight: 650;
 }
@@ -1264,7 +1264,7 @@
 }
 
 .lobby-add-tabs button.active {
-  background: rgba(184, 106, 31, 0.15);
+  background: color-mix(in srgb, var(--accent) 15%, transparent);
   box-shadow: inset 0 -2px 0 var(--accent);
 }
 
@@ -1285,13 +1285,13 @@
   min-height: 46px;
   padding: 0.5rem 0;
   border: 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
   border-radius: 0;
   background: transparent;
 }
 
 .member-avatar {
-  background: rgba(184, 106, 31, 0.32);
+  background: color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .member-kick-button {
@@ -1303,7 +1303,7 @@
 }
 
 .lobby-setting-block {
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   padding-top: 0.75rem;
   margin-top: 0.55rem;
 }
@@ -1324,7 +1324,7 @@
   grid-template-columns: 38px minmax(0, 1fr);
   gap: 0.65rem;
   padding: 0.45rem 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
   border-radius: 0;
   background: transparent;
 }
@@ -1359,7 +1359,7 @@
 .room-stat-grid {
   gap: 0;
   margin-top: 0.65rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .room-stat-grid span {
@@ -1456,10 +1456,10 @@
 
 .lobby-role-pill {
   border-radius: 7px;
-  border-color: rgba(184, 106, 31, 0.52);
+  border-color: color-mix(in srgb, var(--accent) 52%, transparent);
   padding: 0.23rem 0.58rem;
   color: var(--text);
-  background: rgba(184, 106, 31, 0.055);
+  background: color-mix(in srgb, var(--accent) 5.5%, transparent);
 }
 
 .lobby-meta-row {
@@ -1471,9 +1471,9 @@
   min-height: 40px;
   gap: 0.5rem;
   padding: 0.52rem 0.85rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
   border-radius: 7px;
-  background: rgba(255, 255, 255, 0.018);
+  background: color-mix(in srgb, var(--text) 1.8%, transparent);
   color: var(--text);
 }
 
@@ -1482,7 +1482,7 @@
 }
 
 .lobby-meta-chip:last-child {
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
 }
 
 .lobby-hero-actions {
@@ -1508,7 +1508,7 @@
 .lobby-add-panel-redesign,
 .lobby-member-panel-redesign {
   border-radius: 8px;
-  background: rgba(11, 16, 24, 0.78);
+  background: color-mix(in srgb, var(--surface) 78%, transparent);
 }
 
 .lobby-control-card.panel {
@@ -1567,24 +1567,24 @@
   min-height: 64px;
   margin-top: 0.35rem;
   padding: 0.5rem 0.65rem;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   border-radius: 7px;
-  background: rgba(255,255,255,0.018);
+  background: color-mix(in srgb, var(--text) 1.8%, transparent);
 }
 
 .lobby-queue-table-row:last-child {
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .lobby-queue-table-row.active {
-  border-color: rgba(184,106,31,0.34);
-  border-left-color: rgba(184,106,31,0.88);
-  background: rgba(184,106,31,0.09);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+  border-left-color: color-mix(in srgb, var(--accent) 88%, transparent);
+  background: color-mix(in srgb, var(--accent) 9%, transparent);
 }
 
 .lobby-queue-table-row.interactive:hover,
 .lobby-queue-table-row.interactive:focus-visible {
-  border-color: rgba(184,106,31,0.34);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
   box-shadow: inset 2px 0 0 var(--accent);
 }
 
@@ -1610,9 +1610,9 @@
 .member-dashboard-row {
   min-height: 54px;
   padding: 0.55rem 0.65rem;
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   border-radius: 7px;
-  background: rgba(255,255,255,0.018);
+  background: color-mix(in srgb, var(--text) 1.8%, transparent);
 }
 
 .member-section + .member-section {
@@ -1636,7 +1636,7 @@
   padding: 0.72rem 0;
   margin: 0;
   border-top: 0;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .lobby-setting-block > div:first-child > span,
@@ -1648,7 +1648,7 @@
 .permission-row {
   min-height: 48px;
   padding: 0.6rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .permission-row:last-child {
@@ -1793,7 +1793,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 1rem;
   padding: 0.62rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .lobby-permissions-card .lobby-setting-block > div:first-child > strong,
@@ -1848,7 +1848,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 1rem;
   padding: 0.55rem 0;
-  border-bottom: 1px solid rgba(255,255,255,0.07);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
 }
 
 .lobby-permissions-card .permission-row > span:first-child {
@@ -1874,7 +1874,7 @@
 .lobby-permissions-card .permission-subsetting {
   margin: 0;
   padding: 0 0 0 0.9rem;
-  border-left: 1px solid rgba(215, 128, 32, 0.35);
+  border-left: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .lobby-permissions-card .permission-subsetting .permission-row {
@@ -1929,7 +1929,7 @@
   max-width: 30ch;
   font-size: 0.7rem;
   line-height: 1.26;
-  color: rgba(231, 237, 243, 0.68);
+  color: color-mix(in srgb, var(--text) 68%, transparent);
 }
 
 .lobby-permissions-card .lobby-queue-limit-control {
@@ -1979,9 +1979,9 @@
   width: 40px;
   height: 22px;
   padding: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  background: color-mix(in srgb, var(--text) 10%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 5%, transparent);
 }
 
 .lobby-permissions-card .toggle-pill span {
@@ -1990,7 +1990,7 @@
 }
 
 .lobby-permissions-card .toggle-pill.on {
-  background: linear-gradient(90deg, rgba(214, 135, 34, 0.78), rgba(142, 167, 255, 0.28));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 78%, transparent), color-mix(in srgb, var(--accent-bright) 28%, transparent));
 }
 
 .lobby-permissions-card .toggle-pill.on span {
@@ -2000,7 +2000,7 @@
 .lobby-permissions-card .permission-subsetting {
   margin: 0.1rem 0 0;
   padding-left: 0.85rem;
-  border-left: 1px solid rgba(214, 135, 34, 0.3);
+  border-left: 1px solid color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .lobby-permissions-card .permission-subsetting .permission-row {
@@ -2030,10 +2030,10 @@
   grid-template-columns: 34px 58px 34px;
   align-items: center;
   height: 36px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   border-radius: 12px;
-  background: rgba(5, 9, 17, 0.88);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--text) 3%, transparent);
   overflow: hidden;
 }
 
@@ -2069,14 +2069,14 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: rgba(231, 237, 243, 0.9);
+  color: color-mix(in srgb, var(--text) 90%, transparent);
   font-size: 1.12rem;
   font-weight: 700;
   line-height: 1;
 }
 
 .lobby-permissions-card .lobby-queue-limit-arrow:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 
 .lobby-permissions-card .lobby-queue-limit-arrow:disabled {
@@ -2085,7 +2085,7 @@
 }
 
 .lobby-permissions-card .lobby-queue-limit-stepper > * + * {
-  border-left: 1px solid rgba(255, 255, 255, 0.06);
+  border-left: 1px solid color-mix(in srgb, var(--text) 6%, transparent);
 }
 
 /* Queue-limit stepper polish: precise centering, no hover border jump */
@@ -2119,12 +2119,12 @@
   border: 0 !important;
   outline: 0;
   box-shadow: none !important;
-  background: rgba(255, 255, 255, 0.05);
+  background: color-mix(in srgb, var(--text) 5%, transparent);
 }
 
 .lobby-permissions-card .lobby-queue-limit-arrow:focus-visible {
   border: 0 !important;
-  outline: 1px solid rgba(214, 135, 34, 0.72);
+  outline: 1px solid color-mix(in srgb, var(--accent) 72%, transparent);
   outline-offset: -2px;
   box-shadow: none !important;
 }
@@ -2135,9 +2135,9 @@
   width: 40px;
   height: 22px;
   padding: 2px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.13);
+  background: color-mix(in srgb, var(--text) 13%, transparent);
   box-shadow: none;
   overflow: hidden;
 }
@@ -2149,20 +2149,20 @@
   margin: 0;
   border: 0;
   border-radius: 50%;
-  background: #e5ebf2;
+  background: var(--text);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   transform: translateX(0);
 }
 
 .lobby-permissions-card .toggle-pill.on {
-  border-color: rgba(214, 135, 34, 0.72);
+  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
   background: var(--accent);
   box-shadow: none;
 }
 
 .lobby-permissions-card .toggle-pill.on span {
   transform: translateX(18px);
-  background: #f5f7fb;
+  background: var(--text);
 }
 
 /* Final toggle geometry fix: pin the thumb to the track instead of translating it. */
@@ -2173,9 +2173,9 @@
   width: 40px;
   height: 22px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.13);
+  background: color-mix(in srgb, var(--text) 13%, transparent);
   overflow: hidden;
 }
 
@@ -2189,20 +2189,20 @@
   margin: 0;
   border: 0;
   border-radius: 50%;
-  background: #e5ebf2;
+  background: var(--text);
   transform: translateY(-50%);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 
 .lobby-permissions-card .toggle-pill.on {
-  border-color: rgba(214, 135, 34, 0.8);
+  border-color: color-mix(in srgb, var(--accent) 80%, transparent);
   background: var(--accent);
 }
 
 .lobby-permissions-card .toggle-pill.on span {
   left: auto;
   right: 3px;
-  background: #f5f7fb;
+  background: var(--text);
   transform: translateY(-50%);
 }
 
@@ -2218,17 +2218,17 @@
   min-height: 24px;
   padding: 0;
   margin: 0;
-  border: 1px solid rgba(255, 255, 255, 0.09);
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
   border-radius: 999px;
-  background: #343b45;
+  background: var(--control-bg);
   box-shadow: none;
   overflow: hidden;
   vertical-align: middle;
 }
 
 .lobby-permissions-card .permission-row .toggle-pill.on {
-  border-color: #d78020;
-  background: #d78020;
+  border-color: var(--accent);
+  background: var(--accent);
   box-shadow: none;
 }
 
@@ -2247,7 +2247,7 @@
   padding: 0;
   border: 0;
   border-radius: 50%;
-  background: #edf2f7;
+  background: var(--text);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.38);
   transform: translateY(-50%);
   transition: left 120ms ease, background 120ms ease;
@@ -2257,7 +2257,7 @@
 .lobby-permissions-card .permission-row .toggle-pill.on > .toggle-thumb {
   left: 22px;
   right: auto;
-  background: #ffffff;
+  background: var(--text);
   transform: translateY(-50%);
 }
 
@@ -2265,8 +2265,8 @@
 .lobby-dashboard-shell .lobby-station-card {
   padding: 1rem 1.05rem 0.95rem;
   border-radius: 10px;
-  border-color: rgba(255, 255, 255, 0.08);
-  background: rgba(10, 15, 23, 0.74);
+  border-color: color-mix(in srgb, var(--text) 8%, transparent);
+  background: color-mix(in srgb, var(--surface) 74%, transparent);
   box-shadow: none;
 }
 
@@ -2300,8 +2300,8 @@
   margin: 0 0 0.7rem;
   padding: 0.5rem 0.65rem;
   border-radius: 7px;
-  border: 1px solid rgba(213, 128, 31, 0.24);
-  background: rgba(213, 128, 31, 0.08);
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
   font-size: 0.78rem;
 }
 
@@ -2318,8 +2318,8 @@
   height: 42px;
   padding: 0 2.25rem 0 0.75rem;
   border-radius: 7px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background-color: rgba(7, 11, 17, 0.88);
+  border: 1px solid color-mix(in srgb, var(--text) 14%, transparent);
+  background-color: color-mix(in srgb, var(--bg) 88%, transparent);
   color: var(--text);
   font-size: 0.86rem;
 }
@@ -2333,9 +2333,9 @@
   height: 42px;
   padding: 0 0.9rem;
   border-radius: 7px;
-  border: 1px solid rgba(236, 150, 48, 0.78);
+  border: 1px solid color-mix(in srgb, var(--accent) 78%, transparent);
   background: var(--accent);
-  color: #111;
+  color: var(--accent-contrast);
   font-weight: 750;
   box-shadow: none;
   white-space: nowrap;
@@ -2359,7 +2359,7 @@
   align-items: flex-start;
   gap: 0.48rem;
   margin-top: 0.72rem;
-  color: rgba(226, 232, 240, 0.62);
+  color: color-mix(in srgb, var(--text) 62%, transparent);
   font-size: 0.72rem;
   line-height: 1.35;
 }
@@ -2372,7 +2372,7 @@
   width: 16px;
   height: 16px;
   margin-top: 1px;
-  border: 1px solid rgba(213, 128, 31, 0.48);
+  border: 1px solid color-mix(in srgb, var(--accent) 48%, transparent);
   border-radius: 50%;
   color: var(--accent);
   font-size: 0.62rem;
@@ -2664,7 +2664,7 @@
   justify-content: space-between;
   gap: 2rem;
   padding: 1rem 0.15rem 1.55rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .lobby-list-page .lobby-list-header h1 {
@@ -2697,7 +2697,7 @@
 
 .lobby-list-page .lobby-list-create-section {
   padding: 1.45rem 0.15rem 1.55rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .lobby-list-page .lobby-list-create-section h2,
@@ -2710,7 +2710,7 @@
 
 .lobby-list-page .lobby-create-form {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) auto auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr) auto auto;
   align-items: center;
   gap: 0.85rem;
 }
@@ -2721,8 +2721,8 @@
   height: 46px;
   padding: 0 0.95rem;
   border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  background: rgba(7, 11, 17, 0.74);
+  border: 1px solid color-mix(in srgb, var(--text) 11%, transparent);
+  background: color-mix(in srgb, var(--bg) 74%, transparent);
 }
 
 .lobby-list-page .lobby-checkbox {
@@ -2773,13 +2773,13 @@
   padding: 0.4rem 0.7rem;
   border-radius: 7px;
   background: transparent;
-  border-color: rgba(255, 255, 255, 0.1);
+  border-color: color-mix(in srgb, var(--text) 10%, transparent);
   color: var(--muted);
 }
 
 .lobby-list-page .lobby-refresh-button:hover:not(:disabled) {
   color: var(--text);
-  background: rgba(255, 255, 255, 0.035);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 
 .lobby-list-page .lobby-list-empty {
@@ -2797,15 +2797,15 @@
   grid-template-columns: 156px minmax(0, 1fr);
   gap: 1.15rem;
   padding: 1rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.025);
+  background: color-mix(in srgb, var(--text) 2.5%, transparent);
   overflow: hidden;
 }
 
 .lobby-list-page .lobby-card:hover {
-  border-color: rgba(214, 135, 34, 0.28);
-  background: rgba(255, 255, 255, 0.035);
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 
 .lobby-list-page .lobby-list-art {
@@ -2816,8 +2816,8 @@
   aspect-ratio: 1;
   overflow: hidden;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.035);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 .lobby-list-page .lobby-list-art img {
@@ -2852,9 +2852,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(214, 135, 34, 0.82);
+  color: color-mix(in srgb, var(--accent) 82%, transparent);
   font-size: 2.4rem;
-  background: radial-gradient(circle at 45% 40%, rgba(214, 135, 34, 0.12), transparent 58%), rgba(255, 255, 255, 0.025);
+  background: radial-gradient(circle at 45% 40%, color-mix(in srgb, var(--accent) 12%, transparent), transparent 58%), color-mix(in srgb, var(--text) 2.5%, transparent);
 }
 
 .lobby-list-page .lobby-card-main {
@@ -2886,15 +2886,15 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #6b7280;
+  background: var(--faint);
 }
 
 .lobby-list-page .lobby-state-label.open {
-  color: #72d8a6;
+  color: var(--good);
 }
 
 .lobby-list-page .lobby-state-label.open::before {
-  background: #35d391;
+  background: var(--good);
 }
 
 .lobby-list-page .lobby-card h3 {
@@ -2911,7 +2911,7 @@
 
 .lobby-list-page .lobby-card-copy p span {
   margin: 0 0.3rem;
-  color: rgba(255, 255, 255, 0.28);
+  color: color-mix(in srgb, var(--text) 28%, transparent);
 }
 
 .lobby-list-page .lobby-card-actions {
@@ -2940,8 +2940,8 @@
   min-width: 0;
   margin-top: 0.05rem;
   padding: 0.75rem 0.85rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.07);
-  background: rgba(0, 0, 0, 0.12);
+  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  background: color-mix(in srgb, var(--bg) 12%, transparent);
 }
 
 .lobby-list-page .lobby-invite-row > div {
@@ -2963,7 +2963,7 @@
   padding: 0;
   border-radius: 0;
   background: transparent;
-  color: rgba(231, 237, 243, 0.78);
+  color: color-mix(in srgb, var(--text) 78%, transparent);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -3028,4 +3028,28 @@
   .lobby-list-page .lobby-invite-row {
     align-items: flex-end;
   }
+}
+
+/* Five-letter lobby join codes and optional password protection. */
+.lobby-short-code,
+.lobby-code-chip strong {
+  font-size: 1.15rem;
+  letter-spacing: 0.18em;
+  font-weight: 900;
+}
+
+.lobby-password-control {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.lobby-password-control input {
+  min-width: min(230px, 100%);
+  flex: 1 1 180px;
+}
+
+.lobby-code-chip {
+  user-select: all;
 }

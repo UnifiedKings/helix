@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import os
 from typing import Any, Dict, List, Optional, Set
 
 import re
@@ -17,6 +16,7 @@ from ..download_manager import DOWNLOAD_MANAGER, DownloadJob
 from ..integrations import ytmusic as ytmusic_integration
 from ..integrations.subsonic import SubsonicClient
 from ..rate_limit import RATE_LIMITER, make_key
+from ..subsonic_permissions import can_import_to_subsonic
 
 # Optional: cache invalidation helpers if your subsonic resolver uses them.
 try:
@@ -40,13 +40,17 @@ def _load_settings_short() -> Dict[str, Any]:
         db.close()
 
 
-def _can_import_to_library(user: User) -> bool:
-    return user.role == "admin" or os.getenv("HELIX_ALLOW_NON_ADMIN_IMPORT", "false").strip().lower() in {"1", "true", "yes", "on"}
-
-
 def _require_import_permission(user: User) -> None:
-    if not _can_import_to_library(user):
-        raise HTTPException(status_code=403, detail="Only admins can import tracks into the Subsonic library")
+    db = SessionLocal()
+    try:
+        allowed = can_import_to_subsonic(db, user)
+    finally:
+        db.close()
+    if not allowed:
+        raise HTTPException(
+            status_code=403,
+            detail="Your account is not allowed to import tracks into the Subsonic library",
+        )
 
 
 def _skip_existing_album_tracks_enabled() -> bool:

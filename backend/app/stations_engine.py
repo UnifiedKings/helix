@@ -852,9 +852,16 @@ async def generate_and_append_station_tracks(
     # This does not bulk-download anything. We still append only `count` queue
     # items, and fulfillment only happens later when a track reaches the front of
     # the queue.
-    provider_count = max(count * 12, count + 24)
+    # Keep a modest fallback pool without making network-backed providers build
+    # dozens of recommendations for every single queue slot. Discovery results
+    # with stable source ids are normally playable directly, so 4x/+4 gives the
+    # resolver room to skip bad candidates while keeping next-track latency low.
+    provider_count = max(count * 4, count + 4)
     if source_mode == "library_only":
-        provider_count = max(provider_count, count * 20, min(100, count + 40))
+        # Library-only mode needs more overfetch because many discovery candidates
+        # legitimately will not exist in Subsonic, but still cap the work well below
+        # the previous 20x/+40 behavior.
+        provider_count = max(provider_count, count * 12, min(60, count + 16))
     try:
         results = await asyncio.wait_for(
             provider.next_tracks(context, provider_count),

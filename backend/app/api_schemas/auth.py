@@ -31,8 +31,11 @@ class AdminUserResponse(BaseModel):
     username: str
     role: str
     is_active: bool
+    subsonic_import_override: bool = False
+    can_import_subsonic: bool = False
 
 
 class AdminUpdateUserRequest(BaseModel):
     is_active: Optional[bool] = None
     role: Optional[str] = None
+    subsonic_import_override: Optional[bool] = None

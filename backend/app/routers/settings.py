@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends
@@ -10,6 +9,7 @@ from ..auth import get_current_user, require_admin
 from ..db import get_db
 from ..models import User
 from ..settings_store import get_settings, patch_settings
+from ..subsonic_permissions import can_import_to_subsonic
 
 router = APIRouter(tags=["settings"])
 
@@ -25,6 +25,7 @@ PUBLIC_SETTING_KEYS = {
     "subsonic_client_name",
     "subsonic_api_version",
     "subsonic_timeout_s",
+    "allow_all_users_subsonic_import",
     "player_max_queue_items",
     "player_omit_missing",
     "search_hide_non_official",
@@ -100,9 +101,9 @@ def _subsonic_configured(settings: dict[str, Any]) -> bool:
     )
 
 
-def _capabilities_payload(settings: dict[str, Any], user: User | None = None) -> dict[str, Any]:
+def _capabilities_payload(db: Session, settings: dict[str, Any], user: User | None = None) -> dict[str, Any]:
     subsonic_configured = _subsonic_configured(settings)
-    import_allowed = bool(user and (user.role == "admin" or os.getenv("HELIX_ALLOW_NON_ADMIN_IMPORT", "false").strip().lower() in {"1", "true", "yes", "on"}))
+    import_allowed = bool(user and can_import_to_subsonic(db, user))
     return {
         "subsonic_configured": subsonic_configured,
         "features": {
@@ -151,4 +152,4 @@ def admin_patch_settings(
 
 @router.get("/capabilities")
 def get_capabilities(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return _capabilities_payload(get_settings(db), user)
+    return _capabilities_payload(db, get_settings(db), user)

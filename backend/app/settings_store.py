@@ -20,15 +20,13 @@ DEFAULTS: dict[str, Any] = {
     "subsonic_api_version": "1.16.1",
     "subsonic_timeout_s": 20,
 
+    # Import permissions. Administrators can always import. Normal users are
+    # denied by default unless this global switch or a per-user admin override
+    # grants access.
+    "allow_all_users_subsonic_import": False,
+
     # Playback queue behavior
     "player_max_queue_items": 500,
-    # Maximum number of station-generated tracks a user may choose to keep ahead.
-    # Individual users may select any value from 1 up to this ceiling.
-    "station_queue_ahead_max": 10,
-    # Number of upcoming queue items Helix proactively downloads. This is a
-    # server resource policy and remains independent of each user's logical
-    # station queue-ahead preference.
-    "download_prefetch_ahead": 1,
     # Keep missing items in the queue so Helix can fulfill them on-demand.
     "player_omit_missing": False,
 

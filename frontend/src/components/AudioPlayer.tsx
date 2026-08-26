@@ -6,6 +6,7 @@ type Props = {
   player: PlayerState | null
   audioIntent: AudioIntent
   onStateChange: (player: PlayerState) => void
+  repeatTrack?: boolean
   onLocalPlayingChange?: (playing: boolean) => void
   onError?: (message: string) => void
 }
@@ -41,7 +42,7 @@ function clearPosition(queueItemId: string) {
   window.localStorage.removeItem(positionKey(queueItemId))
 }
 
-export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlayingChange, onError }: Props) {
+export function AudioPlayer({ player, audioIntent, onStateChange, repeatTrack = false, onLocalPlayingChange, onError }: Props) {
   const audioRef = useRef<HTMLAudioElement | null>(null)
   const currentItemIdRef = useRef<string>('')
   const pendingRestoreRef = useRef(0)
@@ -227,6 +228,7 @@ export function AudioPlayer({ player, audioIntent, onStateChange, onLocalPlaying
       <audio
         ref={audioRef}
         preload="auto"
+        loop={repeatTrack}
         onEnded={handleEnded}
         onError={handleError}
         onPause={(event) => {

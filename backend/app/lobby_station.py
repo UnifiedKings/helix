@@ -93,7 +93,14 @@ async def fill_lobby_station(lobby_id: str, *, start_if_empty: bool = False) -> 
 
         provider = get_station_provider(context.station_type)
         source_mode = _station_source_mode(context.config)
-        provider_count = max(need * 12, need + 24)
+        # Keep the same modest candidate buffer as the main station engine.
+        # Lobby refill used to request 36 candidates just to append one track,
+        # which is especially expensive for network-backed providers.
+        provider_count = max(need * 4, need + 4)
+        if source_mode == "library_only":
+            # Library-only mode legitimately needs extra candidates because many
+            # discovery picks may not exist in Subsonic. Keep the fallback bounded.
+            provider_count = max(provider_count, need * 12, min(60, need + 16))
         try:
             results = await asyncio.wait_for(provider.next_tracks(context, provider_count), timeout=float(os.getenv("HELIX_STATION_PROVIDER_TIMEOUT_S", "20")))
         except ValueError as exc:

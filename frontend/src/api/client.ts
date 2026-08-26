@@ -276,7 +276,10 @@ export const api = {
   resume: () => request<PlayerState>('/api/playback/resume', { method: 'POST', body: JSON.stringify({}) }),
   next: () => request<PlayerState>('/api/playback/next', { method: 'POST', body: JSON.stringify({}) }),
   previous: () => request<PlayerState>('/api/playback/previous', { method: 'POST', body: JSON.stringify({}) }),
-  ended: () => request<PlayerState>('/api/playback/ended', { method: 'POST', body: JSON.stringify({}) }),
+  ended: (repeatQueue = false) => request<PlayerState>('/api/playback/ended', {
+    method: 'POST',
+    body: JSON.stringify({ repeat_queue: repeatQueue }),
+  }),
   jump: (index: number) => request<PlayerState>('/api/playback/jump', { method: 'POST', body: JSON.stringify({ index }) }),
   setAutoplay: (enabled: boolean) => request<PlayerState>('/api/playback/autoplay', { method: 'POST', body: JSON.stringify({ enabled }) }),
 
@@ -340,7 +343,7 @@ export const api = {
   updateAdminSettings: (payload: Record<string, unknown>) => request<Record<string, unknown>>('/api/admin/settings', { method: 'PATCH', body: JSON.stringify(payload) }),
   adminUsers: () => request<AdminUser[]>('/admin/users'),
   createAdminUser: (payload: { username: string; password: string; role: 'admin' | 'user' }) => request<AdminUser>('/admin/users', { method: 'POST', body: JSON.stringify(payload) }),
-  updateAdminUser: (id: string, payload: { is_active?: boolean; role?: 'admin' | 'user' }) => request<AdminUser>(`/admin/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  updateAdminUser: (id: string, payload: { is_active?: boolean; role?: 'admin' | 'user'; subsonic_import_override?: boolean }) => request<AdminUser>(`/admin/users/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
 
   stationTypes: () => request<StationProviderInfo[]>('/api/stations/types'),
   reloadStationTypes: () => request<StationProviderInfo[]>('/api/stations/types/reload', { method: 'POST', body: JSON.stringify({}) }),
@@ -364,23 +367,23 @@ export const api = {
   deletePlaylist: (id: string) => request<{ ok: boolean }>(`/api/playlists/${encodeURIComponent(id)}`, { method: 'DELETE' }),
 
   lobbies: () => request<LobbyListResponse>('/api/lobbies'),
-  createLobby: (name: string, guestPermissions?: LobbyPermissions, guestQueueLimit?: number) => request<LobbyState>('/api/lobbies', { method: 'POST', body: JSON.stringify({ name, guest_permissions: guestPermissions, guest_queue_limit: guestQueueLimit }) }),
-  updateLobby: (lobbyId: string, payload: { name?: string; is_open?: boolean; guest_permissions?: LobbyPermissions; guest_queue_limit?: number; cleanup_after_days?: number }) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  createLobby: (name: string, guestPermissions?: LobbyPermissions, guestQueueLimit?: number, password?: string) => request<LobbyState>('/api/lobbies', { method: 'POST', body: JSON.stringify({ name, guest_permissions: guestPermissions, guest_queue_limit: guestQueueLimit, password: password?.trim() || null }) }),
+  updateLobby: (lobbyId: string, payload: { name?: string; password?: string | null; is_open?: boolean; guest_permissions?: LobbyPermissions; guest_queue_limit?: number; cleanup_after_days?: number }) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}`, { method: 'PATCH', body: JSON.stringify(payload) }),
   regenerateLobbyInvite: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/invite/regenerate`, { method: 'POST', body: JSON.stringify({}) }),
   playLobbyStation: (lobbyId: string, stationId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/station/${encodeURIComponent(stationId)}/play`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
   stopLobbyStation: (lobbyId: string) => request<LobbyState>(`/api/lobbies/${encodeURIComponent(lobbyId)}/station/stop`, { method: 'POST', headers: lobbyHeaders(lobbyId), body: JSON.stringify({}) }),
   deleteLobby: (lobbyId: string) => request<{ ok: boolean }>(`/api/lobbies/${encodeURIComponent(lobbyId)}`, { method: 'DELETE' }),
-  joinLobby: async (inviteCode: string, nickname: string) => {
-    const cleanedInvite = inviteCode.trim()
+  joinLobby: async (inviteCode: string, nickname: string, password?: string) => {
+    const cleanedInvite = inviteCode.trim().toUpperCase()
     const cleanedNickname = nickname.trim()
-    const response = await request<LobbyJoinResponse>('/api/lobbies/join', { method: 'POST', body: JSON.stringify({ invite_code: cleanedInvite, nickname: cleanedNickname }) })
+    const response = await request<LobbyJoinResponse>('/api/lobbies/join', { method: 'POST', body: JSON.stringify({ invite_code: cleanedInvite, nickname: cleanedNickname, password: password || null }) })
     saveLobbyInviteMapping(cleanedInvite, response.lobby.id, response.guest_token, response.member?.nickname || cleanedNickname)
     return response
   },
-  savedLobbyInvite: (inviteCode: string) => readLobbyInviteMapping(inviteCode),
-  clearSavedLobbyInvite: (inviteCode: string) => clearLobbyInviteMapping(inviteCode),
+  savedLobbyInvite: (inviteCode: string) => readLobbyInviteMapping(inviteCode.trim().toUpperCase()),
+  clearSavedLobbyInvite: (inviteCode: string) => clearLobbyInviteMapping(inviteCode.trim().toUpperCase()),
   resumeJoinedLobby: (inviteCode: string) => {
-    const cleanedInvite = inviteCode.trim()
+    const cleanedInvite = inviteCode.trim().toUpperCase()
     const mapping = readLobbyInviteMapping(cleanedInvite)
     if (mapping) {
       saveLobbyToken(mapping.lobbyId, mapping.token)

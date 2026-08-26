@@ -12,6 +12,7 @@ export function usePlayer() {
   const latestRequestRef = useRef(0)
   const actionInFlightRef = useRef(false)
   const socketOpenRef = useRef(false)
+  const lastSocketSeqRef = useRef(0)
 
   const refresh = useCallback(async () => {
     if (actionInFlightRef.current) return
@@ -70,11 +71,21 @@ export function usePlayer() {
       }
       socket.onmessage = (event) => {
         try {
-          const message = JSON.parse(event.data) as { type?: string; state?: PlayerState }
-          if (message.type === 'player.state' && message.state) {
-            setPlayer(message.state)
-            setLoading(false)
-          }
+          const message = JSON.parse(event.data) as { type?: string; seq?: number; state?: PlayerState }
+          if (message.type !== 'player.state' || !message.state) return
+
+          const seq = Number(message.seq || 0)
+          if (seq && seq <= lastSocketSeqRef.current) return
+          if (seq) lastSocketSeqRef.current = seq
+
+          // HTTP playback/queue actions return an authoritative post-action state.
+          // Ignore websocket snapshots while one is in flight, because a broadcast
+          // queued just before the action can arrive afterward and overwrite that
+          // newer state (most visibly as queue reorder snapping back).
+          if (actionInFlightRef.current) return
+
+          setPlayer(message.state)
+          setLoading(false)
         } catch { /* ignore malformed realtime messages */ }
       }
       socket.onclose = () => {

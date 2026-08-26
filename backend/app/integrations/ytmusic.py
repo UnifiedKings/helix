@@ -219,8 +219,12 @@ def search_ytmusic(
 
     c = _client()
 
-    songs_raw = c.search(q, filter="songs", limit=int(song_limit) if song_limit else 15) or []
-    albums_raw = c.search(q, filter="albums", limit=int(album_limit) if album_limit else 15) or []
+    # A zero limit explicitly disables that result type. Several station paths use
+    # song_limit=0 or album_limit=0 to avoid an unnecessary second network search.
+    song_limit = max(0, int(song_limit or 0))
+    album_limit = max(0, int(album_limit or 0))
+    songs_raw = (c.search(q, filter="songs", limit=song_limit) or []) if song_limit > 0 else []
+    albums_raw = (c.search(q, filter="albums", limit=album_limit) or []) if album_limit > 0 else []
 
     songs: List[Dict[str, Any]] = []
     for it in songs_raw:

@@ -180,6 +180,11 @@
   margin-bottom: 0.25rem;
 }
 
+.top-result-library-state {
+  margin-top: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+
 .top-result-actions {
   display: flex;
   gap: 0.7rem;

@@ -5,6 +5,7 @@ import logging
 import os
 import random
 import re
+import time
 from typing import Any
 
 from ...integrations.ytmusic import find_artist_by_name, get_artist_popular_songs
@@ -97,8 +98,41 @@ class ArtistCollectionProvider(StationProvider):
     station_type = "artist_collection"
     display_name = "Artist Collection"
     description = "Uses YouTube Music artist catalogs and only plays tracks from the selected seed artists, with simple rotation and repeat controls."
-    version = "1.2.0"
+    version = "1.2.1"
     builtin = True
+
+    def __init__(self) -> None:
+        # The registry keeps one provider instance alive. Artist Collection can
+        # otherwise re-resolve every seed artist and re-fetch every catalog on
+        # every queue refill, even when the same station was filled seconds ago.
+        self._cache: dict[tuple[Any, ...], tuple[float, Any]] = {}
+
+    def _cache_ttl(self) -> float:
+        try:
+            return max(0.0, float(os.getenv("HELIX_YTMUSIC_STATION_CACHE_TTL_S", "600")))
+        except Exception:
+            return 600.0
+
+    def _cache_get(self, key: tuple[Any, ...]) -> Any:
+        row = self._cache.get(key)
+        if not row:
+            return None
+        expires_at, value = row
+        if expires_at <= time.monotonic():
+            self._cache.pop(key, None)
+            return None
+        return value
+
+    def _cache_put(self, key: tuple[Any, ...], value: Any) -> Any:
+        ttl = self._cache_ttl()
+        if ttl > 0:
+            if len(self._cache) >= 512:
+                now = time.monotonic()
+                self._cache = {k: v for k, v in self._cache.items() if v[0] > now}
+                if len(self._cache) >= 512:
+                    self._cache.pop(next(iter(self._cache)), None)
+            self._cache[key] = (time.monotonic() + ttl, value)
+        return value
 
     def config_options(self) -> list[StationConfigOption]:
         return [
@@ -164,13 +198,19 @@ class ArtistCollectionProvider(StationProvider):
             raise ValueError("Artist rotation must be balanced or random")
 
     async def _yt_artist(self, artist: str) -> dict[str, Any]:
-        if not _clean(artist):
+        artist = _clean(artist)
+        if not artist:
             return {}
+        cache_key = ("artist", _norm_artist(artist))
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return dict(cached)
         try:
-            return await asyncio.wait_for(
+            result = await asyncio.wait_for(
                 asyncio.to_thread(find_artist_by_name, artist, artist_limit=8),
                 timeout=float(os.getenv("HELIX_YTMUSIC_LOOKUP_TIMEOUT_S", "8")),
             ) or {}
+            return dict(self._cache_put(cache_key, dict(result)))
         except Exception as exc:
             LOG.warning("Artist Collection YouTube Music artist lookup failed artist=%r err=%s", artist, exc)
             return {}
@@ -180,15 +220,22 @@ class ArtistCollectionProvider(StationProvider):
         browse_id = _clean(str(yt_artist.get("browse_id") or yt_artist.get("artist_id") or ""))
         if not browse_id:
             return []
+        wanted = max(1, int(limit))
+        cache_key = ("songs", browse_id, wanted)
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return [dict(item) for item in cached]
         try:
             recordings = await asyncio.wait_for(
-                asyncio.to_thread(get_artist_popular_songs, browse_id, limit=max(1, int(limit))),
+                asyncio.to_thread(get_artist_popular_songs, browse_id, limit=wanted),
                 timeout=float(os.getenv("HELIX_YTMUSIC_ARTIST_SONGS_TIMEOUT_S", "12")),
             ) or []
         except Exception as exc:
             LOG.warning("Artist Collection YouTube Music songs failed artist=%r browse_id=%s err=%s", artist, browse_id, exc)
             return []
-        return [dict(item, _helix_seed_artist=artist, _helix_yt_artist_id=browse_id) for item in recordings if isinstance(item, dict)]
+        cleaned = [dict(item, _helix_seed_artist=artist, _helix_yt_artist_id=browse_id) for item in recordings if isinstance(item, dict)]
+        self._cache_put(cache_key, [dict(item) for item in cleaned])
+        return cleaned
 
     def _artist_counts(self, context: StationContext, seed_artists: list[str]) -> dict[str, int]:
         seed_keys = {_norm_artist(a) for a in seed_artists}
@@ -219,21 +266,6 @@ class ArtistCollectionProvider(StationProvider):
         recent_window = max(0, min(500, _safe_int(cfg.get("recent_track_window"), 75)))
         wanted = max(1, int(count or 1))
 
-        recording_groups = await asyncio.gather(*(self._top_recordings(artist, pool_size) for artist in seed_artists))
-        by_artist: dict[str, list[dict[str, Any]]] = {}
-        display_by_key: dict[str, str] = {}
-        for artist, recordings in zip(seed_artists, recording_groups):
-            key = _norm_artist(artist)
-            if not key:
-                continue
-            display_by_key[key] = artist
-            cleaned = [r for r in recordings if _recording_title(r)]
-            random.shuffle(cleaned)
-            by_artist[key] = cleaned
-
-        if not any(by_artist.values()):
-            return []
-
         recent_pairs = {
             _norm_pair(item.title, item.artist)
             for item in list(context.recent_tracks or [])[:recent_window]
@@ -244,55 +276,94 @@ class ArtistCollectionProvider(StationProvider):
 
         selected: list[StationResult] = []
         counts = self._artist_counts(context, seed_artists)
-        artist_keys = [key for key in (_norm_artist(a) for a in seed_artists) if key in by_artist and by_artist[key]]
+        by_artist: dict[str, list[dict[str, Any]]] = {}
+        display_by_key = {_norm_artist(artist): artist for artist in seed_artists if _norm_artist(artist)}
 
-        attempts = max(wanted * max(len(artist_keys), 1) * 5, 20)
-        for _ in range(attempts):
-            if len(selected) >= wanted:
-                break
-            available = [key for key in artist_keys if by_artist.get(key)]
-            if len(artist_keys) > 1 and artist_cooldown > 0:
-                blocked_artists = _blocked_artists_for_cooldown(context, selected, artist_cooldown)
-                available = [key for key in available if key not in blocked_artists]
-            if not available:
-                break
-            if rotation_mode == "balanced":
-                min_count = min(counts.get(key, 0) for key in available)
-                artist_key = random.choice([key for key in available if counts.get(key, 0) == min_count])
-            else:
-                artist_key = random.choice(available)
+        # Loading every configured artist catalog before picking even one track is
+        # wasteful for large collections. Start with only the artists most likely
+        # to be selected, then expand to the rest only if duplicates/unavailable
+        # tracks prevent us from satisfying the requested batch.
+        candidate_artists = list(seed_artists)
+        if rotation_mode == "balanced":
+            random.shuffle(candidate_artists)  # random tie-break for equal counts
+            candidate_artists.sort(key=lambda artist: counts.get(_norm_artist(artist), 0))
+        else:
+            random.shuffle(candidate_artists)
 
-            recordings = by_artist.get(artist_key) or []
-            while recordings:
-                recording = recordings.pop(0)
-                seed_artist = _clean(str(recording.get("_helix_seed_artist") or display_by_key.get(artist_key, "")))
-                title = _recording_title(recording)
-                artist = _recording_artist(recording, seed_artist)
-                if _norm_artist(artist) != artist_key:
-                    # YouTube Music can return collaboration credits on artist pages.
-                    # This provider is intentionally strict: only seed artists are allowed.
-                    artist = seed_artist
-                pair = _norm_pair(title, artist)
-                if not title or not artist or pair in used_pairs:
+        initial_artist_count = min(
+            len(candidate_artists),
+            max(4, wanted * 2, min(len(candidate_artists), artist_cooldown + 1)),
+        )
+        initial_artists = candidate_artists[:initial_artist_count]
+        remaining_artists = candidate_artists[initial_artist_count:]
+
+        async def load_artists(artists: list[str]) -> None:
+            if not artists:
+                return
+            recording_groups = await asyncio.gather(*(self._top_recordings(artist, pool_size) for artist in artists))
+            for artist, recordings in zip(artists, recording_groups):
+                key = _norm_artist(artist)
+                if not key:
                     continue
-                duration_ms = _safe_int(recording.get("duration_ms") or recording.get("durationMs") or 0, 0)
-                result = StationResult(
-                    title=title,
-                    artist=artist,
-                    album=_clean(str(recording.get("album") or "")),
-                    duration_ms=duration_ms,
-                    reason=f"Artist Collection seed artist: {seed_artist}",
-                    provider_metadata={
-                        "provider": self.station_type,
-                        "yt_artist_id": str(recording.get("_helix_yt_artist_id") or ""),
-                        "video_id": str(recording.get("video_id") or recording.get("videoId") or ""),
-                        "thumbnail_url": str(recording.get("thumbnail_url") or ""),
-                        "discovery_source": "ytmusic",
-                    },
-                )
-                selected.append(result)
-                used_pairs.add(pair)
-                counts[artist_key] = counts.get(artist_key, 0) + 1
-                break
+                cleaned = [r for r in recordings if _recording_title(r)]
+                random.shuffle(cleaned)
+                by_artist[key] = cleaned
+
+        def pick_from_loaded() -> None:
+            artist_keys = [key for key in (_norm_artist(a) for a in candidate_artists) if key in by_artist and by_artist[key]]
+            attempts = max((wanted - len(selected)) * max(len(artist_keys), 1) * 5, 20)
+            for _ in range(attempts):
+                if len(selected) >= wanted:
+                    break
+                available = [key for key in artist_keys if by_artist.get(key)]
+                if len(artist_keys) > 1 and artist_cooldown > 0:
+                    blocked_artists = _blocked_artists_for_cooldown(context, selected, artist_cooldown)
+                    available = [key for key in available if key not in blocked_artists]
+                if not available:
+                    break
+                if rotation_mode == "balanced":
+                    min_count = min(counts.get(key, 0) for key in available)
+                    artist_key = random.choice([key for key in available if counts.get(key, 0) == min_count])
+                else:
+                    artist_key = random.choice(available)
+
+                recordings = by_artist.get(artist_key) or []
+                while recordings:
+                    recording = recordings.pop(0)
+                    seed_artist = _clean(str(recording.get("_helix_seed_artist") or display_by_key.get(artist_key, "")))
+                    title = _recording_title(recording)
+                    artist = _recording_artist(recording, seed_artist)
+                    if _norm_artist(artist) != artist_key:
+                        # YouTube Music can return collaboration credits on artist pages.
+                        # This provider is intentionally strict: only seed artists are allowed.
+                        artist = seed_artist
+                    pair = _norm_pair(title, artist)
+                    if not title or not artist or pair in used_pairs:
+                        continue
+                    duration_ms = _safe_int(recording.get("duration_ms") or recording.get("durationMs") or 0, 0)
+                    result = StationResult(
+                        title=title,
+                        artist=artist,
+                        album=_clean(str(recording.get("album") or "")),
+                        duration_ms=duration_ms,
+                        reason=f"Artist Collection seed artist: {seed_artist}",
+                        provider_metadata={
+                            "provider": self.station_type,
+                            "yt_artist_id": str(recording.get("_helix_yt_artist_id") or ""),
+                            "video_id": str(recording.get("video_id") or recording.get("videoId") or ""),
+                            "thumbnail_url": str(recording.get("thumbnail_url") or ""),
+                            "discovery_source": "ytmusic",
+                        },
+                    )
+                    selected.append(result)
+                    used_pairs.add(pair)
+                    counts[artist_key] = counts.get(artist_key, 0) + 1
+                    break
+
+        await load_artists(initial_artists)
+        pick_from_loaded()
+        if len(selected) < wanted and remaining_artists:
+            await load_artists(remaining_artists)
+            pick_from_loaded()
 
         return selected[:wanted]

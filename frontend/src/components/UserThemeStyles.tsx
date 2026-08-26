@@ -22,6 +22,7 @@ function shift(hex: string, amount: number) {
 function densityCss(density: UserSettingsPayload['settings']['appearance_ui_density']) {
   if (density === 'compact') {
     return `
+:root { --transport-control-gap: 0.62rem; }
 .side-link { min-height: 40px !important; padding-block: .55rem !important; }
 .queue-row-redesign, .queue-panel-redesign .queue-item { min-height: 62px !important; }
 .settings-control-row { padding-block: .62rem !important; }
@@ -31,6 +32,7 @@ function densityCss(density: UserSettingsPayload['settings']['appearance_ui_dens
   }
   if (density === 'spacious') {
     return `
+:root { --transport-control-gap: 1.28rem; }
 .side-link { min-height: 52px !important; padding-block: .86rem !important; }
 .queue-row-redesign, .queue-panel-redesign .queue-item { min-height: 78px !important; }
 .settings-control-row { padding-block: 1rem !important; }
@@ -38,7 +40,9 @@ function densityCss(density: UserSettingsPayload['settings']['appearance_ui_dens
 .search-song-row, .history-row { min-height: 72px !important; }
 `
   }
-  return ''
+  return `
+:root { --transport-control-gap: 0.92rem; }
+`
 }
 
 function artworkRadiusCss(style: UserSettingsPayload['settings']['appearance_artwork_radius']) {

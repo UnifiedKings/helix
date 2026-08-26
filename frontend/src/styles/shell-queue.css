@@ -4,10 +4,10 @@
   content: "";
   position: absolute;
   inset: 0.75rem 0.65rem 0.75rem 0.65rem;
-  border: 1px solid rgba(184, 106, 31, 0.12);
+  border: 1px solid color-mix(in srgb, var(--accent) 12%, transparent);
   border-radius: 26px;
   pointer-events: none;
-  box-shadow: inset 0 0 40px rgba(23, 120, 255, 0.035);
+  box-shadow: inset 0 0 40px color-mix(in srgb, var(--accent) 3.5%, transparent);
 }
 
 .sidebar-brand {
@@ -25,21 +25,21 @@
   min-height: 48px;
   border-radius: 16px;
   padding: 0.78rem 0.95rem;
-  color: rgba(232, 238, 255, 0.78);
-  border-color: rgba(255,255,255,0.035);
-  background: rgba(255,255,255,0.018);
+  color: color-mix(in srgb, var(--text) 78%, transparent);
+  border-color: color-mix(in srgb, var(--text) 3.5%, transparent);
+  background: color-mix(in srgb, var(--text) 1.8%, transparent);
 }
 
 .side-link:hover:not(:disabled),
 .side-link.active {
-  color: white;
-  border-color: rgba(184, 106, 31, 0.45);
-  background: linear-gradient(90deg, rgba(184, 106, 31, 0.36), rgba(184, 106, 31, 0.12)),
-    rgba(255,255,255,0.035);
-  box-shadow: inset 3px 0 0 rgba(198, 119, 255, 0.92),
-    inset 0 0 0 1px rgba(255,255,255,0.035),
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 36%, transparent), color-mix(in srgb, var(--accent) 12%, transparent)),
+    color-mix(in srgb, var(--text) 3.5%, transparent);
+  box-shadow: inset 3px 0 0 color-mix(in srgb, var(--accent-bright) 92%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--text) 3.5%, transparent),
     0 16px 38px rgba(0,0,0,0.22),
-    0 0 30px rgba(184, 106, 31, 0.16);
+    0 0 30px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
 .sidebar-account-panel {
@@ -53,10 +53,10 @@
 
 .sidebar-account-card,
 .sidebar-logout-button {
-  border: 1px solid rgba(255,255,255,0.08);
+  border: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
   border-radius: 18px;
-  background: rgba(255,255,255,0.035);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.02);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 2%, transparent);
 }
 
 .sidebar-account-card {
@@ -84,13 +84,13 @@
   min-height: 48px;
   justify-content: flex-start;
   gap: 0.65rem;
-  color: rgba(248, 251, 255, 0.9);
+  color: color-mix(in srgb, var(--text) 90%, transparent);
   padding: 0.75rem 0.9rem;
 }
 
 .sidebar-logout-button:hover {
-  border-color: rgba(184, 106, 31, 0.35);
-  background: rgba(184, 106, 31, 0.10);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .app-main-area {
@@ -107,7 +107,7 @@
 }
 
 .queue-panel-redesign {
-  border-color: rgba(72, 157, 255, 0.18);
+  border-color: color-mix(in srgb, var(--accent-bright) 18%, transparent);
 }
 
 .queue-panel-redesign .queue-header h2::before {
@@ -117,9 +117,9 @@
   height: 1.65rem;
   margin-right: 0.45rem;
   border-radius: 10px;
-  color: #b9a6ff;
-  background: rgba(184, 106, 31, 0.14);
-  border: 1px solid rgba(184, 106, 31, 0.22);
+  color: color-mix(in srgb, var(--accent) 42%, var(--text));
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   font-size: 0.9rem;
   vertical-align: middle;
 }
@@ -129,15 +129,15 @@
 }
 
 .queue-row-redesign.active {
-  border-color: rgba(184, 106, 31, 0.62);
+  border-color: color-mix(in srgb, var(--accent) 62%, transparent);
 }
 
 .queue-summary {
   position: sticky;
   bottom: -1.1rem;
   margin: 1rem -1.1rem -1.1rem;
-  border-top: 1px solid rgba(255,255,255,0.07);
-  background: linear-gradient(180deg, rgba(6, 11, 19, 0.72), rgba(6, 11, 19, 0.96));
+  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  background: linear-gradient(180deg, color-mix(in srgb, var(--surface) 72%, transparent), color-mix(in srgb, var(--surface) 96%, transparent));
   backdrop-filter: blur(18px);
 }
 
@@ -188,11 +188,11 @@
 }
 
 .app-sidebar .side-link:hover:not(:disabled) {
-  border-color: rgba(184, 106, 31, 0.22);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .app-sidebar .side-link.active {
-  border-color: rgba(184, 106, 31, 0.50);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
 .app-sidebar .sidebar-logout-button {
@@ -219,8 +219,8 @@
 }
 
 .app-sidebar .sidebar-logout-button:hover {
-  border-color: rgba(184, 106, 31, 0.22);
-  background: rgba(184, 106, 31, 0.08);
+  border-color: color-mix(in srgb, var(--accent) 22%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
   box-shadow: none;
 }
 
@@ -256,9 +256,9 @@
   margin: 0.1rem 0 0.85rem;
   padding: 0.56rem 0.62rem;
   border-radius: 14px;
-  border: 1px solid rgba(184, 106, 31, 0.26);
-  background: linear-gradient(90deg, rgba(184, 106, 31, 0.13), rgba(20, 156, 172, 0.07)),
-    rgba(255,255,255,0.022);
+  border: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 13%, transparent), color-mix(in srgb, var(--accent-bright) 7%, transparent)),
+    color-mix(in srgb, var(--text) 2.2%, transparent);
   box-shadow: none;
 }
 
@@ -266,9 +266,9 @@
   width: 30px;
   height: 30px;
   border-radius: 11px;
-  color: #c9bcff;
-  background: rgba(184, 106, 31, 0.14);
-  border: 1px solid rgba(184, 106, 31, 0.22);
+  color: color-mix(in srgb, var(--accent) 32%, var(--text));
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
   box-shadow: none;
   font-size: 0.9rem;
 }
@@ -281,7 +281,7 @@
 }
 
 .queue-station-banner strong {
-  color: rgba(248, 251, 255, 0.92);
+  color: color-mix(in srgb, var(--text) 92%, transparent);
   font-size: 0.92rem;
   font-weight: 850;
 }
@@ -327,11 +327,11 @@
   height: 22px;
   display: block;
   border-radius: 999px;
-  background: radial-gradient(circle at 50% 50%, rgba(9, 14, 24, 1) 0 10%, rgba(213, 203, 255, 0.95) 11% 15%, rgba(9, 14, 24, 1) 16% 25%, transparent 26%),
-    conic-gradient(from 0deg, rgba(203, 189, 255, 0.98), rgba(184, 106, 31, 0.35), rgba(20, 156, 172, 0.55), rgba(203, 189, 255, 0.98));
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.14),
+  background: radial-gradient(circle at 50% 50%, var(--surface) 0 10%, color-mix(in srgb, var(--accent-bright) 95%, transparent) 11% 15%, var(--surface) 16% 25%, transparent 26%),
+    conic-gradient(from 0deg, color-mix(in srgb, var(--accent-bright) 98%, transparent), color-mix(in srgb, var(--accent) 35%, transparent), color-mix(in srgb, var(--accent-bright) 55%, transparent), color-mix(in srgb, var(--accent-bright) 98%, transparent));
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent),
     inset 0 0 12px rgba(0,0,0,0.32),
-    0 0 14px rgba(184, 106, 31, 0.18);
+    0 0 14px color-mix(in srgb, var(--accent) 18%, transparent);
   animation: helix-record-spin 1.6s linear infinite;
 }
 
@@ -340,9 +340,9 @@
   width: 7px;
   height: 7px;
   border-radius: 999px;
-  background: rgba(9, 14, 24, 0.94);
-  border: 1px solid rgba(213, 203, 255, 0.82);
-  box-shadow: 0 0 8px rgba(213, 203, 255, 0.25);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent-bright) 82%, transparent);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-bright) 25%, transparent);
 }
 
 @keyframes helix-record-spin {
@@ -365,13 +365,13 @@
   flex: 0 0 auto;
   width: 34px;
   height: 34px;
-  background: var(--logo-color, var(--accent, #d66f12));
+  background: var(--logo-color, var(--accent));
   -webkit-mask: url("/helix-logo.png") center / contain no-repeat;
   mask: url("/helix-logo.png") center / contain no-repeat;
 }
 
 .sidebar-brand > span:last-child {
-  color: var(--text, #f5f2ec);
+  color: var(--text);
 }
 
 .sidebar-brand img {

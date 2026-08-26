@@ -16,6 +16,9 @@ export function configFromProvider(provider: StationProviderInfo, existing?: Sta
   if (provider.station_type === 'song_radio' && existing) {
     for (const key of ['seed_type', 'seed_title', 'seed_artist', 'seed_video_id', 'seed_album'] as const) if (existing[key] !== undefined) next[key] = existing[key]
   }
+  if (provider.station_type === 'similar_artist' && existing) {
+    for (const key of ['seed_type', 'seed_artist', 'seed_artist_id'] as const) if (existing[key] !== undefined) next[key] = existing[key]
+  }
   return next
 }
 

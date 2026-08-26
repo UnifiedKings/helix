@@ -26,12 +26,6 @@ function IconThumbUp() {
 }
 
 
-function IconShuffle() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5" /><path d="M4 7h4c2.2 0 3.5 1.2 5 3l1 1.2" /><path d="M21 3l-6.8 6.8" /><path d="M16 21h5v-5" /><path d="M4 17h4c2.2 0 3.5-1.2 5-3l1-1.2" /><path d="M21 21l-6.8-6.8" /></svg>
-  )
-}
-
 function IconRepeat() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4" /><path d="M3 11V9a3 3 0 0 1 3-3h15" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a3 3 0 0 1-3 3H3" /></svg>
@@ -73,6 +67,7 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
   const [liked, setLiked] = useState(false)
   const [disliked, setDisliked] = useState(false)
   const [ratingBusy, setRatingBusy] = useState(false)
+  const [repeatTrack, setRepeatTrack] = useState(() => window.localStorage.getItem('helix.repeatTrack') === '1')
   const now = player?.now_playing
   const hasTrack = Boolean(now)
   const shouldKeepPlaying = Boolean(player?.is_playing || localPlaying)
@@ -108,6 +103,10 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
       cancelled = true
     }
   }, [trackIdentity])
+
+  useEffect(() => {
+    window.localStorage.setItem('helix.repeatTrack', repeatTrack ? '1' : '0')
+  }, [repeatTrack])
 
   async function toggleLike() {
     if (!now || ratingBusy) return
@@ -158,9 +157,6 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
 
       <div className="transport-stack">
         <div className="transport">
-          <button className="icon-button transport-extra" type="button" title="Shuffle placeholder" aria-label="Shuffle placeholder" disabled>
-            <IconShuffle />
-          </button>
           <button className="icon-button transport-side" aria-label="Previous track" title="Previous" onClick={() => run(api.previous, shouldKeepPlaying ? 'play' : 'pause')} disabled={!player}>
             <IconPrevious />
           </button>
@@ -176,7 +172,16 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
           <button className="icon-button transport-side" aria-label="Next track" title="Next" onClick={() => run(api.next, shouldKeepPlaying ? 'play' : 'pause')} disabled={!player}>
             <IconNext />
           </button>
-          <button className="icon-button transport-extra" type="button" title="Repeat placeholder" aria-label="Repeat placeholder" disabled>
+          <button
+            className="icon-button transport-extra"
+            type="button"
+            title={repeatTrack ? 'Repeat track on' : 'Repeat track off'}
+            aria-label={repeatTrack ? 'Disable track repeat' : 'Enable track repeat'}
+            aria-pressed={repeatTrack}
+            data-active={repeatTrack}
+            onClick={() => setRepeatTrack((enabled) => !enabled)}
+            disabled={!hasTrack}
+          >
             <IconRepeat />
           </button>
         </div>
@@ -186,6 +191,7 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
         player={player}
         audioIntent={audioIntent}
         onStateChange={setPlayer}
+        repeatTrack={repeatTrack}
         onLocalPlayingChange={setLocalPlaying}
         onError={setError}
       />

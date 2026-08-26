@@ -148,7 +148,9 @@ export function HomePage() {
         <div className="home-session-copy">
           <span className="eyebrow">{session.label}</span>
           <div className="home-session-title-row">
-            <h1>{session.title}</h1>
+            <h1 className={session.title.length > 70 ? 'is-very-long' : session.title.length > 38 ? 'is-long' : undefined}>
+              {session.title}
+            </h1>
           </div>
           <p className="muted">{session.subtitle}</p>
           {activeStation && station ? <p className="home-session-station">From station: <strong>{station.name}</strong></p> : null}

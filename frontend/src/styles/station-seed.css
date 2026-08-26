@@ -16,9 +16,9 @@
   flex-direction: column;
   gap: 0.15rem;
   padding: 0.7rem 0.8rem;
-  border: 1px solid var(--border, rgba(255,255,255,0.12));
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: rgba(255,255,255,0.035);
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
 }
 
 .station-song-seed-selected span,
@@ -42,13 +42,13 @@
   width: 100%;
   padding: 0.65rem 0.75rem;
   text-align: left;
-  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border: 1px solid var(--border);
   border-radius: 10px;
-  background: rgba(255,255,255,0.025);
+  background: color-mix(in srgb, var(--text) 2.5%, transparent);
   color: inherit;
   cursor: pointer;
 }
 
 .station-song-seed-result:hover {
-  background: rgba(255,255,255,0.07);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
 }
