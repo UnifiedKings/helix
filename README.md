@@ -194,6 +194,32 @@ http://localhost:10011
 
 On first launch, Helix will ask you to create an admin account.
 
+## HTTP vs HTTPS session cookies
+
+Helix uses a secure session cookie by default:
+
+```env
+HELIX_COOKIE_SECURE=true
+```
+
+Keep this set to `true` when Helix is served over **HTTPS**.
+
+If you are accessing Helix directly over plain HTTP on a trusted local network, such as:
+
+```text
+http://192.168.1.50:8000
+```
+
+set:
+
+```env
+HELIX_COOKIE_SECURE=false
+```
+
+Browsers do not send cookies marked `Secure` over plain HTTP. If `HELIX_COOKIE_SECURE=true` while using an `http://` URL, login or initial setup can appear to succeed, but the next authenticated request will return `401 Unauthorized` and Helix will immediately send you back to the login page.
+
+For any internet-facing deployment, use HTTPS and leave `HELIX_COOKIE_SECURE=true`.
+
 ## yt-dlp updates
 
 Helix relies on `yt-dlp` for YouTube-backed playback and fulfillment. YouTube changes frequently, and an outdated `yt-dlp` can cause playback or downloads to fail even when the rest of Helix is working normally.
@@ -293,7 +319,7 @@ HelixBot runs in its own Docker container and can be configured to connect to an
 
 ## Security notes
 
-Before exposing Helix outside your LAN, put it behind HTTPS and review your deployment.
+Before exposing Helix outside your LAN, put it behind HTTPS and review your deployment. Keep `HELIX_COOKIE_SECURE=true` for HTTPS deployments; only disable it when intentionally running Helix over plain HTTP on a trusted network.
 
 Custom station providers can execute Python code inside the Helix container. Keep them disabled unless you need them.
 
