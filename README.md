@@ -154,6 +154,12 @@ services:
       SUBSONIC_USERNAME: ""
       SUBSONIC_PASSWORD: ""
 
+      # Keep yt-dlp current independently of the Helix image.
+      # Stable is the default; use "nightly" only if you need fixes not yet
+      # available in the stable yt-dlp release.
+      HELIX_YTDLP_AUTO_UPDATE: "true"
+      HELIX_YTDLP_CHANNEL: "stable"
+
       # Station / queue prefetch
       HELIX_PREFETCH_AHEAD: "3"
 
@@ -187,6 +193,34 @@ http://localhost:10011
 ```
 
 On first launch, Helix will ask you to create an admin account.
+
+## yt-dlp updates
+
+Helix relies on `yt-dlp` for YouTube-backed playback and fulfillment. YouTube changes frequently, and an outdated `yt-dlp` can cause playback or downloads to fail even when the rest of Helix is working normally.
+
+To reduce that failure mode, the Docker image includes a bundled version of `yt-dlp` **and Helix checks for an updated version each time the container starts**. This happens before the Helix application starts, so users do not need to rebuild or pull a new Helix image solely to receive a newer `yt-dlp`.
+
+The default settings are:
+
+```env
+HELIX_YTDLP_AUTO_UPDATE=true
+HELIX_YTDLP_CHANNEL=stable
+```
+
+`HELIX_YTDLP_CHANNEL` supports:
+
+- `stable` — the latest stable `yt-dlp` release. This is the default.
+- `nightly` — allows pre-release/nightly builds when a YouTube fix has not reached stable yet.
+
+Set `HELIX_YTDLP_AUTO_UPDATE=false` if you specifically want to use only the version bundled into the Helix image.
+
+### If the yt-dlp update fails
+
+A failed update **does not prevent Helix from starting**. Helix logs a warning and continues with the version already bundled in the container. This keeps temporary package-index or network outages from taking the entire service down.
+
+However, if that bundled version has become too old for current YouTube behavior, YouTube-backed playback and downloads may fail until `yt-dlp` can be updated. If those features suddenly stop working, check the container startup logs for an entry beginning with `[helix-entrypoint]` before assuming the Helix application itself is broken. Restarting the container when network/package access is available will retry the update; pulling a current Helix image also refreshes the bundled fallback version.
+
+Because the update check runs at container startup, restarts may take slightly longer while `pip` checks for or installs a newer `yt-dlp`.
 
 ## Subsonic / Navidrome
 

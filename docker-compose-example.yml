@@ -1,7 +1,7 @@
 services:
   helix:
+    image: ghcr.io/unifiedkings/helix:latest
     container_name: helix
-    build: .
     ports:
       - "10011:8000"
     restart: unless-stopped
@@ -10,12 +10,10 @@ services:
       # Helix persisted data: database, logs, stream cache, station covers, etc.
       - ./data:/data
 
-      # Inbound YouTube/YTMusic download staging
+      # Inbound download/fulfillment staging
       - ./inbound_yt:/inbound_yt
 
       # Optional: music library root used by Navidrome/Subsonic/beets.
-      # Change this to your real music path, or remove it if you are not using
-      # Helix fulfillment/import features.
       - /path/to/music:/data/music
 
       # Beets config used by Helix fulfillment/import.
@@ -25,31 +23,25 @@ services:
       - ./custom_stations:/data/plugins/stations
 
     environment:
-      # Optional ListenBrainz token. Some station/discovery features may work
-      # better with this configured.
-      LISTENBRAINZ_TOKEN: 01a635a1-0602-4459-919a-045a53a07c27
+      LISTENBRAINZ_TOKEN: "${LISTENBRAINZ_TOKEN:-}"
 
-      # Optional Subsonic/Navidrome connection.
-      # You can also configure these inside the Helix settings UI.
-      SUBSONIC_BASE_URL: ""
-      SUBSONIC_USERNAME: ""
-      SUBSONIC_PASSWORD: ""
+      SUBSONIC_BASE_URL: "${SUBSONIC_BASE_URL:-}"
+      SUBSONIC_USERNAME: "${SUBSONIC_USERNAME:-}"
+      SUBSONIC_PASSWORD: "${SUBSONIC_PASSWORD:-}"
 
-      # Station / queue prefetch
-      HELIX_PREFETCH_AHEAD: "3"
+      HELIX_PREFETCH_AHEAD: "${HELIX_PREFETCH_AHEAD:-3}"
+      HELIX_LOBBY_YT_LINK_MAX_ITEMS: "${HELIX_LOBBY_YT_LINK_MAX_ITEMS:-100}"
 
-      # Max tracks added when someone pastes a YT playlist/album link into a lobby
-      HELIX_LOBBY_YT_LINK_MAX_ITEMS: "100"
+      HELIX_ENABLE_API_DOCS: "${HELIX_ENABLE_API_DOCS:-false}"
+      HELIX_ALLOW_NON_ADMIN_IMPORT: "${HELIX_ALLOW_NON_ADMIN_IMPORT:-false}"
 
-      # Public-safe defaults
-      HELIX_ENABLE_API_DOCS: "false"
-      HELIX_ALLOW_NON_ADMIN_IMPORT: "false"
+      HELIX_ENABLE_CUSTOM_STATION_TYPES: "${HELIX_ENABLE_CUSTOM_STATION_TYPES:-false}"
+      HELIX_CUSTOM_STATION_TYPES_DIR: "${HELIX_CUSTOM_STATION_TYPES_DIR:-/data/plugins/stations}"
 
-      # Custom station providers are trusted Python code.
-      # Only enable this if you trust every .py file in ./custom_stations.
-      HELIX_ENABLE_CUSTOM_STATION_TYPES: "false"
-      HELIX_CUSTOM_STATION_TYPES_DIR: "/data/plugins/stations"
+      HELIX_DB_WATCHDOG_WARN_S: "${HELIX_DB_WATCHDOG_WARN_S:-2}"
+      HELIX_DB_WATCHDOG_ERROR_S: "${HELIX_DB_WATCHDOG_ERROR_S:-10}"
 
-      # Optional DB watchdog tuning
-      HELIX_DB_WATCHDOG_WARN_S: "2"
-      HELIX_DB_WATCHDOG_ERROR_S: "10"
+      # Keep yt-dlp current independently of the Helix image.
+      # If an update check/install fails, Helix starts with the bundled version.
+      HELIX_YTDLP_AUTO_UPDATE: "${HELIX_YTDLP_AUTO_UPDATE:-true}"
+      HELIX_YTDLP_CHANNEL: "${HELIX_YTDLP_CHANNEL:-stable}"

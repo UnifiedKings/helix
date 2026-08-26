@@ -20,6 +20,8 @@ RUN pip install --no-cache-dir beets
 
 # backend code
 COPY backend/app ./app
+COPY backend/app/docker-entrypoint.sh /usr/local/bin/helix-entrypoint
+RUN chmod +x /usr/local/bin/helix-entrypoint
 
 # frontend static files (html + assets)
 COPY frontend ./static
@@ -27,4 +29,5 @@ COPY frontend ./static
 ENV MR_DB_PATH=/data/app.db
 EXPOSE 8000
 
+ENTRYPOINT ["/usr/local/bin/helix-entrypoint"]
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
