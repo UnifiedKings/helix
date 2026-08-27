@@ -52,23 +52,31 @@ class SongRadioProvider(StationProvider):
     station_type = "song_radio"
     display_name = "Song Radio"
     description = "Builds a station from YouTube Music recommendations around one seed song."
-    version = "1.0.0"
+    version = "1.1.0"
     builtin = True
 
     def config_options(self) -> list[StationConfigOption]:
         # The frontend renders seed_title/seed_artist/seed_video_id as one song picker.
         return [
             StationConfigOption(
-                key="discovery_depth",
-                label="Discovery depth",
-                type="select",
-                description="Controls how far down the seed song's YouTube Music radio pool Helix explores.",
-                default="balanced",
-                choices=[
-                    {"value": "safe", "label": "Safe - closest recommendations"},
-                    {"value": "balanced", "label": "Balanced"},
-                    {"value": "deep", "label": "Deep - broader recommendations"},
-                ],
+                key="candidate_pool_size",
+                label="Songs considered",
+                type="integer",
+                description="How many tracks from the seed song's ranked YouTube Music radio results Helix considers when choosing what to play.",
+                default=50,
+                min_value=10,
+                max_value=100,
+                step=5,
+            ),
+            StationConfigOption(
+                key="top_recommendation_bias",
+                label="Favor top recommendations",
+                type="number",
+                description="How strongly Helix favors tracks near the top of YouTube Music's radio ranking. 0 makes all considered tracks equally likely; higher values stay closer to the top recommendations.",
+                default=1.15,
+                min_value=0,
+                max_value=3,
+                step=0.05,
             ),
             StationConfigOption(
                 key="seed_influence",
@@ -142,12 +150,21 @@ class SongRadioProvider(StationProvider):
         if not seed_video_id:
             raise ValueError(f"Seed song could not be resolved on YouTube Music: {seed_artist} - {seed_title}")
 
-        depth = _clean(str(cfg.get("discovery_depth") or "balanced")).lower()
-        pool_limit, rank_power = {
+        # New stations store the radio breadth and ranking bias explicitly.
+        # Existing stations may still have the old Safe/Balanced/Deep setting,
+        # so preserve its exact behavior until the station is re-saved.
+        legacy_depth = _clean(str(cfg.get("discovery_depth") or "")).lower()
+        legacy_pool_limit, legacy_rank_power = {
             "safe": (20, 2.0),
             "balanced": (50, 1.15),
             "deep": (100, 0.55),
-        }.get(depth, (50, 1.15))
+        }.get(legacy_depth, (50, 1.15))
+        pool_limit = max(10, min(100, int(
+            legacy_pool_limit if cfg.get("candidate_pool_size") is None else cfg.get("candidate_pool_size")
+        )))
+        rank_power = max(0.0, min(3.0, float(
+            legacy_rank_power if cfg.get("top_recommendation_bias") is None else cfg.get("top_recommendation_bias")
+        )))
         seed_influence = max(0.0, min(1.0, float(0.35 if cfg.get("seed_influence") is None else cfg.get("seed_influence"))))
         artist_cooldown = max(0, min(50, int(5 if cfg.get("artist_cooldown") is None else cfg.get("artist_cooldown"))))
         blacklist_raw = str(cfg.get("artist_blacklist") or "")

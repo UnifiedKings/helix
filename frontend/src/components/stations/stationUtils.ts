@@ -15,9 +15,39 @@ export function configFromProvider(provider: StationProviderInfo, existing?: Sta
   for (const option of provider.config_options ?? []) next[option.key] = existing && existing[option.key] !== undefined ? existing[option.key] : optionDefault(option)
   if (provider.station_type === 'song_radio' && existing) {
     for (const key of ['seed_type', 'seed_title', 'seed_artist', 'seed_video_id', 'seed_album'] as const) if (existing[key] !== undefined) next[key] = existing[key]
+
+    // Migrate the old Safe/Balanced/Deep Song Radio control into the new
+    // explicit pool-size and recommendation-bias controls. This preserves the
+    // exact behavior existing stations had until the user chooses new values.
+    const legacyDepth = String(existing.discovery_depth || '').trim().toLowerCase()
+    const legacyValues: Record<string, { poolSize: number; rankBias: number }> = {
+      safe: { poolSize: 20, rankBias: 2.0 },
+      balanced: { poolSize: 50, rankBias: 1.15 },
+      deep: { poolSize: 100, rankBias: 0.55 },
+    }
+    const legacy = legacyValues[legacyDepth]
+    if (legacy) {
+      if (existing.candidate_pool_size === undefined) next.candidate_pool_size = legacy.poolSize
+      if (existing.top_recommendation_bias === undefined) next.top_recommendation_bias = legacy.rankBias
+    }
   }
   if (provider.station_type === 'similar_artist' && existing) {
     for (const key of ['seed_type', 'seed_artist', 'seed_artist_id'] as const) if (existing[key] !== undefined) next[key] = existing[key]
+
+    // Migrate the old Safe/Balanced/Deep Similar Artist control into the new
+    // explicit breadth controls so existing stations show the values they were
+    // already using instead of silently displaying the new defaults.
+    const legacyDepth = String(existing.discovery_depth || '').trim().toLowerCase()
+    const legacyValues: Record<string, { relatedArtists: number; songsPerArtist: number }> = {
+      safe: { relatedArtists: 12, songsPerArtist: 8 },
+      balanced: { relatedArtists: 35, songsPerArtist: 15 },
+      deep: { relatedArtists: 100, songsPerArtist: 50 },
+    }
+    const legacy = legacyValues[legacyDepth]
+    if (legacy) {
+      if (existing.related_artist_limit === undefined) next.related_artist_limit = legacy.relatedArtists
+      if (existing.popular_track_pool_size === undefined) next.popular_track_pool_size = legacy.songsPerArtist
+    }
   }
   return next
 }

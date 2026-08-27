@@ -134,7 +134,7 @@ class SimilarArtistProvider(StationProvider):
     station_type = "similar_artist"
     display_name = "Similar Artist Radio"
     description = "Uses YouTube Music related artists and artist songs to recommend station tracks."
-    version = "1.2.1"
+    version = "1.3.0"
     builtin = True
 
     def __init__(self) -> None:
@@ -180,16 +180,24 @@ class SimilarArtistProvider(StationProvider):
                 required=True,
             ),
             StationConfigOption(
-                key="discovery_depth",
-                label="Discovery depth",
-                type="select",
-                description="Controls how adventurous the station is with related artists and how deeply it samples their catalogs.",
-                default="balanced",
-                choices=[
-                    {"value": "safe", "label": "Safe - closest artists and familiar songs"},
-                    {"value": "balanced", "label": "Balanced"},
-                    {"value": "deep", "label": "Deep - broader artists and deeper cuts"},
-                ],
+                key="related_artist_limit",
+                label="Related artists",
+                type="integer",
+                description="How many YouTube Music related artists Helix should consider for this station.",
+                default=35,
+                min_value=5,
+                max_value=100,
+                step=1,
+            ),
+            StationConfigOption(
+                key="popular_track_pool_size",
+                label="Popular songs per artist",
+                type="integer",
+                description="How many popular songs Helix should consider from each selected artist.",
+                default=15,
+                min_value=5,
+                max_value=50,
+                step=1,
             ),
             StationConfigOption(
                 key="seed_influence",
@@ -287,18 +295,28 @@ class SimilarArtistProvider(StationProvider):
         self.validate_config(cfg)
 
         seed_artist = _clean(str(cfg.get("seed_artist") or ""))
+        # Similar Artist Radio now exposes its breadth directly instead of using
+        # the generic Safe/Balanced/Deep discovery preset. Preserve the old
+        # presets for stations that have not yet been re-saved with the new
+        # explicit controls.
         depth = str(cfg.get("discovery_depth") or "").strip().lower()
-        if depth in {"safe", "balanced", "deep"}:
-            discovery, related_limit, popular_track_pool_size = {
-                "safe": (0.15, 12, 8),
-                "balanced": (0.35, 35, 15),
-                "deep": (0.75, 100, 50),
-            }[depth]
+        legacy_depth = {
+            "safe": (0.15, 12, 8),
+            "balanced": (0.35, 35, 15),
+            "deep": (0.75, 100, 50),
+        }.get(depth)
+
+        discovery = float(0.35 if cfg.get("discovery") is None else cfg.get("discovery"))
+        if legacy_depth and cfg.get("related_artist_limit") is None:
+            discovery = legacy_depth[0]
+            related_limit = legacy_depth[1]
         else:
-            # Backward compatibility for stations saved with the old numeric controls.
-            discovery = float(0.35 if cfg.get("discovery") is None else cfg.get("discovery"))
-            related_limit = 100
-            popular_track_pool_size = max(1, int(10 if cfg.get("popular_track_pool_size") is None else cfg.get("popular_track_pool_size")))
+            related_limit = max(5, min(100, _infer_int(cfg.get("related_artist_limit"), 35)))
+
+        if legacy_depth and cfg.get("popular_track_pool_size") is None:
+            popular_track_pool_size = legacy_depth[2]
+        else:
+            popular_track_pool_size = max(5, min(50, _infer_int(cfg.get("popular_track_pool_size"), 15)))
         seed_influence = float(0.75 if cfg.get("seed_influence") is None else cfg.get("seed_influence"))
         artist_cooldown = max(0, min(50, _infer_int(cfg.get("artist_cooldown"), 5)))
         blacklist = {_norm_artist(a) for a in (cfg.get("artist_blacklist_items") or []) if a}
