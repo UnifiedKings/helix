@@ -9,3 +9,5 @@ make_patch.sh
 patches/
 inbound_yt/
 custom_stations/
+beets_config/download.log
+*.bak
