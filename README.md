@@ -6,6 +6,8 @@ It is meant for people who run their own music server but still want a more mode
 
 Helix is still early software. It is usable, but expect rough edges, breaking changes, and setup work.
 
+[![Join the Helix Discord](https://img.shields.io/badge/Discord-Join%20the%20Helix%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/jK6F9mmC7f)
+
 ## Features
 
 - Search and play music from a Subsonic-compatible library
@@ -91,6 +93,16 @@ Stations can be started directly inside a lobby and will populate its shared que
 ![Lobby station demo](docs/gifs/lobby_stations.gif)
 
 Lobbies maintain synchronized playback state across connected clients.
+
+## How it works
+
+Helix has three main parts:
+
+- **Backend**: Python/FastAPI service for playback state, queues, stations, fulfillment, metadata repair for fulfillment, lobbies, and Subsonic communication.
+- **Frontend**: Web UI for search, playback, stations, playlists, lobbies, and settings.
+- **Music library**: A Subsonic-compatible server such as Navidrome.
+
+Helix is built with Subsonic in mind. Helix can search it, stream from it, and optionally add requested tracks/albums back into it.
 
 ## Important behavior
 
@@ -277,7 +289,7 @@ Lobby playback state is synchronized between connected clients so everyone can l
 
 [HelixBot](https://github.com/UnifiedKings/helixbot) is an optional companion project that connects a Helix lobby to a Discord voice channel.
 
-HelixBot links a Discord server to a Helix lobby using its 5-letter join code, joins Discord voice, and mirrors the lobby's current playback. Helix remains the source of truth: the bot follows track changes, pause/resume, seeks, and queue advancement rather than exposing separate Discord playback controls.
+HelixBot links a Discord server to a Helix lobby using its 5-letter join code, joins Discord voice, and mirrors the lobby's current playback. The bot follows track changes, pause/resume, seeks, and queue advancement rather than exposing separate Discord playback controls.
 
 HelixBot runs in its own Docker container and can be configured to connect to any reachable Helix instance.
 
