@@ -32,6 +32,16 @@ class StationProvider(ABC):
     def config_options(self) -> list[StationConfigOption]:
         return []
 
+    def cover_hint(self, config: dict[str, Any]) -> dict[str, Any] | None:
+        """Optionally describe how Helix should build this station's generated cover.
+
+        Supported modes are currently ``track``, ``album``, ``artist``,
+        ``artists``, and ``generated``. Custom providers may override this
+        method; providers that do not are handled by Helix's generic fallback
+        strategy so existing plugins remain compatible.
+        """
+        return None
+
     def validate_config(self, config: dict[str, Any]) -> None:
         """Validate provider-specific config.
 

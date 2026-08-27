@@ -214,13 +214,50 @@ async def station_cover(station_id: str, user: User = Depends(get_current_user))
         if not st or st.user_id != user.id:
             raise HTTPException(status_code=404, detail="Station not found")
         settings = dict(get_settings(db) or {})
+        config = _station_config_payload(st)
         seed_artist = st.seed_artist or st.seed_title or st.name or "Station"
+        station_name = st.name or "Station"
+        station_type = st.station_type
         sid = st.id
         custom_path = custom_station_cover_path(sid)
         if os.path.exists(custom_path):
             return FileResponse(custom_path, media_type="image/jpeg", headers={"Cache-Control": "no-cache, max-age=0"})
     finally:
         db.close()
+
+    # Providers may optionally announce a cover strategy. Existing providers and
+    # plugins remain compatible: Helix derives a sensible strategy from their
+    # normal seed/config fields when no explicit hint is supplied.
+    try:
+        provider = get_station_provider(station_type)
+        cover_hint = provider.cover_hint(dict(config or {}))
+    except Exception:
+        cover_hint = None
+
+    if not cover_hint:
+        seed_title = str((config or {}).get("seed_title") or "").strip()
+        configured_seed_artist = str((config or {}).get("seed_artist") or "").strip()
+        seed_type = str((config or {}).get("seed_type") or "").strip().lower()
+        raw_seed_artists = (config or {}).get("seed_artists")
+        if isinstance(raw_seed_artists, str):
+            seed_artists = [
+                part.strip()
+                for part in raw_seed_artists.replace("\r", "\n").replace(",", "\n").split("\n")
+                if part.strip()
+            ]
+        elif isinstance(raw_seed_artists, list):
+            seed_artists = [str(part or "").strip() for part in raw_seed_artists if str(part or "").strip()]
+        else:
+            seed_artists = []
+
+        if seed_title and configured_seed_artist and seed_type == "track":
+            cover_hint = {"mode": "track", "title": seed_title, "artist": configured_seed_artist, "fallback_seed": station_name}
+        elif seed_artists:
+            cover_hint = {"mode": "artists", "artists": seed_artists[:4], "fallback_seed": station_name}
+        elif configured_seed_artist:
+            cover_hint = {"mode": "artist", "artist": configured_seed_artist, "fallback_seed": station_name}
+        else:
+            cover_hint = {"mode": "generated", "label": station_name, "fallback_seed": station_name}
 
     try:
         from ..stations_engine import _subsonic_client_from_settings
@@ -231,6 +268,7 @@ async def station_cover(station_id: str, user: User = Depends(get_current_user))
                 station_id=sid,
                 seed_artist=seed_artist,
                 subsonic=sub,
+                cover_hint=cover_hint,
                 size=640,
                 tiles=4,
             )
@@ -251,6 +289,7 @@ async def station_cover(station_id: str, user: User = Depends(get_current_user))
             station_id=sid,
             seed_artist=seed_artist,
             subsonic=_Fake(),
+            cover_hint=cover_hint,
             size=640,
             tiles=4,
         )

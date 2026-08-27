@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import io
 import json
 import os
 import time
+import urllib.request
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -20,6 +22,7 @@ clutter when used at small sizes.
 """
 
 from .integrations.subsonic import SubsonicClient
+from .integrations.ytmusic import find_artist_by_name, get_artist_overview, search_ytmusic
 
 
 def _covers_dir() -> str:
@@ -173,6 +176,7 @@ class CoverMeta:
     album_ids: List[str]
     real_tiles: int
     generated_tiles: int
+    cover_key: str = ""
 
 
 def _read_meta(meta_path: str) -> Optional[CoverMeta]:
@@ -185,6 +189,7 @@ def _read_meta(meta_path: str) -> Optional[CoverMeta]:
             album_ids=list(d.get("album_ids") or []),
             real_tiles=int(d.get("real_tiles") or 0),
             generated_tiles=int(d.get("generated_tiles") or 0),
+            cover_key=str(d.get("cover_key") or ""),
         )
     except Exception:
         return None
@@ -200,6 +205,7 @@ def _write_meta(meta_path: str, meta: CoverMeta) -> None:
                     "album_ids": meta.album_ids,
                     "real_tiles": meta.real_tiles,
                     "generated_tiles": meta.generated_tiles,
+                    "cover_key": meta.cover_key,
                 },
                 f,
             )
@@ -207,26 +213,226 @@ def _write_meta(meta_path: str, meta: CoverMeta) -> None:
         pass
 
 
+def _cover_key(seed_artist: str, hint: Optional[Dict[str, Any]]) -> str:
+    payload = {"renderer_version": 2, "seed_artist": str(seed_artist or ""), "hint": hint or {}}
+    try:
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+    except Exception:
+        raw = repr(payload)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def _clean_artists(values: Any) -> List[str]:
+    if isinstance(values, str):
+        values = values.replace("\r", "\n").replace(",", "\n").split("\n")
+    if not isinstance(values, (list, tuple)):
+        return []
+    out: List[str] = []
+    seen = set()
+    for value in values:
+        artist = " ".join(str(value or "").strip().split())
+        key = artist.lower()
+        if not artist or key in seen:
+            continue
+        seen.add(key)
+        out.append(artist)
+    return out
+
+
+async def _first_artist_cover(subsonic: SubsonicClient, artist: str, tile_size: int) -> Tuple[Optional[Image.Image], str]:
+    albums = await subsonic.search_albums_by_artist(artist, limit=20)
+    for album in albums:
+        cover_id = str(album.get("coverArt") or "").strip()
+        if not cover_id:
+            continue
+        data = await subsonic.fetch_cover_art_bytes(cover_id, size=tile_size)
+        if not data:
+            continue
+        try:
+            image = Image.open(io.BytesIO(data)).convert("RGB")
+            image = _center_crop_square(image).resize((tile_size, tile_size))
+            return image, str(album.get("id") or "")
+        except Exception:
+            continue
+    return None, ""
+
+
+def _norm_text(value: str) -> str:
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def _download_image_sync(url: str, size: int) -> Optional[Image.Image]:
+    url = str(url or "").strip()
+    if not url:
+        return None
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "User-Agent": "Mozilla/5.0 Helix/StationCover",
+                "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=8) as response:
+            data = response.read(8 * 1024 * 1024)
+        image = Image.open(io.BytesIO(data)).convert("RGB")
+        return _center_crop_square(image).resize((size, size))
+    except Exception:
+        return None
+
+
+async def _download_image(url: str, size: int) -> Optional[Image.Image]:
+    return await asyncio.to_thread(_download_image_sync, url, size)
+
+
+async def _ytmusic_artist_cover(artist: str, size: int) -> Tuple[Optional[Image.Image], str]:
+    """Resolve one representative artist image from YouTube Music."""
+    try:
+        row = await asyncio.to_thread(find_artist_by_name, artist, artist_limit=8)
+    except Exception:
+        row = {}
+    if not isinstance(row, dict) or not row:
+        return None, ""
+
+    url = str(row.get("thumbnail_url") or "").strip()
+    browse_id = str(row.get("browse_id") or row.get("artist_id") or "").strip()
+    if not url and browse_id:
+        try:
+            overview = await asyncio.to_thread(get_artist_overview, browse_id)
+        except Exception:
+            overview = {}
+        if isinstance(overview, dict):
+            url = str(overview.get("thumbnail_url") or "").strip()
+
+    image = await _download_image(url, size)
+    return image, f"ytmusic:artist:{browse_id or _norm_text(artist)}" if image is not None else ""
+
+
+async def _ytmusic_track_cover(*, title: str, artist: str, album: str, size: int) -> Tuple[Optional[Image.Image], str]:
+    """Resolve seed-track artwork from YouTube Music when it is not local."""
+    query = " ".join(part for part in (title, artist) if str(part or "").strip())
+    if not query:
+        return None, ""
+    try:
+        payload = await asyncio.to_thread(search_ytmusic, query, song_limit=10, album_limit=5)
+    except Exception:
+        payload = {}
+
+    songs = payload.get("songs") if isinstance(payload, dict) else []
+    wanted_title = _norm_text(title)
+    wanted_artist = _norm_text(artist)
+    wanted_album = _norm_text(album)
+    ranked = []
+    for row in songs or []:
+        if not isinstance(row, dict):
+            continue
+        score = 0
+        if _norm_text(row.get("title")) == wanted_title:
+            score += 8
+        if wanted_artist and _norm_text(row.get("artist")) == wanted_artist:
+            score += 5
+        if wanted_album and _norm_text(row.get("album")) == wanted_album:
+            score += 3
+        ranked.append((score, row))
+    ranked.sort(key=lambda pair: pair[0], reverse=True)
+
+    for _score, row in ranked:
+        url = str(row.get("thumbnail_url") or "").strip()
+        image = await _download_image(url, size)
+        if image is not None:
+            ident = str(row.get("video_id") or "").strip()
+            return image, f"ytmusic:track:{ident or wanted_title}"
+
+    # Album search results are a useful final artwork fallback when the song
+    # result itself has no thumbnail.
+    for row in (payload.get("albums") or []) if isinstance(payload, dict) else []:
+        if not isinstance(row, dict):
+            continue
+        if wanted_album and _norm_text(row.get("title")) != wanted_album:
+            continue
+        url = str(row.get("thumbnail_url") or "").strip()
+        image = await _download_image(url, size)
+        if image is not None:
+            ident = str(row.get("browse_id") or "").strip()
+            return image, f"ytmusic:album:{ident or wanted_album}"
+    return None, ""
+
+
+async def _ytmusic_artist_album_covers(artist: str, *, limit: int, size: int) -> List[Tuple[Image.Image, str]]:
+    """Return several distinct album covers for one artist from YouTube Music."""
+    try:
+        payload = await asyncio.to_thread(search_ytmusic, artist, song_limit=0, album_limit=max(12, limit * 4))
+    except Exception:
+        payload = {}
+    rows = payload.get("albums") if isinstance(payload, dict) else []
+    wanted_artist = _norm_text(artist)
+    out: List[Tuple[Image.Image, str]] = []
+    seen = set()
+    for row in rows or []:
+        if not isinstance(row, dict):
+            continue
+        row_artist = _norm_text(row.get("artist"))
+        if wanted_artist and row_artist and row_artist != wanted_artist:
+            continue
+        key = (_norm_text(row.get("title")), str(row.get("browse_id") or ""))
+        if key in seen:
+            continue
+        seen.add(key)
+        image = await _download_image(str(row.get("thumbnail_url") or ""), size)
+        if image is None:
+            continue
+        ident = str(row.get("browse_id") or "").strip()
+        out.append((image, f"ytmusic:album:{ident or key[0]}"))
+        if len(out) >= limit:
+            break
+    return out
+
+
+async def _track_cover(subsonic: SubsonicClient, *, title: str, artist: str, album: str, size: int) -> Tuple[Optional[Image.Image], str]:
+    if not title or not artist:
+        return None, ""
+    try:
+        row = await subsonic.search_song_best(title=title, artist=artist, album=album or "")
+    except Exception:
+        row = None
+    if not row:
+        return None, ""
+    cover_id = str(row.get("coverArt") or "").strip()
+    if not cover_id:
+        return None, ""
+    data = await subsonic.fetch_cover_art_bytes(cover_id, size=size)
+    if not data:
+        return None, ""
+    try:
+        image = Image.open(io.BytesIO(data)).convert("RGB")
+        return _center_crop_square(image).resize((size, size)), str(row.get("albumId") or row.get("album") or "")
+    except Exception:
+        return None, ""
+
+
 async def ensure_station_cover(
     *,
     station_id: str,
     seed_artist: str,
     subsonic: SubsonicClient,
+    cover_hint: Optional[Dict[str, Any]] = None,
     size: int = 640,
     tiles: int = 4,
 ) -> str:
     """Ensure a cached station cover exists and is reasonably fresh.
 
-    Returns the image file path.
+    User-uploaded covers are handled by the router before this function runs.
+    Generated covers may be provider-guided through ``cover_hint``. Providers
+    that do not supply a hint continue to use the historical seed-artist collage.
     """
     img_path, meta_path = _cover_paths(station_id)
     meta = _read_meta(meta_path)
     now = _now_ts()
+    key = _cover_key(seed_artist, cover_hint)
 
-    if os.path.exists(img_path) and meta and meta.rebuild_after and now < meta.rebuild_after:
+    if os.path.exists(img_path) and meta and meta.rebuild_after and now < meta.rebuild_after and meta.cover_key == key:
         return img_path
 
-    # Build a 2x2 collage for now.
     grid = int(tiles)
     if grid not in (4, 9):
         grid = 4
@@ -234,75 +440,142 @@ async def ensure_station_cover(
     rows = cols
     tile_size = size // cols
 
-    # Fetch candidate albums.
-    albums = await subsonic.search_albums_by_artist(seed_artist, limit=50)
-    # Prefer diverse albums.
-    picks: List[Dict[str, Any]] = []
-    seen_titles = set()
-    for a in albums:
-        t = str(a.get("title") or "").strip().lower()
-        if t and t in seen_titles:
-            continue
-        if t:
-            seen_titles.add(t)
-        picks.append(a)
-        if len(picks) >= grid:
-            break
-
-    tile_images: List[Image.Image] = []
+    hint = dict(cover_hint or {})
+    mode = str(hint.get("mode") or "artist").strip().lower()
     album_ids: List[str] = []
-    for a in picks:
-        cover_id = str(a.get("coverArt") or "").strip()
-        if not cover_id:
-            continue
-        b = await subsonic.fetch_cover_art_bytes(cover_id, size=tile_size)
-        if not b:
-            continue
-        try:
-            im = Image.open(io.BytesIO(b)).convert("RGB")
-            im = _center_crop_square(im).resize((tile_size, tile_size))
-            tile_images.append(im)
-            album_ids.append(str(a.get("id") or ""))
-        except Exception:
-            continue
+    tile_images: List[Image.Image] = []
+
+    # Song Radio and other track-anchored providers can use the seed track art
+    # directly rather than an unrelated collage from the artist's albums.
+    if mode == "track":
+        image, album_id = await _track_cover(
+            subsonic,
+            title=str(hint.get("title") or "").strip(),
+            artist=str(hint.get("artist") or seed_artist or "").strip(),
+            album=str(hint.get("album") or "").strip(),
+            size=size,
+        )
+        if image is None:
+            image, album_id = await _ytmusic_track_cover(
+                title=str(hint.get("title") or "").strip(),
+                artist=str(hint.get("artist") or seed_artist or "").strip(),
+                album=str(hint.get("album") or "").strip(),
+                size=size,
+            )
+        if image is not None:
+            _ensure_dir(os.path.dirname(img_path))
+            image.save(img_path, format="JPEG", quality=88, optimize=True)
+            _write_meta(meta_path, CoverMeta(
+                built_at=now,
+                rebuild_after=now + 7 * 24 * 3600,
+                album_ids=[album_id] if album_id else [],
+                real_tiles=1,
+                generated_tiles=0,
+                cover_key=key,
+            ))
+            return img_path
+        # If neither local nor YouTube Music seed-track artwork is available,
+        # gracefully fall back to the artist collage.
+        mode = "artist"
+
+    if mode == "generated":
+        artists: List[str] = []
+    elif mode == "artists":
+        artists = _clean_artists(hint.get("artists"))
+    elif mode == "album":
+        # Album mode currently resolves through the declared artist. This still
+        # gives plugins a stable strategy and degrades cleanly if the album is
+        # not yet present in the library.
+        artists = _clean_artists([hint.get("artist") or seed_artist])
+    else:  # artist + unknown modes
+        artists = _clean_artists([hint.get("artist") or seed_artist])
+
+    if artists:
+        if mode == "artists":
+            for artist in artists[:grid]:
+                image, album_id = await _first_artist_cover(subsonic, artist, tile_size)
+                if image is None:
+                    image, album_id = await _ytmusic_artist_cover(artist, tile_size)
+                if image is not None:
+                    tile_images.append(image)
+                    if album_id:
+                        album_ids.append(album_id)
+        else:
+            # Historical behavior: one artist can contribute several distinct
+            # album covers to the collage.
+            artist = artists[0]
+            albums = await subsonic.search_albums_by_artist(artist, limit=50)
+            seen_titles = set()
+            for album in albums:
+                title = str(album.get("title") or "").strip().lower()
+                if title and title in seen_titles:
+                    continue
+                if title:
+                    seen_titles.add(title)
+                cover_id = str(album.get("coverArt") or "").strip()
+                if not cover_id:
+                    continue
+                data = await subsonic.fetch_cover_art_bytes(cover_id, size=tile_size)
+                if not data:
+                    continue
+                try:
+                    image = Image.open(io.BytesIO(data)).convert("RGB")
+                    image = _center_crop_square(image).resize((tile_size, tile_size))
+                    tile_images.append(image)
+                    album_ids.append(str(album.get("id") or ""))
+                except Exception:
+                    continue
+                if len(tile_images) >= grid:
+                    break
+
+            # Fill any missing collage slots from YouTube Music album artwork.
+            # This keeps artist-based station covers useful even when the artist
+            # is absent or only partially represented in the local library.
+            if len(tile_images) < grid:
+                yt_rows = await _ytmusic_artist_album_covers(
+                    artist,
+                    limit=grid - len(tile_images),
+                    size=tile_size,
+                )
+                for image, album_id in yt_rows:
+                    tile_images.append(image)
+                    if album_id:
+                        album_ids.append(album_id)
+                    if len(tile_images) >= grid:
+                        break
+
+            # If YouTube Music has no usable album artwork either, use the
+            # artist's YouTube Music image before resorting to generated tiles.
+            if len(tile_images) < grid:
+                image, artist_id = await _ytmusic_artist_cover(artist, tile_size)
+                if image is not None:
+                    tile_images.append(image)
+                    if artist_id:
+                        album_ids.append(artist_id)
 
     real_tiles = len(tile_images)
-    # Fill remaining tiles with generated gradient tiles.
+    fallback_seed = str(hint.get("fallback_seed") or seed_artist or hint.get("label") or "Station")
     while len(tile_images) < grid:
-        tile_images.append(_make_gradient_tile(tile_size, seed_artist))
+        tile_images.append(_make_gradient_tile(tile_size, f"{fallback_seed}:{len(tile_images)}"))
 
-    # Compose grid.
     base = Image.new("RGB", (cols * tile_size, rows * tile_size), (0, 0, 0))
     idx = 0
     for r in range(rows):
         for c in range(cols):
             base.paste(tile_images[idx], (c * tile_size, r * tile_size))
             idx += 1
-
-    # Ensure exact requested size.
     base = base.resize((size, size))
 
-    # Save.
     _ensure_dir(os.path.dirname(img_path))
     base.save(img_path, format="JPEG", quality=88, optimize=True)
 
-    # Rebuild policy:
-    # - If we used fewer than 4 real arts, retry daily.
-    # - Otherwise, refresh weekly ("regularly" but not urgent).
-    if real_tiles < 4:
-        rebuild_after = now + 24 * 3600
-    else:
-        rebuild_after = now + 7 * 24 * 3600
-
-    _write_meta(
-        meta_path,
-        CoverMeta(
-            built_at=now,
-            rebuild_after=rebuild_after,
-            album_ids=[a for a in album_ids if a],
-            real_tiles=real_tiles,
-            generated_tiles=grid - real_tiles,
-        ),
-    )
-
+    rebuild_after = now + (24 * 3600 if real_tiles < grid else 7 * 24 * 3600)
+    _write_meta(meta_path, CoverMeta(
+        built_at=now,
+        rebuild_after=rebuild_after,
+        album_ids=[a for a in album_ids if a],
+        real_tiles=real_tiles,
+        generated_tiles=grid - real_tiles,
+        cover_key=key,
+    ))
     return img_path
