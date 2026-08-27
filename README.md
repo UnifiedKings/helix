@@ -92,16 +92,6 @@ Stations can be started directly inside a lobby and will populate its shared que
 
 Lobbies maintain synchronized playback state across connected clients.
 
-## How it works
-
-Helix has three main parts:
-
-- **Backend**: Python/FastAPI service for playback state, queues, stations, fulfillment, metadata repair for fulfillment, lobbies, and Subsonic communication.
-- **Frontend**: Web UI for search, playback, stations, playlists, lobbies, and settings.
-- **Music library**: A Subsonic-compatible server such as Navidrome.
-
-Helix is built with Subsonic in mind. Helix can search it, stream from it, and optionally add requested tracks/albums back into it.
-
 ## Important behavior
 
 Helix is designed to be conservative with fulfillment.
