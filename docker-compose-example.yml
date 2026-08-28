@@ -45,4 +45,5 @@ services:
       # If an update check/install fails, Helix starts with the bundled version.
       HELIX_YTDLP_AUTO_UPDATE: "${HELIX_YTDLP_AUTO_UPDATE:-true}"
       HELIX_YTDLP_CHANNEL: "${HELIX_YTDLP_CHANNEL:-stable}"
+      # Make this false if you are using helix over an http connection
       HELIX_COOKIE_SECURE: "${HELIX_COOKIE_SECURE:-true}"
