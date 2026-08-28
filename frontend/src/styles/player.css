@@ -427,3 +427,64 @@ nav a.active {
   text-overflow: ellipsis !important;
   white-space: nowrap !important;
 }
+
+/* Playbar metadata hardening: shared inline-link spacing is useful elsewhere,
+   but the compact player needs a self-contained, non-overhanging line. */
+.playback-bar .now-playing-info {
+  overflow: hidden;
+}
+
+.playback-bar .now-playing-info .title,
+.playback-bar .now-playing-info .eyebrow {
+  min-width: 0;
+}
+
+.playback-bar .now-playing-meta {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0 !important;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden !important;
+  white-space: nowrap;
+  line-height: 1.35;
+}
+
+.playback-bar .now-playing-meta > .artist-inline-link:not(.album-inline-link) {
+  display: inline-block !important;
+  flex: 0 1 auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: 48% !important;
+  margin: 0 !important;
+  padding: 0 0.18rem !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  vertical-align: middle !important;
+}
+
+.playback-bar .now-playing-meta-separator {
+  display: inline-block;
+  flex: 0 0 auto;
+  margin: 0 0.22rem !important;
+  padding: 0;
+  color: inherit;
+  line-height: inherit;
+}
+
+.playback-bar .now-playing-meta > .album-inline-link {
+  display: inline-block !important;
+  flex: 1 1 auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 0.18rem !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+  justify-content: flex-start !important;
+  vertical-align: middle !important;
+}
