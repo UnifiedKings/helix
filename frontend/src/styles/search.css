@@ -700,3 +700,53 @@
 .search-results-section + .search-results-section {
   margin-top: 0.35rem;
 }
+
+/* Artist/detail album cards: keep all actions inside the card and make the
+   action row read more like a deliberate control strip. */
+.detail-page .search-album-strip {
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+}
+
+.detail-page .search-album-card {
+  padding: 0.85rem;
+  border-radius: 22px;
+}
+
+.detail-page .album-card-body {
+  padding: 0.78rem 0.15rem 0.6rem;
+}
+
+.detail-page .album-card-body strong {
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.25;
+  min-height: 2.5em;
+}
+
+.detail-page .album-card-actions {
+  min-width: 0;
+  gap: 0.5rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--border-soft);
+}
+
+.detail-page .album-card-actions .primary {
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 28%, transparent);
+}
+
+.detail-page .album-card-actions .button-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding-inline: 0.9rem;
+  border-radius: 999px;
+  text-align: center;
+}
+
+.detail-page .album-card-actions .subsonic-add-action {
+  flex: 0 0 42px !important;
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+}

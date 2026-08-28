@@ -631,3 +631,128 @@ button.subsonic-add-action > .splus-mark::after,
 .lobby-station-card .info-banner {
   margin-bottom: 0.8rem;
 }
+
+/* Artist-detail Subsonic button polish: match the concept pass more closely. */
+button.subsonic-add-action,
+.icon-button.subsonic-add-action,
+.compact-action.subsonic-add-action {
+  background: color-mix(in srgb, var(--surface-soft) 88%, transparent) !important;
+  border: 1px solid color-mix(in srgb, var(--accent) 62%, var(--border-soft)) !important;
+  color: color-mix(in srgb, var(--accent) 84%, var(--text)) !important;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 10%, transparent) !important;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease, box-shadow 140ms ease, transform 140ms ease !important;
+}
+
+button.subsonic-add-action:hover,
+.icon-button.subsonic-add-action:hover,
+.compact-action.subsonic-add-action:hover,
+button.subsonic-add-action:focus-visible,
+.icon-button.subsonic-add-action:focus-visible,
+.compact-action.subsonic-add-action:focus-visible {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-raised)) !important;
+  border-color: var(--accent-border) !important;
+  color: var(--text) !important;
+  box-shadow: 0 10px 22px color-mix(in srgb, var(--accent) 18%, transparent) !important;
+}
+
+button.subsonic-add-action > .splus-mark,
+.icon-button.subsonic-add-action > .splus-mark,
+.compact-action.subsonic-add-action > .splus-mark {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 42px !important;
+  height: 42px !important;
+}
+
+button.subsonic-add-action .splus-s,
+.icon-button.subsonic-add-action .splus-s,
+.compact-action.subsonic-add-action .splus-s,
+button.subsonic-add-action .splus-plus,
+.icon-button.subsonic-add-action .splus-plus,
+.compact-action.subsonic-add-action .splus-plus {
+  top: 50% !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  transform: translate(-50%, -54%) !important;
+}
+
+button.subsonic-add-action .splus-s,
+.icon-button.subsonic-add-action .splus-s,
+.compact-action.subsonic-add-action .splus-s {
+  left: 16.5px !important;
+  font-size: 14px !important;
+}
+
+button.subsonic-add-action .splus-plus,
+.icon-button.subsonic-add-action .splus-plus,
+.compact-action.subsonic-add-action .splus-plus {
+  left: 24.8px !important;
+  font-size: 13px !important;
+}
+
+button.subsonic-add-action.is-queued,
+.icon-button.subsonic-add-action.is-queued,
+.compact-action.subsonic-add-action.is-queued,
+button.subsonic-add-action:disabled,
+.icon-button.subsonic-add-action:disabled,
+.compact-action.subsonic-add-action:disabled {
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-soft)) !important;
+  border-color: color-mix(in srgb, var(--accent) 76%, white 24%) !important;
+  color: color-mix(in srgb, var(--accent) 88%, white 12%) !important;
+  opacity: 1 !important;
+}
+
+.subsonic-state-check {
+  position: absolute;
+  right: -3px;
+  top: -3px;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+  color: #ffffff;
+  background: #2bb24c;
+  box-shadow: 0 0 0 2px var(--surface-soft);
+  pointer-events: none;
+}
+
+/* Artist-detail Subsonic glyph centering fix v2:
+   use a dedicated non-span glyph so older shared span rules cannot interfere. */
+button.subsonic-add-action,
+.icon-button.subsonic-add-action,
+.compact-action.subsonic-add-action {
+  position: relative !important;
+}
+
+button.subsonic-add-action > .subsonic-add-glyph-v2,
+.icon-button.subsonic-add-action > .subsonic-add-glyph-v2,
+.compact-action.subsonic-add-action > .subsonic-add-glyph-v2 {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-style: normal !important;
+  font-family: Arial, Helvetica, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  line-height: 1 !important;
+  letter-spacing: -0.08em !important;
+  color: currentColor !important;
+  transform: translate(-50%, -55%) !important;
+  pointer-events: none !important;
+  white-space: nowrap !important;
+}
+
+button.subsonic-add-action > .splus-mark,
+.icon-button.subsonic-add-action > .splus-mark,
+.compact-action.subsonic-add-action > .splus-mark {
+  display: none !important;
+}
