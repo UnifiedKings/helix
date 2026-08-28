@@ -3,6 +3,8 @@ import { Link, useOutletContext, useParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { PlaylistDetail, PlaylistTrack, SearchMode, SearchSong } from '../api/types'
 import { Artwork } from '../components/Artwork'
+import { ArtistLink } from '../components/ArtistLink'
+import { AlbumLink } from '../components/AlbumLink'
 import type { usePlayer } from '../hooks/usePlayer'
 
 const SEARCH_MODES: Array<{ id: SearchMode; label: string }> = [
@@ -267,7 +269,7 @@ export function PlaylistEditPage() {
                   <Artwork src={trackArtwork(track)} alt={track.title} size="sm" />
                   <div className="playlist-editor-track-meta">
                     <strong>{track.title}</strong>
-                    <span className="muted">{track.artist}{track.album ? ` • ${track.album}` : ''}</span>
+                    <span className="muted"><ArtistLink artist={track.artist} />{track.album ? <> • <AlbumLink album={track.album} artist={track.artist} source={track.source} /></> : null}</span>
                   </div>
                   <span className="playlist-editor-duration">{formatDuration(track.duration_ms)}</span>
                   <div className="playlist-track-menu-wrap">
@@ -330,7 +332,7 @@ export function PlaylistEditPage() {
                   <Artwork src={song.art_url || song.thumbnail_url || song.thumbnail} alt={song.title} size="sm" />
                   <div className="playlist-editor-track-meta">
                     <strong>{song.title}</strong>
-                    <span className="muted">{song.artist}{song.album ? ` • ${song.album}` : ''}</span>
+                    <span className="muted"><ArtistLink artist={song.artist} />{song.album ? <> • <AlbumLink album={song.album} artist={song.artist} source={song.source} /></> : null}</span>
                   </div>
                   <span className="playlist-editor-add-duration">{formatSearchDuration(song)}</span>
                   <button disabled={alreadyAdded || addingKey === key} onClick={() => void addSong(song)}>

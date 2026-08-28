@@ -503,3 +503,15 @@
 .home-session-actions .button-link.primary:hover {
   background: var(--accent-strong) !important;
 }
+
+
+/* Now Playing artist navigation uses the shared .artist-inline-link hover treatment. */
+.home-session-artist-row {
+  display: flex;
+  align-items: center;
+}
+
+.home-session-artist-link {
+  font: inherit;
+  text-align: left;
+}

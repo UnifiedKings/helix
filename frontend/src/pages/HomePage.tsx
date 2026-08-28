@@ -3,6 +3,7 @@ import { Link, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import type { HomeActivityItem, HomeSummary } from '../api/types'
 import { Artwork } from '../components/Artwork'
+import { ArtistLink } from '../components/ArtistLink'
 import type { usePlayer } from '../hooks/usePlayer'
 
 type PlayerContext = ReturnType<typeof usePlayer>
@@ -105,6 +106,7 @@ export function HomePage() {
     return () => { cancelled = true }
   }, [current?.id, current?.title, current?.artist, current?.album, current?.duration_ms, current?.subsonic_song_id, current?.source, current?.yt_video_id])
 
+
   async function addCurrentToSubsonic() {
     if (!current || subsonicState !== 'missing') return
     try {
@@ -152,7 +154,11 @@ export function HomePage() {
               {session.title}
             </h1>
           </div>
-          <p className="muted">{session.subtitle}</p>
+          {current ? (
+            <p className="muted home-session-artist-row">
+              <ArtistLink artist={session.subtitle} className="home-session-artist-link" />
+            </p>
+          ) : <p className="muted">{session.subtitle}</p>}
           {activeStation && station ? <p className="home-session-station">From station: <strong>{station.name}</strong></p> : null}
           <div className="home-session-actions">
             {activeStation && player.player?.active_station_id ? <Link className="button-link primary" to={`/stations?edit=${encodeURIComponent(player.player.active_station_id)}`}>Edit Station</Link> : null}

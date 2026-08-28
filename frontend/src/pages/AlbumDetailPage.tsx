@@ -1,11 +1,26 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useLocation, useOutletContext, useParams } from 'react-router-dom'
 import { api } from '../api/client'
-import type { AlbumDetail, SearchSong } from '../api/types'
+import type { AlbumDetail, SearchAlbum, SearchSong } from '../api/types'
 import { Artwork } from '../components/Artwork'
+import { ArtistLink } from '../components/ArtistLink'
 import type { usePlayer } from '../hooks/usePlayer'
 
 type PlayerContext = ReturnType<typeof usePlayer>
+
+
+function albumToSearchAlbum(album: AlbumDetail): SearchAlbum {
+  return {
+    title: album.title,
+    artist: album.artist,
+    year: album.year,
+    art_url: album.art_url,
+    thumbnail_url: album.thumbnail_url,
+    browse_id: album.browse_id,
+    source: album.subsonic_complete ? 'subsonic' : 'ytmusic',
+    subsonic_album_id: album.subsonic_album_id ?? undefined,
+  }
+}
 
 function trackToSong(track: SearchSong, album: AlbumDetail): SearchSong {
   return {
@@ -75,7 +90,7 @@ export function AlbumDetailPage() {
     return () => { cancelled = true }
   }, [browseId, albumSource])
 
-  const albumIsInSubsonic = albumSource === 'subsonic'
+  const albumIsInSubsonic = Boolean(album?.subsonic_complete)
   const albumSummary = useMemo(() => {
     if (!album) return ''
     const count = album.tracks.length
@@ -134,15 +149,15 @@ export function AlbumDetailPage() {
             <div className="album-detail-copy">
               <span className="eyebrow">Album</span>
               <h1>{album.title}</h1>
-              <p className="album-detail-meta">{album.artist}{album.year ? ` · ${album.year}` : ''}</p>
+              <p className="album-detail-meta"><ArtistLink artist={album.artist} />{album.year ? ` · ${album.year}` : ''}</p>
 
               {albumIsInSubsonic ? (
                 <div className="album-library-status"><span aria-hidden="true">✓</span> In Subsonic</div>
               ) : null}
 
               <div className="album-detail-actions">
-                <button className="primary" onClick={() => player.run(() => api.playAlbum(album), 'play')}>▶ <span>Play album</span></button>
-                <button onClick={() => player.run(() => api.queueAlbum(album))}>＋ <span>Queue album</span></button>
+                <button className="primary" onClick={() => player.run(() => api.playAlbum(albumToSearchAlbum(album)), 'play')}>▶ <span>Play album</span></button>
+                <button onClick={() => player.run(() => api.queueAlbum(albumToSearchAlbum(album)))}>＋ <span>Queue album</span></button>
                 {!albumIsInSubsonic ? (
                   <button className="album-subsonic-action" disabled={albumImportQueued} onClick={() => void addAlbumToSubsonic()}>S+ <span>{albumImportQueued ? 'Queued' : 'Add to Subsonic'}</span></button>
                 ) : null}
@@ -174,15 +189,20 @@ export function AlbumDetailPage() {
                 return (
                   <article className="album-track-row" key={`${song.title}-${song.yt_video_id || song.video_id || song.subsonic_song_id}-${index}`}>
                     <span className="album-track-number">{index + 1}</span>
-                    <div className="album-track-title"><strong>{song.title}</strong></div>
-                    <span className="album-track-artist">{song.artist}</span>
+                    <div className="album-track-title">
+                      <strong>{song.title}</strong>
+                      {songIsInSubsonic ? <span className="album-track-library-mark" title="In Subsonic"><span aria-hidden="true">✓</span> In Subsonic</span> : null}
+                    </div>
+                    <span className="album-track-artist"><ArtistLink artist={song.artist} /></span>
                     <span className="album-track-duration">{durationLabel(song)}</span>
                     <div className="album-track-actions">
                       <button className="album-icon-action" aria-label={`Play ${song.title}`} title="Play" onClick={() => player.run(() => api.playSong(song), 'play')}>▶</button>
                       <button className="album-icon-action" aria-label={`Add ${song.title} to queue`} title="Add to queue" onClick={() => player.run(() => api.queueSong(song))}>＋</button>
                       {!songIsInSubsonic ? (
                         <button className="album-icon-action album-track-subsonic" disabled={trackImportQueued} aria-label={trackImportQueued ? `${song.title} queued for Subsonic import` : `Add ${song.title} to Subsonic`} title={trackImportQueued ? 'Queued for Subsonic' : 'Add to Subsonic'} onClick={() => void addTrackToSubsonic(song, importKey)}>S+</button>
-                      ) : null}
+                      ) : (
+                        <span className="album-track-action-placeholder" aria-hidden="true" />
+                      )}
                     </div>
                   </article>
                 )

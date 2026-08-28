@@ -3,6 +3,8 @@ import { useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import type { PlaybackHistoryFilters, PlaybackHistoryItem, PlaybackHistoryResponse, Station } from '../api/types'
 import { Artwork } from '../components/Artwork'
+import { ArtistLink } from '../components/ArtistLink'
+import { AlbumLink } from '../components/AlbumLink'
 import type { usePlayer } from '../hooks/usePlayer'
 
 type PlayerContext = ReturnType<typeof usePlayer>
@@ -274,7 +276,7 @@ export function HistoryPage() {
                     <Artwork src={item.art_url} alt={item.title} size="sm" />
                     <div>
                       <strong>{item.title}</strong>
-                      <span>{item.artist}{item.album ? ` · ${item.album}` : ''}</span>
+                      <span><ArtistLink artist={item.artist} />{item.album ? <> · <AlbumLink album={item.album} artist={item.artist} source={item.source} /></> : null}</span>
                     </div>
                   </div>
                   <span className="history-source-badge" role="cell">{sourceLabel(item.source)}</span>

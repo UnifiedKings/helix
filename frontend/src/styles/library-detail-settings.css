@@ -943,3 +943,575 @@
     gap: 0;
   }
 }
+
+/* Artist detail redesign: scoped so the Helix shell, queue and playbar stay unchanged. */
+.artist-detail-redesign {
+  gap: 0.95rem;
+}
+
+.artist-profile-hero {
+  display: grid;
+  grid-template-columns: minmax(200px, 290px) minmax(0, 1fr);
+  gap: 1.45rem;
+  align-items: stretch;
+  padding: 1.15rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 12% 16%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 38%),
+    linear-gradient(110deg, color-mix(in srgb, var(--surface-raised) 96%, transparent), color-mix(in srgb, var(--bg) 92%, transparent));
+  overflow: hidden;
+}
+
+.artist-profile-hero .artwork-lg {
+  width: 100%;
+  max-width: none;
+  aspect-ratio: 1;
+  align-self: center;
+  border-radius: 10px;
+}
+
+.artist-profile-copy {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 0;
+  padding: 0.25rem 0;
+}
+
+.artist-profile-copy h1 {
+  margin: 0.15rem 0 0.8rem;
+  font-size: clamp(2.6rem, 5vw, 4.25rem);
+  line-height: 0.98;
+  letter-spacing: -0.045em;
+}
+
+.artist-profile-description {
+  max-width: 70ch;
+  margin: 0;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.artist-profile-actions {
+  margin-top: 1rem;
+}
+
+.artist-profile-main-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.9fr) minmax(320px, 0.95fr);
+  gap: 0.9rem;
+  align-items: start;
+}
+
+.artist-profile-panel {
+  min-width: 0;
+  padding: 0.92rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background: var(--surface-soft);
+}
+
+.artist-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.7rem;
+}
+
+.artist-section-heading h2 {
+  margin: 0;
+  font-size: 1.08rem;
+}
+
+.artist-section-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 4.5%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 0.86rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.artist-section-button:hover,
+.artist-section-button:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--text);
+  outline: none;
+}
+
+.artist-popular-list,
+.artist-similar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.38rem;
+}
+
+.artist-popular-row {
+  display: grid;
+  grid-template-columns: 1.8rem 42px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 56px;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid color-mix(in srgb, var(--text) 5%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--text) 2.7%, transparent);
+}
+
+.artist-popular-row:hover {
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border-soft));
+  background: color-mix(in srgb, var(--surface-raised) 92%, var(--accent) 8%);
+}
+
+.artist-popular-number {
+  color: var(--faint);
+  text-align: center;
+  font-size: 0.84rem;
+}
+
+.artist-popular-row .artwork-sm {
+  width: 42px;
+  height: 42px;
+  border-radius: 7px;
+}
+
+.artist-popular-copy {
+  min-width: 0;
+}
+
+.artist-popular-copy > strong,
+.artist-popular-copy > span,
+.artist-popular-copy > .album-inline-link {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artist-popular-copy > strong {
+  color: var(--text);
+  font-size: 0.93rem;
+}
+
+.artist-popular-copy > span,
+.artist-popular-copy > .album-inline-link {
+  margin-top: 0.12rem;
+  color: var(--muted);
+  font-size: 0.83rem;
+}
+
+.artist-popular-duration {
+  min-width: 3rem;
+  color: var(--muted);
+  text-align: right;
+  font-size: 0.82rem;
+}
+
+.artist-popular-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.16rem;
+}
+
+.artist-track-action {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+
+.artist-track-action:hover:not(:disabled),
+.artist-track-action:focus-visible:not(:disabled) {
+  border-color: color-mix(in srgb, var(--primary, var(--accent)) 82%, transparent);
+  background: color-mix(in srgb, var(--primary, var(--accent)) 16%, transparent);
+  color: var(--text);
+  outline: none;
+}
+
+.artist-track-subsonic {
+  color: var(--accent-bright);
+  font-size: 0.78rem;
+}
+
+.artist-track-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.artist-similar-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 58px;
+  padding: 0.45rem 0.55rem;
+  color: inherit;
+  text-decoration: none;
+  border: 1px solid color-mix(in srgb, var(--text) 5%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--text) 2.7%, transparent);
+  transition: border-color 120ms ease, background 120ms ease;
+}
+
+.artist-similar-row:hover,
+.artist-similar-row:focus-visible {
+  border-color: var(--accent-border);
+  background: color-mix(in srgb, var(--surface-raised) 94%, var(--accent) 6%);
+  outline: none;
+}
+
+.artist-similar-row .artwork-sm {
+  width: 42px;
+  height: 42px;
+  border-radius: 999px !important;
+}
+
+.artist-similar-row strong,
+.artist-similar-copy {
+  min-width: 0;
+}
+
+.artist-similar-row strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.artist-similar-arrow {
+  color: var(--muted);
+  font-size: 1.35rem;
+}
+
+.artist-empty-state {
+  margin: 0;
+  padding: 0.8rem 0.4rem;
+}
+
+.artist-releases-panel {
+  padding-bottom: 1rem;
+}
+
+.artist-release-strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(120px, 150px);
+  gap: 0.75rem;
+  overflow-x: auto;
+  padding: 0 0 0.65rem;
+  margin-bottom: 0.15rem;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--text) 28%, transparent) transparent;
+}
+
+.artist-release-strip::-webkit-scrollbar {
+  height: 10px;
+}
+
+.artist-release-strip::-webkit-scrollbar-track {
+  background: transparent;
+  margin-top: 0.15rem;
+}
+
+.artist-release-strip::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--text) 22%, transparent);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.artist-release-card {
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.artist-release-card .artwork-lg {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  transition: transform 140ms ease, box-shadow 140ms ease;
+}
+
+.artist-release-card:hover .artwork-lg,
+.artist-release-card:focus-visible .artwork-lg {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.artist-release-card:focus-visible {
+  outline: none;
+}
+
+.artist-release-card strong,
+.artist-release-card > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.artist-release-card strong {
+  margin-top: 0.42rem;
+  color: var(--text);
+  font-size: 0.82rem;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.artist-release-card > span {
+  margin-top: 0.12rem;
+  color: var(--muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+}
+
+.artist-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.4rem;
+  background: rgba(0, 0, 0, 0.62);
+  backdrop-filter: blur(8px);
+}
+
+.artist-modal {
+  width: min(980px, 100%);
+  max-height: min(84vh, 820px);
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-soft);
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--accent) 14%, transparent), transparent 34%),
+    var(--surface-raised);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.42);
+  overflow: hidden;
+}
+
+.artist-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1rem 0.85rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.artist-modal-header h2 {
+  margin: 0.16rem 0 0;
+  font-size: 1.25rem;
+}
+
+.artist-modal-close {
+  display: inline-grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  color: var(--text);
+  font: inherit;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.artist-modal-close:hover,
+.artist-modal-close:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  outline: none;
+}
+
+.artist-modal-body {
+  min-height: 0;
+  overflow: auto;
+  padding: 0.9rem 1rem 1rem;
+}
+
+.artist-modal-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.artist-popular-row-modal,
+.artist-similar-row-modal {
+  min-height: 60px;
+}
+
+.artist-modal-track-list .artist-popular-row {
+  padding-right: 0.7rem;
+}
+
+@media (max-width: 900px) {
+  .artist-profile-hero {
+    grid-template-columns: 160px minmax(0, 1fr);
+  }
+
+  .artist-profile-main-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .artist-modal {
+    width: min(760px, 100%);
+  }
+}
+
+@media (max-width: 620px) {
+  .artist-profile-hero {
+    grid-template-columns: 1fr;
+  }
+
+  .artist-profile-hero .artwork-lg {
+    max-width: 220px;
+  }
+
+  .artist-profile-copy h1 {
+    font-size: clamp(2.15rem, 12vw, 3.2rem);
+  }
+
+  .artist-popular-row,
+  .artist-popular-row-modal {
+    grid-template-columns: 1.6rem 40px minmax(0, 1fr) auto;
+  }
+
+  .artist-popular-duration {
+    display: none;
+  }
+
+  .artist-popular-actions {
+    grid-column: 3 / -1;
+    justify-content: flex-end;
+  }
+
+  .artist-modal-backdrop {
+    padding: 0.65rem;
+    align-items: stretch;
+  }
+
+  .artist-modal {
+    width: 100%;
+    max-height: 100%;
+  }
+}
+
+/* Keep artist bios compact; source links are exposed separately when YTMusic
+   includes a Wikipedia attribution URL. */
+.artist-profile-description {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 5;
+  overflow: hidden;
+}
+
+.artist-profile-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.artist-wikipedia-link {
+  background: transparent;
+}
+
+.artist-profile-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.artist-wikipedia-link {
+  text-decoration: none;
+}
+
+.artist-bio-attribution {
+  margin: 0.5rem 0 0;
+  color: var(--faint);
+  font-size: 0.72rem;
+}
+
+/* Partial Subsonic albums: mark individual local tracks without implying the
+   entire album is available in the library. */
+.album-track-title {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.album-track-title > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.album-track-library-mark {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.26rem;
+  min-height: 1.45rem;
+  padding: 0.12rem 0.42rem;
+  border: 1px solid color-mix(in srgb, var(--good) 42%, transparent);
+  border-radius: 999px;
+  color: var(--good);
+  background: color-mix(in srgb, var(--good) 9%, transparent);
+  font-size: 0.68rem;
+  font-weight: var(--weight-semibold);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+
+/* Per-track Subsonic availability badge. */
+.album-track-library-mark > span[aria-hidden="true"] {
+  display: inline-grid;
+  place-items: center;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 999px;
+  background: var(--good);
+  color: var(--bg);
+  font-size: 0.62rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+
+/* Keep Play and Queue aligned whether the S+ action is visible or not. */
+.album-track-action-placeholder {
+  flex: 0 0 2.45rem;
+  width: 2.45rem;
+  height: 2.2rem;
+  pointer-events: none;
+}
+

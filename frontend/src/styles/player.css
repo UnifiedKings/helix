@@ -393,3 +393,37 @@ nav a.active {
 .volume-row {
   transform: translateY(0.28rem);
 }
+
+
+/* Keep long Now Playing album names readable instead of collapsing to only an ellipsis. */
+.playback-bar .now-playing-meta {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.playback-bar .now-playing-meta > .artist-inline-link:not(.album-inline-link) {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 58%;
+}
+
+.playback-bar .now-playing-meta-separator {
+  flex: 0 0 auto;
+  margin: 0 0.28rem;
+}
+
+.playback-bar .now-playing-meta > .album-inline-link {
+  /* Hug the album text when it fits, but still allow it to shrink/ellipsis
+     when the playbar runs out of room. */
+  flex: 0 1 max-content;
+  min-width: 0 !important;
+  width: max-content !important;
+  max-width: 100%;
+  justify-content: flex-start;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}

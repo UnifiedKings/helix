@@ -60,7 +60,7 @@ export function NowPlayingCard({
           <strong>{now?.title ?? "Nothing queued"}</strong>
           <span className="muted">
             {now
-              ? `${now.artist}${now.album ? ` • ${now.album}` : ""}`
+              ? <>{now.artist}{now.album ? ` • ${now.album}` : ""}</>
               : "Add something to start the room."}
           </span>
           <span className="muted">
@@ -1158,7 +1158,7 @@ export function LobbyMiniPlayer({
         <Artwork src={now?.art_url} alt={now?.title ?? "No track"} size="sm" />
         <div>
           <strong>{now?.title ?? "Nothing playing"}</strong>
-          <span>{now?.artist ?? "Shared lobby"}</span>
+          <span>{now?.artist || "Shared lobby"}</span>
         </div>
       </div>
       <div className="lobby-mini-transport">

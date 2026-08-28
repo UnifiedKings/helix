@@ -4,6 +4,8 @@ import { Link, useLocation, useNavigate, useOutletContext } from 'react-router-d
 import { api } from '../api/client'
 import type { Capabilities, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong } from '../api/types'
 import { Artwork } from '../components/Artwork'
+import { ArtistLink } from '../components/ArtistLink'
+import { AlbumLink } from '../components/AlbumLink'
 import type { usePlayer } from '../hooks/usePlayer'
 
 type PlayerContext = ReturnType<typeof usePlayer>
@@ -75,9 +77,6 @@ function TopResultCard({ result, player, onStatus, searchReturn, canImportToSubs
   const title = item.title
   const artwork = resultArtwork(item)
   const isYt = item.source === 'ytmusic' || (!item.source && result.kind === 'album')
-  const subtitle = result.kind === 'album'
-    ? `${result.item.artist ?? 'Unknown artist'}${result.item.year ? ` • ${result.item.year}` : ''}`
-    : `${result.item.artist}${result.item.album ? ` • ${result.item.album}` : ''}`
   const topResultStyle = artwork ? ({ '--search-feature-art': `url(${JSON.stringify(artwork)})` } as CSSProperties) : undefined
   const [subsonicQueued, setSubsonicQueued] = useState(false)
 
@@ -109,8 +108,10 @@ function TopResultCard({ result, player, onStatus, searchReturn, canImportToSubs
         <Artwork src={artwork} alt={title} size="lg" />
         <div className="top-result-copy">
           <span className="result-kind">{result.kind}</span>
-          <h2>{title}</h2>
-          <p>{subtitle}</p>
+          <h2>{result.kind === 'album' ? <AlbumLink album={result.item.title} artist={result.item.artist} albumId={albumBrowseId(result.item)} source={result.item.source} /> : title}</h2>
+          <p>{result.kind === 'album'
+            ? <><ArtistLink artist={result.item.artist ?? 'Unknown artist'} />{result.item.year ? ` • ${result.item.year}` : ''}</>
+            : <><ArtistLink artist={result.item.artist} />{result.item.album ? <> • <AlbumLink album={result.item.album} artist={result.item.artist} source={result.item.source} /></> : null}</>}</p>
           <div className="top-result-library-state"><SourceBadge source={item.source} /></div>
           <div className="top-result-actions">
             <button className="primary" onClick={() => result.kind === 'album' ? player.run(() => api.playAlbum(result.item), 'play') : player.run(() => api.playSong(result.item), 'play')}>▶ Play</button>
@@ -143,7 +144,13 @@ function SongRow({ song, player, onStatus, canImportToSubsonic }: { song: Search
   return (
     <article className="search-song-row">
       <Artwork src={resultArtwork(song)} alt={song.title} size="sm" />
-      <div className="song-title-cell"><strong>{song.title}</strong><span>{song.artist}{song.album ? ` • ${song.album}` : ''}</span></div>
+      <div className="song-title-cell">
+        <strong>{song.title}</strong>
+        <div className="song-meta-line">
+          <ArtistLink artist={song.artist} />
+          {song.album ? <span className="song-meta-album">• <AlbumLink album={song.album} artist={song.artist} source={song.source} /></span> : null}
+        </div>
+      </div>
       <SourceBadge source={song.source} />
       <span className="song-duration">{duration}</span>
       <div className="search-row-actions">
@@ -196,8 +203,8 @@ function AlbumCard({ album, player, onStatus, searchReturn, canImportToSubsonic 
     >
       <Artwork src={resultArtwork(album)} alt={album.title} size="lg" />
       <div className="album-card-body">
-        <strong>{album.title}</strong>
-        <span>{album.artist ?? 'Unknown artist'}{album.year ? ` • ${album.year}` : ''}</span>
+        <strong><AlbumLink album={album.title} artist={album.artist} albumId={albumBrowseId(album)} source={album.source} /></strong>
+        <span><ArtistLink artist={album.artist ?? 'Unknown artist'} />{album.year ? ` • ${album.year}` : ''}</span>
         <SourceBadge source={album.source} />
       </div>
       <div className="album-card-actions album-card-actions--compact" onClick={(event) => event.stopPropagation()}>

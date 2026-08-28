@@ -1,4 +1,4 @@
-import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, DislikeState, HomeSummary, LikeState, PlaybackHistoryFilters, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, StationProviderInfo, AdminUser, Capabilities, User, UserSettingsPayload, UserSettings, LobbyJoinResponse, LobbyListResponse, LobbyPermissions, LobbyState } from './types'
+import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, ArtistSimilarResponse, DislikeState, HomeSummary, LikeState, PlaybackHistoryFilters, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, StationProviderInfo, AdminUser, Capabilities, User, UserSettingsPayload, UserSettings, LobbyJoinResponse, LobbyListResponse, LobbyPermissions, LobbyState } from './types'
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const { headers, ...rest } = options
@@ -322,6 +322,13 @@ export const api = {
       ...payload,
       albums: (payload.albums ?? []).map((album) => normalizeAlbum({ ...album, source: album.source || 'ytmusic' })),
       singles: (payload.singles ?? []).map((album) => normalizeAlbum({ ...album, source: album.source || 'ytmusic' })),
+    }
+  },
+  artistSimilar: async (browseId: string) => {
+    const payload = await request<ArtistSimilarResponse>(`/api/ytmusic/artists/${encodeURIComponent(browseId)}/similar?limit=12`)
+    return {
+      ...payload,
+      similar_artists: (payload.similar_artists ?? []).map((artist) => normalizeArtist(artist)),
     }
   },
   album: async (albumId: string, source?: string) => normalizeAlbumDetail(await request<AlbumDetail>(`/api/album/${encodeURIComponent(albumId)}${source ? `?source=${encodeURIComponent(source)}` : ''}`)),

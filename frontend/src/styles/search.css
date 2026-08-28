@@ -750,3 +750,48 @@
   min-width: 42px;
   height: 42px;
 }
+
+
+/* Search song metadata: keep artist hover affordance outside the ellipsis clip.
+   Album text gets its own truncation box so the artist bubble can render fully. */
+.song-title-cell > .song-meta-line {
+  display: flex;
+  align-items: center;
+  gap: 0.22rem;
+  min-width: 0;
+  margin-top: 0.12rem;
+  overflow: visible;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.song-title-cell > .song-meta-line .artist-inline-link {
+  flex: 0 0 auto;
+  margin: 0 !important;
+}
+
+.song-title-cell > .song-meta-line .song-meta-album {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+}
+
+
+/* Search artist-link hover: override the broad `.song-title-cell span` clipping
+   rule for the interactive artist span itself. */
+.song-title-cell > .song-meta-line .artist-inline-link {
+  display: inline-flex !important;
+  align-items: center !important;
+  width: fit-content !important;
+  max-width: max-content !important;
+  flex: 0 0 auto !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: nowrap !important;
+  margin: -0.16rem 0 !important;
+  padding: 0.16rem 0.42rem !important;
+  line-height: 1.15 !important;
+}

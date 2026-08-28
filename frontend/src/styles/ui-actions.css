@@ -441,3 +441,64 @@
     width: 100%;
   }
 }
+
+/* Artist names are navigational anywhere they are presented as metadata.
+   Keep the hover treatment inside the existing text line so parent metadata
+   elements can safely use overflow/ellipsis without clipping the bubble. */
+.artist-inline-link {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: fit-content !important;
+  max-width: 100%;
+  padding: 0 0.20rem;
+  margin: 0 -0.20rem 0 0;
+  min-height: 0;
+  line-height: inherit;
+  box-sizing: border-box;
+  align-self: baseline;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  text-decoration: none;
+  cursor: pointer;
+  vertical-align: baseline;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: nowrap;
+  transition:
+    color 120ms ease,
+    background 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.artist-inline-link:hover,
+.artist-inline-link:focus-visible {
+  color: var(--text);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent-border);
+  text-decoration: none;
+}
+
+.artist-inline-link:focus-visible {
+  outline: none;
+  box-shadow:
+    inset 0 0 0 1px var(--accent-border),
+    inset 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
+}
+
+/* Album links share the artist hover treatment, but must not inherit the
+   shrink-wrapped width behavior. In compact metadata lines, fit-content can be
+   squeezed down to only the ellipsis. Let the surrounding metadata container
+   own truncation instead. */
+.album-inline-link {
+  display: inline !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  overflow: visible !important;
+  text-overflow: clip !important;
+  white-space: inherit !important;
+  vertical-align: baseline !important;
+}

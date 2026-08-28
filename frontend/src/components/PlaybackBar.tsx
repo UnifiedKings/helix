@@ -3,6 +3,8 @@ import { api } from '../api/client'
 import type { AudioIntent, PlayerState } from '../api/types'
 import type { AudioRunMode } from '../hooks/usePlayer'
 import { Artwork } from './Artwork'
+import { ArtistLink } from './ArtistLink'
+import { AlbumLink } from './AlbumLink'
 import { AudioPlayer } from './AudioPlayer'
 
 type Props = {
@@ -143,7 +145,7 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
         <div className="now-playing-info">
           <div className="eyebrow">Now Playing</div>
           <div className="title">{now?.title ?? 'Nothing selected'}</div>
-          <div className="muted">{now ? `${now.artist}${now.album ? ` • ${now.album}` : ''}` : 'Search, queue, or start a station'}</div>
+          <div className="muted now-playing-meta">{now ? <><ArtistLink artist={now.artist} />{now.album ? <><span className="now-playing-meta-separator" aria-hidden="true">•</span><AlbumLink album={now.album} artist={now.artist} source={now.source} /></> : null}</> : 'Search, queue, or start a station'}</div>
         </div>
         <div className="rating-controls" aria-label="Track rating controls">
           <button className="icon-button rating-button" aria-label="Dislike current track" title="Dislike" onClick={toggleDislike} disabled={!hasTrack || ratingBusy} data-active={disliked}>

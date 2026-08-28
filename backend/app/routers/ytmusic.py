@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import re
+from urllib.parse import quote
+
+import httpx
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -44,6 +47,114 @@ _RESOLUTION_LOCK = asyncio.Lock()
 
 _DETAIL_TTL_S = 60 * 30
 _RESOLUTION_TTL_S = 60 * 60 * 24 * 30
+
+_WIKIPEDIA_TTL_S = 60 * 60 * 24 * 7
+_WIKIPEDIA_USER_AGENT = "Helix/0.1 (+https://github.com/UnifiedKings/helix)"
+_WIKIPEDIA_MUSIC_TERMS = (
+    "singer", "songwriter", "musician", "band", "rapper", "composer", "record producer",
+    "recording artist", "musical artist", "guitarist", "vocalist", "duo", "trio", "music group",
+)
+
+
+def _wikipedia_cache_key(artist_name: str) -> str:
+    return f"wikipedia_artist|{_norm_artist_name(artist_name)}"
+
+
+def _wikipedia_title_score(artist_name: str, title: str, extract: str) -> float:
+    target = _norm_artist_name(artist_name)
+    candidate = _norm_artist_name(re.sub(r"\s*\([^)]*\)\s*$", "", title or ""))
+    if not target or not candidate:
+        return 0.0
+    score = SequenceMatcher(None, target, candidate).ratio()
+    if target == candidate:
+        score += 1.0
+    elif target in candidate or candidate in target:
+        score += 0.25
+    haystack = f"{title} {extract}".lower()
+    if any(term in haystack for term in _WIKIPEDIA_MUSIC_TERMS):
+        score += 0.45
+    return score
+
+
+async def _fetch_wikipedia_artist_bio(artist_name: str) -> Dict[str, Any]:
+    name = str(artist_name or "").strip()
+    if not name:
+        return {}
+
+    cache_key = _wikipedia_cache_key(name)
+    hit = _CACHE.get(cache_key)
+    if hit is not None:
+        return dict(hit)
+
+    params = {
+        "action": "query",
+        "generator": "search",
+        "gsrsearch": f'"{name}" musician OR singer OR band OR songwriter',
+        "gsrnamespace": "0",
+        "gsrlimit": "6",
+        "prop": "extracts|info",
+        "exintro": "1",
+        "explaintext": "1",
+        "inprop": "url",
+        "redirects": "1",
+        "format": "json",
+        "formatversion": "2",
+        "origin": "*",
+    }
+    headers = {"User-Agent": _WIKIPEDIA_USER_AGENT}
+    result: Dict[str, Any] = {}
+    try:
+        async with httpx.AsyncClient(timeout=6.0, headers=headers, follow_redirects=True) as client:
+            response = await client.get("https://en.wikipedia.org/w/api.php", params=params)
+            response.raise_for_status()
+            payload = response.json()
+        pages = list(((payload or {}).get("query") or {}).get("pages") or [])
+        best: Optional[Dict[str, Any]] = None
+        best_score = 0.0
+        for page in pages:
+            if not isinstance(page, dict):
+                continue
+            title = str(page.get("title") or "")
+            extract = str(page.get("extract") or "").strip()
+            score = _wikipedia_title_score(name, title, extract)
+            if score > best_score:
+                best_score = score
+                best = page
+        if best is not None and best_score >= 1.05:
+            extract = str(best.get("extract") or "").strip()
+            title = str(best.get("title") or "").strip()
+            page_url = str(best.get("fullurl") or "").strip()
+            if not page_url and title:
+                page_url = f"https://en.wikipedia.org/wiki/{quote(title.replace(' ', '_'))}"
+            if extract and page_url:
+                result = {
+                    "description": extract,
+                    "description_source": "wikipedia",
+                    "description_source_url": page_url,
+                    "wikipedia_title": title,
+                    "wikipedia_url": page_url,
+                }
+    except Exception:
+        result = {}
+
+    _CACHE.set(cache_key, result, ttl_seconds=_WIKIPEDIA_TTL_S)
+    return result
+
+
+async def _with_canonical_artist_bio(payload: Dict[str, Any]) -> Dict[str, Any]:
+    base = dict(payload or {})
+    artist_name = str(base.get("name") or base.get("artist_name") or "").strip()
+    if not artist_name:
+        return base
+    wiki = await _fetch_wikipedia_artist_bio(artist_name)
+    if wiki.get("description"):
+        base.update(wiki)
+    else:
+        base["description_source"] = "ytmusic"
+        base["description_source_url"] = ""
+        base["wikipedia_title"] = ""
+        base["wikipedia_url"] = ""
+    return base
 
 _SUBSONIC_STRONG_SONG_THRESHOLD = 0.78
 _SUBSONIC_STRONG_ALBUM_THRESHOLD = 0.82
@@ -262,13 +373,35 @@ async def _artist_payload_nonblocking(browse_id: str) -> Dict[str, Any]:
     overview = _yt_artist_overview_cached(browse_id)
     if not overview:
         return {}
-    return _resolved_like_payload(overview)
+    payload = _resolved_like_payload(overview)
+    return await _with_canonical_artist_bio(payload)
 
 
 def _norm_artist_name(value: str) -> str:
     s = (value or "").strip().lower()
     s = re.sub(r"[^a-z0-9]+", " ", s)
     return re.sub(r"\s+", " ", s).strip()
+
+
+def _parse_artist_popularity(value: Any) -> int:
+    """Parse YTMusic's human-readable artist popularity string for sorting only.
+
+    Examples include ``111K``, ``1.2M subscribers`` and plain numeric strings.
+    The parsed value is never exposed as user-facing copy; it is only a ranking
+    signal for the similar-artists list.
+    """
+    text = str(value or "").strip().upper().replace(",", "")
+    if not text:
+        return 0
+    match = re.search(r"([0-9]+(?:\.[0-9]+)?)\s*([KMB]?)", text)
+    if not match:
+        return 0
+    try:
+        number = float(match.group(1))
+    except (TypeError, ValueError):
+        return 0
+    multiplier = {"": 1, "K": 1_000, "M": 1_000_000, "B": 1_000_000_000}.get(match.group(2), 1)
+    return int(number * multiplier)
 
 
 def _pick_best_artist_hit(name: str, rows: list[dict[str, Any]]) -> Optional[Dict[str, Any]]:
@@ -298,19 +431,21 @@ def _pick_best_artist_hit(name: str, rows: list[dict[str, Any]]) -> Optional[Dic
 
 
 async def _enrich_similar_artist_row(row: Dict[str, Any]) -> Dict[str, Any]:
-    name = str(row.get("artist_name") or row.get("name") or "").strip()
+    name = str(row.get("artist_name") or row.get("name") or row.get("artist") or "").strip()
     mbid = str(row.get("artist_mbid") or row.get("mb_artist_id") or "").strip()
     score = int(row.get("score") or 0)
-    payload = {
+    payload = dict(row)
+    payload.update({
         "artist_name": name,
         "name": name,
         "artist_mbid": mbid,
         "mb_artist_id": mbid,
         "score": score,
-        "yt_browse_id": "",
-        "browse_id": "",
-        "thumbnail_url": "",
-    }
+        "yt_browse_id": str(row.get("yt_browse_id") or row.get("browse_id") or row.get("artist_id") or "").strip(),
+        "browse_id": str(row.get("browse_id") or row.get("artist_id") or row.get("yt_browse_id") or "").strip(),
+        "thumbnail_url": str(row.get("thumbnail_url") or row.get("art_url") or "").strip(),
+        "_popularity_score": _parse_artist_popularity(row.get("subscriber_count")),
+    })
     if not name:
         return payload
 
@@ -333,9 +468,10 @@ async def _enrich_similar_artist_row(row: Dict[str, Any]) -> Dict[str, Any]:
         payload.update({
             "artist_name": yt_name or name,
             "name": yt_name or name,
-            "yt_browse_id": yt_browse_id,
-            "browse_id": yt_browse_id,
-            "thumbnail_url": thumbnail_url,
+            "yt_browse_id": yt_browse_id or payload.get("yt_browse_id") or "",
+            "browse_id": yt_browse_id or payload.get("browse_id") or "",
+            "thumbnail_url": thumbnail_url or payload.get("thumbnail_url") or "",
+            "_popularity_score": _parse_artist_popularity(cached.get("subscriber_count")),
         })
     return payload
 
@@ -566,7 +702,7 @@ async def ytmusic_artist_similar(
     if not RATE_LIMITER.allow(make_key(scope="ytmusic:artist:similar", user_id=user.id, ip=ip), limit=20, window_s=60):
         raise HTTPException(status_code=429, detail="Too many requests")
 
-    cache_key = f"artist_similar|{browse_id}|{limit}"
+    cache_key = f"artist_similar_v2|{browse_id}|{limit}"
     hit = _CACHE.get(cache_key)
     if hit is not None:
         return hit
@@ -576,12 +712,27 @@ async def ytmusic_artist_similar(
         raise HTTPException(status_code=404, detail="Artist not found")
 
     rows = get_artist_related_artists(browse_id, limit=limit)
+    enriched_rows = await _enrich_similar_artist_rows(rows, limit=limit)
+    enriched_rows.sort(
+        key=lambda row: (
+            -int(row.get("_popularity_score") or 0),
+            int(row.get("rank") or 999999),
+            str(row.get("name") or "").casefold(),
+        )
+    )
+    for row in enriched_rows:
+        # Popularity is intentionally an internal ordering signal. Do not expose
+        # YTMusic's subscriber wording/count in the similar-artists UI payload.
+        row.pop("_popularity_score", None)
+        row.pop("subscriber_count", None)
+        row.pop("monthly_listeners", None)
+
     payload = {
         "artist_name": overview.get("name") or "",
         "yt_browse_id": browse_id,
         "mb_artist_id": "",
         "mb_resolution_status": "not_required",
-        "similar_artists": rows,
+        "similar_artists": enriched_rows,
     }
     _CACHE.set(cache_key, payload, ttl_seconds=60 * 60 * 6)
     return payload

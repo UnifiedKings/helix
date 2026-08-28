@@ -377,3 +377,38 @@
 .sidebar-brand img {
   display: none;
 }
+
+/* Keep Helix's side columns pinned while the center content scrolls. */
+@media (min-width: 1081px) {
+  .app-sidebar {
+    position: sticky !important;
+    top: 0;
+    align-self: start;
+    height: calc(100vh - 104px);
+    max-height: calc(100vh - 104px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .dashboard-grid > .queue-panel-redesign,
+  .dashboard-grid > .queue-panel {
+    position: sticky;
+    top: 1.1rem;
+    align-self: start;
+    height: calc(100vh - 128px - 2.2rem);
+    max-height: calc(100vh - 128px - 2.2rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
+/* Pinned sidebar: extend to the actual top edge of the playbar. */
+@media (min-width: 1081px) {
+  .app-sidebar {
+    padding-bottom: 0;
+  }
+
+  .app-sidebar .sidebar-account-panel {
+    padding-bottom: 0;
+  }
+}

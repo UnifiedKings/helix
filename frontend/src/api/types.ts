@@ -44,6 +44,7 @@ export type SearchSong = {
   thumbnails?: Array<{ url?: string; width?: number; height?: number }>
   source?: string
   subsonic_song_id?: string
+  subsonic_available?: boolean
   videoId?: string
   video_id?: string
   yt_video_id?: string
@@ -87,6 +88,10 @@ export type SearchArtist = {
 
 export type ArtistDetail = SearchArtist & {
   description?: string
+  description_source?: 'wikipedia' | 'ytmusic' | string
+  description_source_url?: string
+  wikipedia_title?: string
+  wikipedia_url?: string
   views?: string
   songs_count?: number
   albums_count?: number
@@ -101,6 +106,13 @@ export type ArtistPopularResponse = {
   artist_name?: string
   yt_browse_id?: string
   tracks: SearchSong[]
+}
+
+
+export type ArtistSimilarResponse = {
+  artist_name?: string
+  yt_browse_id?: string
+  similar_artists: SearchArtist[]
 }
 
 export type ArtistAlbumsResponse = {
@@ -118,6 +130,8 @@ export type AlbumDetail = {
   thumbnail_url?: string
   art_url?: string
   tracks: SearchSong[]
+  subsonic_complete?: boolean
+  subsonic_album_id?: string | null
 }
 
 export type PlaybackHistoryItem = QueueItem & {
