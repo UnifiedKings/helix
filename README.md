@@ -8,6 +8,8 @@ Helix is still early software. It is usable, but expect rough edges, breaking ch
 
 [![Join the Helix Discord](https://img.shields.io/badge/Discord-Join%20the%20Helix%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/jK6F9mmC7f)
 
+[![Support Helix on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Helix-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/unifiedkings)
+
 ## Features
 
 - Search and play music from a Subsonic-compatible library
@@ -17,7 +19,6 @@ Helix is still early software. It is usable, but expect rough edges, breaking ch
 - Join lobbies with simple 5-letter codes and optional password protection
 - Mirror a Helix lobby into Discord voice with the optional [HelixBot](https://github.com/UnifiedKings/helixbot) companion project
 - Use the optional native [Helix for Android](https://github.com/UnifiedKings/helix-android) client for mobile playback and control
-- Add missing music to your library through optional fulfillment providers
 - Repair metadata before finalized imports
 - Use custom station providers through a plugin system
 - Continue working with or without a configured Subsonic server, with unsupported features hidden or disabled
@@ -93,16 +94,6 @@ Stations can be started directly inside a lobby and will populate its shared que
 ![Lobby station demo](docs/gifs/lobby_stations.gif)
 
 Lobbies maintain synchronized playback state across connected clients.
-
-## How it works
-
-Helix has three main parts:
-
-- **Backend**: Python/FastAPI service for playback state, queues, stations, fulfillment, metadata repair for fulfillment, lobbies, and Subsonic communication.
-- **Frontend**: Web UI for search, playback, stations, playlists, lobbies, and settings.
-- **Music library**: A Subsonic-compatible server such as Navidrome.
-
-Helix is built with Subsonic in mind. Helix can search it, stream from it, and optionally add requested tracks/albums back into it.
 
 ## Important behavior
 
