@@ -1342,6 +1342,26 @@ button.primary svg,
 
 .queue-panel-redesign .queue-remove-icon {
   margin-right: 0.18rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  line-height: 1;
+  text-align: center;
+}
+
+.queue-panel-redesign .queue-remove-glyph {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  line-height: 1;
+  transform: translateY(-0.03em);
+  pointer-events: none;
 }
 
 /* Clear stays secondary to playback controls, but is now unmistakably clickable. */

@@ -2,7 +2,6 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { api } from '../api/client'
 import type { PlayerState, QueueItem } from '../api/types'
 import { Artwork } from './Artwork'
-import { ArtistLink } from './ArtistLink'
 
 type Props = {
   player: PlayerState | null
@@ -72,11 +71,13 @@ function QueueRow({
         <Artwork src={item.art_url} alt={item.title} size="sm" />
         <span>
           <strong>{item.title}</strong>
-          <span className="muted"><ArtistLink artist={item.artist} /></span>
+          <span className="muted">{item.artist}</span>
         </span>
       </button>
       <span className="queue-duration">{formatDuration(item.duration_ms)}</span>
-      <button className="queue-remove-icon" onClick={onRemove} aria-label={`Remove ${item.title} from queue`}>×</button>
+      <button className="queue-remove-icon" onClick={onRemove} aria-label={`Remove ${item.title} from queue`}>
+        <span className="queue-remove-glyph" aria-hidden="true">×</span>
+      </button>
     </div>
   )
 }
