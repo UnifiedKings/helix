@@ -2,6 +2,7 @@
    Files are imported in cascade order so component/page styles stay easy to find. */
 @import "./foundation.css";
 @import "./player.css";
+@import "./playbar-styles.css";
 @import "./playlists.css";
 @import "./stations.css";
 @import "./search.css";

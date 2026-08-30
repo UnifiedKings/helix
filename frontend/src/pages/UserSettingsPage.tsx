@@ -16,6 +16,14 @@ const SECTIONS = [
 
 type SectionKey = (typeof SECTIONS)[number][0]
 
+type PlaybarStyle = 'helix' | 'ytmusic' | 'spotify' | 'pandora'
+type UserSettingsWithPlaybar = UserSettings & { playback_bar_style?: PlaybarStyle }
+
+function playbarStyle(settings: UserSettings): PlaybarStyle {
+  const value = (settings as UserSettingsWithPlaybar).playback_bar_style
+  return value === 'ytmusic' || value === 'spotify' || value === 'pandora' ? value : 'helix'
+}
+
 const ACCENT_PRESETS = [
   ['Amber', '#a95f18'],
   ['Orange', '#d46f16'],
@@ -267,6 +275,10 @@ export function UserSettingsPage() {
         for (const key of Object.keys(DEFAULT_PAYLOAD.settings)) {
           if (key in incoming) next[key] = (incoming as Record<string, unknown>)[key]
         }
+        if ('playback_bar_style' in incoming) {
+          const style = (incoming as Record<string, unknown>).playback_bar_style
+          if (style === 'helix' || style === 'ytmusic' || style === 'spotify' || style === 'pandora') next.playback_bar_style = style
+        }
         setDraft(next as UserSettings)
         setStatus('Imported settings are ready to preview or save.')
         setError('')
@@ -377,7 +389,17 @@ export function UserSettingsPage() {
 
           {section === 'playback' ? <>
             <div className="settings-section-heading"><h2>Playback</h2><p>Defaults that apply when you use Helix.</p></div>
-            <div className="settings-card"><label className="settings-control-row"><div><strong>Default volume</strong><span>Used as your initial playback volume on a new browser or device.</span></div><div className="settings-range-control"><input type="range" min="0" max="100" value={Math.round(draft.playback_default_volume * 100)} onChange={(event) => update('playback_default_volume', Number(event.target.value) / 100)} /><output>{Math.round(draft.playback_default_volume * 100)}%</output></div></label></div>
+            <div className="settings-card">
+              <div className="settings-control-row settings-control-row-stack-mobile">
+                <div><strong>Playbar style</strong><span>Change the layout and control placement while keeping Helix playback behavior the same.</span></div>
+                <Segmented
+                  value={playbarStyle(draft)}
+                  options={[["helix", "Helix"], ["ytmusic", "YTMusic"], ["spotify", "Spotify"], ["pandora", "Pandora"]]}
+                  onChange={(value) => setDraft((current) => ({ ...current, playback_bar_style: value } as UserSettings))}
+                />
+              </div>
+              <label className="settings-control-row"><div><strong>Default volume</strong><span>Used as your initial playback volume on a new browser or device.</span></div><div className="settings-range-control"><input type="range" min="0" max="100" value={Math.round(draft.playback_default_volume * 100)} onChange={(event) => update('playback_default_volume', Number(event.target.value) / 100)} /><output>{Math.round(draft.playback_default_volume * 100)}%</output></div></label>
+            </div>
           </> : null}
 
           {section === 'search' ? <>

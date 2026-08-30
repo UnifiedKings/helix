@@ -47,6 +47,7 @@ USER_DEFAULTS: dict[str, Any] = {
 
     # Playback / discovery
     "playback_default_volume": 0.85,
+    "playback_bar_style": "helix",
     "search_default_mode": "hybrid",
     "search_default_tab": "songs",
 
@@ -160,6 +161,12 @@ def _validated_value(db: Session, key: str, value: Any) -> Any:
         except Exception as exc:
             raise ValueError("Default volume must be between 0 and 1") from exc
 
+    if key == "playback_bar_style":
+        raw = str(value or "").strip().lower()
+        if raw not in {"helix", "ytmusic", "spotify", "pandora"}:
+            raise ValueError("Invalid playbar style")
+        return raw
+
     if key == "search_default_mode":
         raw = str(value or "").strip().lower()
         if raw not in {"hybrid", "subsonic", "ytmusic"}:
@@ -179,7 +186,6 @@ def _validated_value(db: Session, key: str, value: Any) -> Any:
             raise ValueError("Station queue-ahead must be a number") from exc
         maximum = int(user_setting_limits(db)["station_queue_ahead_max"])
         return max(1, min(maximum, requested))
-
 
     if key == "lobbies_default_name":
         raw = str(value or "").strip()

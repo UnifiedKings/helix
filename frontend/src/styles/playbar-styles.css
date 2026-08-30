@@ -1,0 +1,1882 @@
+/* Alternate playbar layouts.
+   These change layout, sizing, and control treatment only. Color always comes
+   from Helix's user appearance tokens instead of the referenced services. */
+
+.playback-bar[data-playbar-style] {
+  transition: min-height 160ms ease, border-color 160ms ease;
+}
+
+.playback-bar[data-playbar-style] .scrub-input,
+.playback-bar[data-playbar-style] .volume-input {
+  accent-color: var(--accent) !important;
+}
+
+/* YouTube Music ---------------------------------------------------------- */
+.playback-bar.playback-style-ytmusic {
+  min-height: 72px;
+  grid-template-columns: minmax(360px, 0.9fr) minmax(520px, 1.4fr) minmax(180px, 0.7fr) !important;
+  grid-template-rows: 1fr !important;
+  column-gap: 1.25rem;
+  row-gap: 0;
+  padding: 0 1rem !important;
+  background: var(--player-bg) !important;
+  border-top-color: transparent !important;
+  backdrop-filter: none;
+  overflow: visible;
+}
+
+/* Guaranteed full-width YTMusic rail. This belongs to the footer instead of
+   the browser range control so Firefox cannot make the top track disappear. */
+.playback-bar.playback-style-ytmusic::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: color-mix(in srgb, var(--muted) 52%, transparent);
+  pointer-events: none;
+  z-index: 80;
+}
+
+.playback-bar.playback-style-ytmusic::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: var(--helix-scrub-progress, 0%);
+  height: 3px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 81;
+}
+
+/* YT Music treats playback progress as the top edge of the entire player,
+   not as a progress control inside the center column. */
+.playback-style-ytmusic .scrub-row {
+  position: absolute !important;
+  top: -7px !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: 15px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+  transform: none !important;
+  z-index: 82;
+  color: var(--muted);
+}
+
+.playback-style-ytmusic .scrub-input {
+  position: absolute;
+  inset: 0;
+  width: 100% !important;
+  max-width: none !important;
+  height: 15px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+/* Draw the YT Music-style full-width line explicitly. Relying on the browser's
+   native range styling made the track disappear in some themes/browsers. */
+.playback-style-ytmusic .scrub-input::-webkit-slider-runnable-track {
+  height: 3px;
+  border: 0;
+  border-radius: 0;
+  background: linear-gradient(90deg, var(--accent) 0 var(--helix-scrub-progress, 0%), var(--muted) var(--helix-scrub-progress, 0%) 100%);
+  opacity: 0.9;
+}
+
+.playback-style-ytmusic .scrub-input::-moz-range-track {
+  height: 3px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.playback-style-ytmusic .scrub-input::-moz-range-progress {
+  height: 3px;
+  border: 0;
+  border-radius: 0;
+  background: var(--accent);
+}
+
+/* The real YT Music bar does not have a large seek knob sitting on the line. */
+.playback-style-ytmusic .scrub-input::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 7px;
+  height: 7px;
+  margin-top: -2px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+.playback-style-ytmusic .scrub-input::-moz-range-thumb {
+  width: 7px;
+  height: 7px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
+/* Put elapsed / duration beside the left transport group, matching the
+   compact timestamp placement in YT Music rather than the Spotify-style row. */
+.playback-style-ytmusic .scrub-row > span {
+  display: block !important;
+  position: fixed;
+  bottom: 26px;
+  z-index: 4;
+  font-size: 0.68rem;
+  line-height: 1;
+  color: var(--muted);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+.playback-style-ytmusic .scrub-row > span:first-child {
+  left: 158px;
+}
+
+.playback-style-ytmusic .scrub-row > span:first-child::after {
+  content: ' /';
+}
+
+.playback-style-ytmusic .scrub-row > span:last-child {
+  left: 190px;
+}
+
+.playback-style-ytmusic .transport-stack {
+  position: absolute !important;
+  left: 8px !important;
+  top: 50% !important;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  justify-self: auto !important;
+  align-self: auto !important;
+  width: auto !important;
+  margin: 0 !important;
+  transform: translateY(-50%) !important;
+  z-index: 5;
+}
+
+.playback-style-ytmusic .transport {
+  gap: 0.18rem !important;
+  justify-content: flex-start !important;
+  align-items: center;
+}
+
+.playback-style-ytmusic .transport-side,
+.playback-style-ytmusic .transport-main {
+  width: 40px;
+  height: 40px;
+  min-width: 40px !important;
+  padding: 0;
+  border-radius: 0;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: var(--text) !important;
+}
+
+/* YT Music's play control is a larger bare play/pause glyph, not a filled
+   circular button. */
+.playback-style-ytmusic .transport-main {
+  width: 48px;
+  height: 48px;
+  min-width: 48px !important;
+}
+
+.playback-style-ytmusic .transport-main svg {
+  width: 29px;
+  height: 29px;
+  stroke-width: 1.8;
+}
+
+.playback-style-ytmusic .transport-side svg {
+  width: 21px;
+  height: 21px;
+}
+
+/* Repeat is a right-side utility in the YT Music layout, next to volume rather
+   than part of the left transport cluster. */
+.playback-style-ytmusic .transport-extra {
+  position: fixed !important;
+  right: 198px !important;
+  bottom: 15px !important;
+  top: auto !important;
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--muted) !important;
+  transform: none !important;
+  z-index: 84;
+}
+
+.playback-style-ytmusic .transport-extra svg {
+  width: 21px;
+  height: 21px;
+}
+
+.playback-style-ytmusic .transport-main:hover:not(:disabled),
+.playback-style-ytmusic .transport-side:hover:not(:disabled),
+.playback-style-ytmusic .transport-extra:hover:not(:disabled) {
+  background: transparent !important;
+  opacity: 0.78;
+  transform: none;
+}
+
+.playback-style-ytmusic .transport-extra:hover:not(:disabled) {
+  transform: none !important;
+}
+
+.playback-style-ytmusic .now-playing {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  align-self: center !important;
+  justify-self: center !important;
+  width: min(100%, 620px) !important;
+  max-width: 620px !important;
+  gap: 0.7rem;
+  transform: none !important;
+}
+
+.playback-style-ytmusic .now-playing .artwork,
+.playback-style-ytmusic .now-playing .artwork-md {
+  width: 42px;
+  height: 42px;
+  border-radius: 2px !important;
+  box-shadow: none;
+}
+
+.playback-style-ytmusic .now-playing .eyebrow {
+  display: none;
+}
+
+.playback-style-ytmusic .now-playing .title {
+  font-size: 0.9rem;
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.playback-style-ytmusic .now-playing-info .muted,
+.playback-style-ytmusic .now-playing-meta {
+  color: var(--muted) !important;
+  font-size: 0.76rem;
+}
+
+.playback-style-ytmusic .rating-controls {
+  margin-left: 0.45rem !important;
+  gap: 0.05rem;
+  flex: 0 0 auto;
+}
+
+.playback-style-ytmusic .rating-button {
+  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  padding: 0.38rem;
+  color: var(--muted);
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.playback-style-ytmusic .rating-button:hover:not(:disabled) {
+  background: transparent !important;
+  opacity: 0.78;
+  transform: none;
+}
+
+.playback-style-ytmusic .volume-row {
+  grid-column: 3 !important;
+  grid-row: 1 !important;
+  justify-self: end !important;
+  align-self: center !important;
+  width: 170px !important;
+  grid-template-columns: auto minmax(100px, 140px) !important;
+  max-width: 170px !important;
+  margin: 0 !important;
+  transform: none !important;
+  color: var(--muted);
+}
+
+.playback-style-ytmusic .audio-error {
+  position: absolute;
+  right: 1rem;
+  bottom: 4px;
+}
+
+/* Spotify ---------------------------------------------------------------- */
+.playback-bar.playback-style-spotify {
+  min-height: 94px;
+  grid-template-columns: minmax(260px, 0.9fr) minmax(380px, 1.2fr) minmax(190px, 0.8fr);
+  grid-template-rows: 56px 28px;
+  column-gap: 1.5rem;
+  row-gap: 0;
+  padding: 0.25rem 1rem 0.35rem;
+  background: var(--player-bg) !important;
+  border-top-color: var(--border-soft) !important;
+  backdrop-filter: none;
+}
+
+.playback-style-spotify .now-playing {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  transform: none;
+  gap: 0.65rem;
+  max-width: none;
+}
+
+.playback-style-spotify .now-playing .artwork,
+.playback-style-spotify .now-playing .artwork-md {
+  width: 52px;
+  height: 52px;
+  border-radius: 4px !important;
+  box-shadow: none;
+}
+
+.playback-style-spotify .now-playing .eyebrow {
+  display: none;
+}
+
+.playback-style-spotify .now-playing .title {
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.playback-style-spotify .now-playing-info .muted,
+.playback-style-spotify .now-playing-meta {
+  font-size: 0.75rem;
+  color: var(--muted) !important;
+}
+
+.playback-style-spotify .rating-controls {
+  gap: 0;
+  margin-left: 0.1rem;
+}
+
+.playback-style-spotify .rating-button {
+  min-width: 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0.35rem;
+  color: var(--muted);
+}
+
+.playback-style-spotify .transport-stack {
+  grid-column: 2;
+  grid-row: 1;
+  transform: none;
+  align-self: end;
+}
+
+.playback-style-spotify .transport {
+  gap: 0.35rem;
+}
+
+.playback-style-spotify .transport-side,
+.playback-style-spotify .transport-extra {
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  padding: 0.3rem;
+  color: var(--muted);
+}
+
+.playback-style-spotify .transport-main {
+  width: 34px;
+  height: 34px;
+  min-width: 34px !important;
+  padding: 0;
+  border-radius: 50%;
+  background: var(--accent) !important;
+  border-color: var(--accent-border) !important;
+  color: var(--accent-contrast) !important;
+  box-shadow: none !important;
+}
+
+.playback-style-spotify .transport-main:hover:not(:disabled) {
+  background: var(--accent-strong) !important;
+  transform: scale(1.06);
+}
+
+.playback-style-spotify .scrub-row {
+  grid-column: 2;
+  grid-row: 2;
+  width: min(100%, 600px);
+  transform: none;
+  align-self: start;
+  color: var(--faint);
+  font-size: 0.7rem;
+}
+
+.playback-style-spotify .scrub-input,
+.playback-style-spotify .volume-input {
+  height: 4px;
+}
+
+.playback-style-spotify .volume-row {
+  grid-column: 3;
+  grid-row: 1 / 3;
+  justify-self: end;
+  grid-template-columns: auto minmax(100px, 140px);
+  max-width: 185px;
+  transform: none;
+  color: var(--muted);
+}
+
+.playback-style-spotify .audio-error {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+/* Pandora ---------------------------------------------------------------- */
+.playback-bar.playback-style-pandora {
+  min-height: 66px;
+  grid-template-columns: 1fr minmax(320px, 430px) 1fr;
+  grid-template-rows: 3px 1fr;
+  column-gap: 1rem;
+  row-gap: 0;
+  padding: 0 1rem 0.15rem;
+  background: var(--player-bg) !important;
+  border-top-color: var(--border-soft) !important;
+  color: var(--text);
+  backdrop-filter: none;
+}
+
+.playback-style-pandora .scrub-row {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  width: 100%;
+  max-width: none;
+  gap: 0;
+  transform: none;
+  align-self: start;
+}
+
+.playback-style-pandora .scrub-row > span {
+  display: none;
+}
+
+.playback-style-pandora .scrub-input {
+  width: 100%;
+  height: 3px;
+}
+
+.playback-style-pandora .now-playing {
+  display: contents;
+}
+
+.playback-style-pandora .now-playing > .artwork,
+.playback-style-pandora .now-playing > .artwork-md,
+.playback-style-pandora .now-playing-info {
+  display: none;
+}
+
+.playback-style-pandora .transport-stack {
+  grid-column: 2;
+  grid-row: 2;
+  transform: none;
+  width: auto;
+  justify-self: center;
+  align-self: center;
+  z-index: 2;
+}
+
+.playback-style-pandora .transport {
+  gap: 0.65rem;
+}
+
+/* Pandora's reference bar has feedback, replay, play, and skip clustered
+   together. Helix does not have exactly the same command set, so repeat/play/
+   next occupy that visual cluster and Previous is omitted in this layout. */
+.playback-style-pandora .transport-previous {
+  display: none;
+}
+
+.playback-style-pandora .transport-repeat { order: 1; }
+.playback-style-pandora .transport-main { order: 2; }
+.playback-style-pandora .transport-next { order: 3; }
+
+.playback-style-pandora .transport-side,
+.playback-style-pandora .transport-extra,
+.playback-style-pandora .transport-main {
+  width: 38px;
+  height: 38px;
+  min-width: 38px !important;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: var(--text) !important;
+}
+
+.playback-style-pandora .transport-main {
+  width: 44px;
+  height: 44px;
+  min-width: 44px !important;
+  border: 1.5px solid color-mix(in srgb, var(--text) 75%, transparent) !important;
+}
+
+.playback-style-pandora .transport-main:hover:not(:disabled),
+.playback-style-pandora .transport-side:hover:not(:disabled),
+.playback-style-pandora .transport-extra:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 9%, transparent) !important;
+}
+
+.playback-style-pandora .rating-controls {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 1px);
+  width: min(330px, 34vw);
+  min-width: 280px;
+  justify-content: space-between;
+  margin: 0;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.playback-style-pandora .rating-button {
+  width: 38px;
+  height: 38px;
+  min-width: 38px;
+  padding: 0.45rem;
+  color: var(--text);
+  pointer-events: auto;
+}
+
+.playback-style-pandora .rating-button[data-active="true"] {
+  background: var(--accent-soft) !important;
+  border-color: var(--accent-border) !important;
+  color: var(--accent-bright) !important;
+}
+
+.playback-style-pandora .volume-row {
+  grid-column: 3;
+  grid-row: 2;
+  justify-self: end;
+  align-self: center;
+  grid-template-columns: auto minmax(100px, 140px);
+  max-width: 185px;
+  transform: none;
+  color: var(--muted);
+}
+
+.playback-style-pandora .audio-error {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+/* Alternate layouts collapse back to the existing stacked mobile player. */
+@media (max-width: 1100px) {
+  .playback-style-ytmusic,
+  .playback-style-spotify,
+  .playback-style-pandora {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto auto auto;
+    min-height: 0;
+    padding: 0.45rem 0.8rem 0.8rem;
+    row-gap: 0.55rem;
+  }
+
+  .playback-style-ytmusic .scrub-row,
+  .playback-style-spotify .scrub-row,
+  .playback-style-pandora .scrub-row {
+    grid-column: 1;
+    grid-row: 1;
+    width: 100%;
+  }
+
+  .playback-style-ytmusic .now-playing,
+  .playback-style-spotify .now-playing,
+  .playback-style-pandora .now-playing {
+    display: flex;
+    grid-column: 1;
+    grid-row: 2;
+    width: 100%;
+    max-width: none;
+  }
+
+  .playback-style-pandora .now-playing > .artwork,
+  .playback-style-pandora .now-playing > .artwork-md,
+  .playback-style-pandora .now-playing-info {
+    display: revert;
+  }
+
+  .playback-style-ytmusic .transport-stack,
+  .playback-style-spotify .transport-stack,
+  .playback-style-pandora .transport-stack {
+    grid-column: 1;
+    grid-row: 3;
+    justify-self: center;
+    align-self: center;
+  }
+
+  .playback-style-pandora .transport-previous {
+    display: inline-grid;
+    order: 0;
+  }
+
+  .playback-style-ytmusic .volume-row,
+  .playback-style-spotify .volume-row,
+  .playback-style-pandora .volume-row {
+    grid-column: 1;
+    grid-row: 4;
+    justify-self: start;
+  }
+
+  .playback-style-pandora .rating-controls {
+    position: static;
+    width: auto;
+    min-width: 0;
+    transform: none;
+    pointer-events: auto;
+    margin-left: auto;
+  }
+
+  .playback-style-ytmusic .audio-error,
+  .playback-style-spotify .audio-error,
+  .playback-style-pandora .audio-error {
+    grid-column: 1;
+    grid-row: 5;
+    justify-self: start;
+  }
+}
+
+/* YT Music v6: make the full-width progress rail unmissable and keep the
+   timestamp clear of transport controls. */
+.playback-style-ytmusic .scrub-row {
+  top: 0 !important;
+  height: 5px !important;
+  background: color-mix(in srgb, var(--muted) 45%, transparent) !important;
+  overflow: visible !important;
+  pointer-events: none;
+}
+
+.playback-style-ytmusic .scrub-input {
+  top: 0 !important;
+  height: 5px !important;
+  pointer-events: auto;
+  z-index: 5;
+}
+
+.playback-style-ytmusic .scrub-input::-moz-range-track {
+  height: 4px !important;
+  background: color-mix(in srgb, var(--muted) 55%, transparent) !important;
+}
+
+.playback-style-ytmusic .scrub-input::-moz-range-progress {
+  height: 4px !important;
+  background: var(--accent) !important;
+}
+
+.playback-style-ytmusic .scrub-input::-moz-range-thumb {
+  width: 6px !important;
+  height: 6px !important;
+  background: var(--accent) !important;
+}
+
+.playback-style-ytmusic .scrub-input::-webkit-slider-runnable-track {
+  height: 4px !important;
+  background: color-mix(in srgb, var(--muted) 55%, transparent) !important;
+}
+
+.playback-style-ytmusic .scrub-input::-webkit-slider-thumb {
+  width: 6px !important;
+  height: 6px !important;
+  margin-top: -1px !important;
+  background: var(--accent) !important;
+}
+
+/* Keep the compact YT Music time readout after the transport cluster instead
+   of underneath/inside the next button. */
+.playback-style-ytmusic .scrub-row > span {
+  bottom: 27px !important;
+}
+
+.playback-style-ytmusic .scrub-row > span:first-child {
+  left: 168px !important;
+}
+
+.playback-style-ytmusic .scrub-row > span:last-child {
+  left: 202px !important;
+}
+
+.playback-style-ytmusic .transport {
+  gap: 0.28rem !important;
+}
+
+/* Repeat belongs to the right utility group, immediately before volume. */
+.playback-style-ytmusic .transport-extra {
+  right: 184px !important;
+}
+
+
+/* YTMusic v7 hardening: keep the seek hit target/progress above the rail. */
+.playback-style-ytmusic .scrub-input {
+  z-index: 82 !important;
+}
+.playback-style-ytmusic .scrub-input::-moz-range-progress {
+  background: var(--accent) !important;
+  height: 3px !important;
+}
+.playback-style-ytmusic .scrub-input::-moz-range-track {
+  background: transparent !important;
+  height: 3px !important;
+}
+
+
+/* YTMusic v8: thin visual rail, forgiving seek target. */
+.playback-style-ytmusic .scrub-row,
+.playback-style-ytmusic .scrub-input {
+  pointer-events: auto !important;
+  touch-action: none;
+}
+.playback-style-ytmusic .scrub-input {
+  cursor: pointer !important;
+}
+.playback-style-ytmusic .scrub-input::-moz-range-track,
+.playback-style-ytmusic .scrub-input::-moz-range-progress {
+  height: 3px !important;
+}
+
+
+/* YTMusic v9: footer owns progress rendering; range is interaction-only. */
+.playback-style-ytmusic .scrub-input::-moz-range-track,
+.playback-style-ytmusic .scrub-input::-moz-range-progress,
+.playback-style-ytmusic .scrub-input::-webkit-slider-runnable-track {
+  background: transparent !important;
+}
+.playback-style-ytmusic .scrub-input {
+  z-index: 83 !important;
+}
+
+
+/* YTMusic v10 cleanup */
+
+/* The original Repeat button stays in the shared transport markup for every
+   other playbar style. YTMusic uses its own right-side copy. */
+.playback-style-ytmusic .transport .transport-repeat {
+  display: none !important;
+}
+
+.ytmusic-utility-repeat {
+  display: none;
+}
+
+.playback-style-ytmusic .ytmusic-utility-repeat {
+  display: flex !important;
+  position: absolute !important;
+  right: 174px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 90;
+  align-items: center;
+  justify-content: center;
+}
+
+.playback-style-ytmusic .ytmusic-repeat-button {
+  position: static !important;
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--muted) !important;
+  transform: none !important;
+}
+
+.playback-style-ytmusic .ytmusic-repeat-button:hover:not(:disabled) {
+  background: transparent !important;
+  transform: none !important;
+  opacity: .78;
+}
+
+.playback-style-ytmusic .ytmusic-repeat-button svg {
+  width: 21px !important;
+  height: 21px !important;
+}
+
+/* Put the compact time readout after Next. */
+.playback-style-ytmusic .scrub-row > span {
+  bottom: 27px !important;
+  pointer-events: none !important;
+}
+.playback-style-ytmusic .scrub-row > span:first-child {
+  left: 202px !important;
+}
+.playback-style-ytmusic .scrub-row > span:last-child {
+  left: 236px !important;
+}
+
+/* Keep the rail visually 3px, but make the actual range a forgiving full-width
+   22px target centered on the top edge. Native range behavior handles click
+   and drag seeking. */
+.playback-style-ytmusic .scrub-row {
+  top: -10px !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  height: 22px !important;
+  background: transparent !important;
+  overflow: visible !important;
+  pointer-events: auto !important;
+  z-index: 88 !important;
+}
+
+.playback-style-ytmusic .scrub-input {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 22px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  opacity: 0.001 !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  z-index: 91 !important;
+}
+
+/* Footer-owned visible rail/fill stay underneath the invisible native range. */
+.playback-bar.playback-style-ytmusic::before,
+.playback-bar.playback-style-ytmusic::after {
+  top: 0 !important;
+  height: 3px !important;
+  pointer-events: none !important;
+}
+
+
+/* YTMusic v11 fixes */
+.playback-style-ytmusic .ytmusic-seek-hitbox {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -10px;
+  height: 22px;
+  z-index: 120;
+  cursor: pointer;
+  background: transparent;
+}
+
+/* The invisible hitbox handles seeking in YTMusic mode; keep the actual range
+   from stealing pointer events while still letting AudioPlayer own the value. */
+.playback-style-ytmusic .scrub-input {
+  pointer-events: none !important;
+}
+
+.playback-style-ytmusic .scrub-row {
+  z-index: 100 !important;
+}
+
+.playback-style-ytmusic .ytmusic-utility-repeat {
+  position: absolute !important;
+  right: 176px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 130 !important;
+  pointer-events: auto !important;
+}
+
+.playback-style-ytmusic .ytmusic-repeat-button {
+  display: inline-grid !important;
+  place-items: center !important;
+  pointer-events: auto !important;
+}
+
+.playback-style-ytmusic .volume-row {
+  z-index: 125 !important;
+}
+
+.playback-style-ytmusic .rating-controls {
+  align-items: center !important;
+}
+
+.playback-style-ytmusic .rating-button {
+  display: inline-grid !important;
+  place-items: center !important;
+  min-width: 34px;
+  width: 34px;
+  height: 34px;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  line-height: 0 !important;
+}
+
+.playback-style-ytmusic .rating-button svg {
+  width: 18px !important;
+  height: 18px !important;
+  display: block !important;
+  margin: 0 !important;
+}
+
+
+/* YTMusic v12 interaction polish */
+.playback-style-ytmusic .ytmusic-seek-hitbox {
+  top: -12px !important;
+  height: 26px !important;
+  z-index: 140 !important;
+}
+
+/* Grow the rail on hover without changing the size of the hit target. */
+@media (hover: hover) and (pointer: fine) {
+  .playback-bar.playback-style-ytmusic:has(.ytmusic-seek-hitbox:hover)::before,
+  .playback-bar.playback-style-ytmusic:has(.ytmusic-seek-hitbox:hover)::after {
+    height: 6px !important;
+  }
+}
+
+.playback-bar.playback-style-ytmusic::before,
+.playback-bar.playback-style-ytmusic::after {
+  transition: height 90ms ease;
+}
+
+/* Give Repeat more breathing room from the volume icon and make it its own
+   top-level clickable utility above the seek overlay. */
+.playback-style-ytmusic .ytmusic-utility-repeat {
+  right: 220px !important;
+  z-index: 220 !important;
+  pointer-events: auto !important;
+}
+
+.playback-style-ytmusic .ytmusic-repeat-button {
+  width: 42px !important;
+  height: 42px !important;
+  min-width: 42px !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  position: relative !important;
+  z-index: 221 !important;
+}
+
+.playback-style-ytmusic .volume-row {
+  z-index: 210 !important;
+}
+
+
+/* YTMusic v13: focus on making Repeat reliably clickable. */
+.playback-style-ytmusic .ytmusic-seek-hitbox {
+  right: 320px !important;
+  z-index: 140 !important;
+}
+
+.playback-style-ytmusic .ytmusic-utility-repeat {
+  right: 274px !important;
+  z-index: 400 !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+}
+
+.playback-style-ytmusic .ytmusic-repeat-button {
+  width: 46px !important;
+  height: 46px !important;
+  min-width: 46px !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+  cursor: pointer !important;
+}
+
+.playback-style-ytmusic .ytmusic-repeat-button svg {
+  width: 22px !important;
+  height: 22px !important;
+}
+
+.playback-style-ytmusic .volume-row {
+  z-index: 300 !important;
+}
+
+
+/* YTMusic v15: stop positioning Repeat with guessed viewport offsets.
+   Repeat and Volume now occupy the SAME fixed right-side grid column. */
+.playback-bar.playback-style-ytmusic {
+  grid-template-columns: 360px minmax(0, 1fr) 270px !important;
+}
+
+.playback-style-ytmusic .ytmusic-utility-repeat {
+  position: static !important;
+  grid-column: 3 !important;
+  grid-row: 1 !important;
+  justify-self: start !important;
+  align-self: center !important;
+  right: auto !important;
+  left: auto !important;
+  top: auto !important;
+  bottom: auto !important;
+  margin: 0 !important;
+  transform: none !important;
+  z-index: 300 !important;
+  pointer-events: auto !important;
+}
+
+.playback-style-ytmusic .volume-row {
+  grid-column: 3 !important;
+  grid-row: 1 !important;
+  justify-self: end !important;
+  align-self: center !important;
+  width: 170px !important;
+  margin: 0 !important;
+  transform: none !important;
+  z-index: 290 !important;
+}
+
+/* Leave the entire right utility column out of the custom seek overlay. */
+.playback-style-ytmusic .ytmusic-seek-hitbox {
+  right: 270px !important;
+  z-index: 140 !important;
+}
+
+.playback-style-ytmusic .ytmusic-repeat-button {
+  position: static !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border: 1px solid transparent !important;
+  border-radius: 999px !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  box-shadow: none !important;
+  transform: none !important;
+  opacity: .82 !important;
+  cursor: pointer !important;
+  pointer-events: auto !important;
+  touch-action: manipulation !important;
+  z-index: 301 !important;
+}
+
+.playback-style-ytmusic .ytmusic-repeat-button svg {
+  width: 21px !important;
+  height: 21px !important;
+  margin: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Repeat OFF vs ON must be visually unmistakable. */
+.playback-style-ytmusic .ytmusic-repeat-button[data-active="true"] {
+  color: var(--accent-contrast) !important;
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  opacity: 1 !important;
+  box-shadow: 0 0 0 2px var(--accent-border) !important;
+}
+
+.playback-style-ytmusic .ytmusic-repeat-button:hover:not(:disabled) {
+  opacity: 1 !important;
+  transform: none !important;
+}
+
+.playback-style-ytmusic .ytmusic-repeat-button:focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+
+
+/* YTMusic v16: real Repeat state toggle + utility spacing. */
+.playback-bar.playback-style-ytmusic {
+  grid-template-columns: 360px minmax(0, 1fr) 300px !important;
+}
+
+.playback-style-ytmusic .volume-row {
+  justify-self: end !important;
+  margin-right: 24px !important;
+}
+
+.playback-style-ytmusic .ytmusic-utility-repeat {
+  justify-self: start !important;
+  margin-left: 8px !important;
+  pointer-events: auto !important;
+}
+
+/* The right utility column is 300px now, so keep seeking out of it entirely. */
+.playback-style-ytmusic .ytmusic-seek-hitbox {
+  right: 300px !important;
+}
+
+/* Final-cascade Repeat state. */
+.playback-style-ytmusic .ytmusic-repeat-button[data-active="false"] {
+  color: var(--muted) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  opacity: .78 !important;
+}
+
+.playback-style-ytmusic .ytmusic-repeat-button[data-active="true"] {
+  color: var(--accent-contrast) !important;
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent-border) !important;
+  opacity: 1 !important;
+}
+
+.playback-style-ytmusic .ytmusic-repeat-button[data-active="true"] svg {
+  stroke: currentColor !important;
+}
+
+
+/* YTMusic v17: tighten metadata-to-rating spacing. */
+.playback-style-ytmusic .now-playing {
+  width: auto !important;
+  max-width: min(100%, 620px) !important;
+}
+
+.playback-style-ytmusic .now-playing-info {
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+}
+
+.playback-style-ytmusic .rating-controls {
+  margin-left: 0.18rem !important;
+  gap: 0 !important;
+}
+
+
+/* YTMusic v18: bring Repeat closer to the speaker/volume cluster. */
+.playback-bar.playback-style-ytmusic {
+  grid-template-columns: 360px minmax(0, 1fr) 260px !important;
+}
+
+.playback-style-ytmusic .ytmusic-seek-hitbox {
+  right: 260px !important;
+}
+
+.playback-style-ytmusic .volume-row {
+  width: 166px !important;
+  max-width: 166px !important;
+  margin-right: 18px !important;
+}
+
+.playback-style-ytmusic .ytmusic-utility-repeat {
+  margin-left: 0 !important;
+}
+
+
+/* YTMusic v19: give the timestamp a little more breathing room from Next. */
+.playback-style-ytmusic .scrub-row > span:first-child {
+  left: 216px !important;
+}
+
+.playback-style-ytmusic .scrub-row > span:last-child {
+  left: 250px !important;
+}
+
+
+/* Spotify pass 1: match Spotify's compact left / centered transport / right utility structure. */
+.playback-bar.playback-style-spotify {
+  min-height: 86px !important;
+  grid-template-columns: minmax(260px, 1fr) minmax(520px, 660px) minmax(210px, 1fr) !important;
+  grid-template-rows: 48px 28px !important;
+  column-gap: 1.15rem !important;
+  row-gap: 0 !important;
+  padding: 0.25rem 1rem 0.3rem !important;
+}
+
+/* Keep track info compact instead of allowing the left column to create a huge
+   empty gap before Helix's feedback controls. */
+.playback-style-spotify .now-playing {
+  width: fit-content !important;
+  max-width: min(100%, 470px) !important;
+  justify-self: start !important;
+  gap: 0.6rem !important;
+}
+
+.playback-style-spotify .now-playing-info {
+  flex: 0 1 auto !important;
+  min-width: 0 !important;
+  max-width: 310px !important;
+}
+
+.playback-style-spotify .rating-controls {
+  margin-left: 0.15rem !important;
+  gap: 0.05rem !important;
+  flex: 0 0 auto !important;
+}
+
+.playback-style-spotify .rating-button {
+  display: inline-grid !important;
+  place-items: center !important;
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 30px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+}
+
+.playback-style-spotify .rating-button svg {
+  width: 17px !important;
+  height: 17px !important;
+}
+
+/* Spotify's transport cluster is tightly centered above the scrubber. */
+.playback-style-spotify .transport-stack {
+  grid-column: 2 !important;
+  grid-row: 1 !important;
+  width: 100% !important;
+  justify-self: center !important;
+  align-self: end !important;
+  transform: none !important;
+}
+
+.playback-style-spotify .transport {
+  justify-content: center !important;
+  align-items: center !important;
+  gap: 0.55rem !important;
+}
+
+.playback-style-spotify .transport-side,
+.playback-style-spotify .transport-extra {
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 30px !important;
+  padding: 0 !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.playback-style-spotify .transport-side svg,
+.playback-style-spotify .transport-extra svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.playback-style-spotify .transport-main {
+  width: 34px !important;
+  min-width: 34px !important;
+  height: 34px !important;
+  padding: 0 !important;
+  display: inline-grid !important;
+  place-items: center !important;
+}
+
+.playback-style-spotify .transport-main svg {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* Scrubber sits directly below the centered controls, like Spotify. */
+.playback-style-spotify .scrub-row {
+  grid-column: 2 !important;
+  grid-row: 2 !important;
+  width: 100% !important;
+  max-width: 660px !important;
+  justify-self: center !important;
+  align-self: start !important;
+  gap: 0.55rem !important;
+  transform: none !important;
+  font-size: 0.68rem !important;
+}
+
+.playback-style-spotify .scrub-input {
+  height: 4px !important;
+}
+
+/* Keep the right-side utility area compact and visually anchored to the edge. */
+.playback-style-spotify .volume-row {
+  grid-column: 3 !important;
+  grid-row: 1 / 3 !important;
+  justify-self: end !important;
+  align-self: center !important;
+  width: 165px !important;
+  max-width: 165px !important;
+  grid-template-columns: auto minmax(95px, 130px) !important;
+  gap: 0.55rem !important;
+  transform: none !important;
+}
+
+
+/* Spotify pass 2: add a little more vertical separation between the centered
+   transport cluster and the scrubber. */
+.playback-bar.playback-style-spotify {
+  grid-template-rows: 46px 32px !important;
+}
+
+.playback-style-spotify .transport-stack {
+  align-self: center !important;
+}
+
+.playback-style-spotify .scrub-row {
+  margin-top: 4px !important;
+}
+
+
+/* Pandora restart: rebuild the desktop Pandora layout from scratch.
+   Goal: thin full-width top progress rail, tight centered radio controls,
+   thumbs close to the central cluster, small time readout near the volume,
+   and no copied Pandora colors. */
+.playback-bar.playback-style-pandora {
+  position: relative !important;
+  min-height: 64px !important;
+  grid-template-columns: 1fr !important;
+  grid-template-rows: 3px 1fr !important;
+  column-gap: 0 !important;
+  row-gap: 0 !important;
+  padding: 0 16px !important;
+  background: var(--player-bg) !important;
+  border-top-color: var(--border-soft) !important;
+  color: var(--text) !important;
+  backdrop-filter: none !important;
+  overflow: visible !important;
+}
+
+/* Full-width top edge progress rail. */
+.playback-style-pandora .scrub-row {
+  position: absolute !important;
+  left: 0 !important;
+  right: 0 !important;
+  top: 0 !important;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: 3px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+  transform: none !important;
+  z-index: 2 !important;
+}
+
+.playback-style-pandora .scrub-input {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  max-width: none !important;
+  height: 3px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  cursor: pointer !important;
+}
+
+.playback-style-pandora .scrub-input::-webkit-slider-runnable-track {
+  height: 3px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: color-mix(in srgb, var(--text) 32%, transparent) !important;
+}
+
+.playback-style-pandora .scrub-input::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  margin-top: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+.playback-style-pandora .scrub-input::-moz-range-track {
+  height: 3px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: color-mix(in srgb, var(--text) 32%, transparent) !important;
+}
+
+.playback-style-pandora .scrub-input::-moz-range-progress {
+  height: 3px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: var(--accent) !important;
+}
+
+.playback-style-pandora .scrub-input::-moz-range-thumb {
+  width: 0 !important;
+  height: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+/* Small right-side time readout like Pandora. */
+.playback-style-pandora .scrub-row > span {
+  position: absolute !important;
+  top: 18px !important;
+  bottom: auto !important;
+  display: block !important;
+  font-size: 0.72rem !important;
+  line-height: 1 !important;
+  color: var(--muted) !important;
+  white-space: nowrap !important;
+  pointer-events: none !important;
+  z-index: 6 !important;
+}
+
+.playback-style-pandora .scrub-row > span:first-child {
+  right: 84px !important;
+}
+
+.playback-style-pandora .scrub-row > span:first-child::after {
+  content: " |";
+  margin-left: 4px;
+}
+
+.playback-style-pandora .scrub-row > span:last-child {
+  right: 40px !important;
+}
+
+/* Hide metadata/artwork in desktop Pandora mode. */
+.playback-style-pandora .now-playing {
+  display: contents !important;
+}
+
+.playback-style-pandora .now-playing > .artwork,
+.playback-style-pandora .now-playing > .artwork-md,
+.playback-style-pandora .now-playing-info {
+  display: none !important;
+}
+
+/* Tight centered radio-control cluster. */
+.playback-style-pandora .transport-stack {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  justify-self: auto !important;
+  align-self: auto !important;
+  width: auto !important;
+  margin: 0 !important;
+  transform: translate(-50%, -50%) !important;
+  z-index: 5 !important;
+}
+
+.playback-style-pandora .transport {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0.8rem !important;
+}
+
+.playback-style-pandora .transport-previous {
+  display: none !important;
+}
+
+.playback-style-pandora .transport-repeat {
+  order: 0 !important;
+}
+
+.playback-style-pandora .transport-main {
+  order: 1 !important;
+}
+
+.playback-style-pandora .transport-next {
+  order: 2 !important;
+}
+
+.playback-style-pandora .transport-side,
+.playback-style-pandora .transport-extra,
+.playback-style-pandora .transport-main {
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  padding: 0 !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: var(--text) !important;
+}
+
+.playback-style-pandora .transport-main svg {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+.playback-style-pandora .transport-side svg,
+.playback-style-pandora .transport-extra svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.playback-style-pandora .transport-main:hover:not(:disabled),
+.playback-style-pandora .transport-side:hover:not(:disabled),
+.playback-style-pandora .transport-extra:hover:not(:disabled) {
+  background: transparent !important;
+  opacity: 0.78 !important;
+  transform: none !important;
+}
+
+/* Repeat active state should still be readable. */
+.playback-style-pandora .transport-repeat[data-active="true"] {
+  color: var(--accent-bright) !important;
+}
+
+/* Position thumbs close to the transport cluster, not spread across the bar. */
+.playback-style-pandora .rating-controls {
+  position: absolute !important;
+  left: 50% !important;
+  top: 50% !important;
+  width: 256px !important;
+  min-width: 256px !important;
+  margin: 0 !important;
+  transform: translate(-50%, -50%) !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  pointer-events: none !important;
+  z-index: 4 !important;
+}
+
+.playback-style-pandora .rating-button {
+  width: 34px !important;
+  height: 34px !important;
+  min-width: 34px !important;
+  padding: 0 !important;
+  display: inline-grid !important;
+  place-items: center !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  color: var(--text) !important;
+  pointer-events: auto !important;
+}
+
+.playback-style-pandora .rating-button svg {
+  width: 18px !important;
+  height: 18px !important;
+}
+
+.playback-style-pandora .rating-button:hover:not(:disabled) {
+  background: transparent !important;
+  opacity: 0.78 !important;
+  transform: none !important;
+}
+
+.playback-style-pandora .rating-button[data-active="true"] {
+  color: var(--accent-bright) !important;
+}
+
+/* Small right-side volume utility. */
+.playback-style-pandora .volume-row {
+  position: absolute !important;
+  right: 16px !important;
+  top: 50% !important;
+  grid-column: auto !important;
+  grid-row: auto !important;
+  justify-self: auto !important;
+  align-self: auto !important;
+  width: 122px !important;
+  max-width: 122px !important;
+  grid-template-columns: auto minmax(82px, 92px) !important;
+  gap: 0.45rem !important;
+  margin: 0 !important;
+  transform: translateY(-50%) !important;
+  color: var(--muted) !important;
+  z-index: 5 !important;
+}
+
+.playback-style-pandora .audio-error {
+  position: absolute !important;
+  right: 16px !important;
+  bottom: -18px !important;
+  grid-column: auto !important;
+  grid-row: auto !important;
+}
+
+/* Mobile/tablet fallback remains the stacked player. */
+@media (max-width: 1100px) {
+  .playback-style-pandora {
+    grid-template-columns: 1fr !important;
+    grid-template-rows: auto auto auto auto auto !important;
+    min-height: 0 !important;
+    padding: 0.45rem 0.8rem 0.8rem !important;
+    row-gap: 0.55rem !important;
+  }
+
+  .playback-style-pandora .scrub-row {
+    position: static !important;
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  .playback-style-pandora .scrub-row > span {
+    position: static !important;
+    display: revert !important;
+  }
+
+  .playback-style-pandora .now-playing {
+    display: flex !important;
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .playback-style-pandora .now-playing > .artwork,
+  .playback-style-pandora .now-playing > .artwork-md,
+  .playback-style-pandora .now-playing-info {
+    display: revert !important;
+  }
+
+  .playback-style-pandora .transport-stack {
+    position: static !important;
+    grid-column: 1 !important;
+    grid-row: 3 !important;
+    transform: none !important;
+  }
+
+  .playback-style-pandora .transport-previous {
+    display: inline-grid !important;
+    order: 0 !important;
+  }
+
+  .playback-style-pandora .rating-controls {
+    position: static !important;
+    grid-column: 1 !important;
+    grid-row: 4 !important;
+    width: auto !important;
+    min-width: 0 !important;
+    transform: none !important;
+    justify-content: center !important;
+    gap: 0.45rem !important;
+    pointer-events: auto !important;
+  }
+
+  .playback-style-pandora .volume-row {
+    position: static !important;
+    grid-column: 1 !important;
+    grid-row: 5 !important;
+    width: 100% !important;
+    max-width: none !important;
+    transform: none !important;
+  }
+}
+
+
+/* Pandora restart v3: restore the playback bar's fundamental full-width shell.
+   The v2 restart accidentally changed the footer to position:relative, which
+   collapsed the entire Pandora layout into its parent/content width. */
+.playback-bar.playback-style-pandora {
+  position: fixed !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  width: auto !important;
+  max-width: none !important;
+  box-sizing: border-box !important;
+}
+
+
+/* Pandora restart v4: taller bar and swap Repeat / Previous positions. */
+.playback-bar.playback-style-pandora {
+  min-height: 78px !important;
+}
+
+.playback-style-pandora .transport {
+  gap: 0.9rem !important;
+}
+
+/* Visual order: Repeat, Previous, Play/Pause, Next. */
+.playback-style-pandora .transport-repeat {
+  display: inline-grid !important;
+  order: 0 !important;
+}
+
+.playback-style-pandora .transport-previous {
+  display: inline-grid !important;
+  order: 1 !important;
+}
+
+.playback-style-pandora .transport-main {
+  order: 2 !important;
+}
+
+.playback-style-pandora .transport-next {
+  order: 3 !important;
+}
+
+.playback-style-pandora .transport-side,
+.playback-style-pandora .transport-extra {
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+}
+
+.playback-style-pandora .transport-main {
+  width: 46px !important;
+  height: 46px !important;
+  min-width: 46px !important;
+}
+
+.playback-style-pandora .rating-controls {
+  width: 318px !important;
+  min-width: 318px !important;
+}
+
+.playback-style-pandora .rating-button {
+  width: 38px !important;
+  height: 38px !important;
+  min-width: 38px !important;
+}
+
+
+/* Pandora restart v5: scale the controls with the taller bar and move the
+   timestamp into the right-side utility row, immediately left of volume. */
+.playback-bar.playback-style-pandora {
+  min-height: 84px !important;
+}
+
+.playback-style-pandora .transport {
+  gap: 1rem !important;
+}
+
+.playback-style-pandora .transport-side,
+.playback-style-pandora .transport-extra {
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+}
+
+.playback-style-pandora .transport-main {
+  width: 52px !important;
+  height: 52px !important;
+  min-width: 52px !important;
+}
+
+.playback-style-pandora .transport-side svg,
+.playback-style-pandora .transport-extra svg {
+  width: 21px !important;
+  height: 21px !important;
+}
+
+.playback-style-pandora .transport-main svg {
+  width: 27px !important;
+  height: 27px !important;
+}
+
+.playback-style-pandora .rating-controls {
+  width: 352px !important;
+  min-width: 352px !important;
+}
+
+.playback-style-pandora .rating-button {
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+}
+
+.playback-style-pandora .rating-button svg {
+  width: 21px !important;
+  height: 21px !important;
+}
+
+/* Shift volume a little left to make room for the timestamp. */
+.playback-style-pandora .volume-row {
+  right: 18px !important;
+  width: 132px !important;
+  max-width: 132px !important;
+}
+
+/* Timestamp becomes one compact horizontal readout immediately left of volume. */
+.playback-style-pandora .scrub-row > span {
+  top: auto !important;
+  bottom: auto !important;
+  right: auto !important;
+  left: auto !important;
+  transform: translateY(-50%) !important;
+  font-size: 0.74rem !important;
+}
+
+.playback-style-pandora .scrub-row > span:first-child {
+  position: fixed !important;
+  right: 176px !important;
+  top: calc(100% - 42px) !important;
+}
+
+.playback-style-pandora .scrub-row > span:last-child {
+  position: fixed !important;
+  right: 138px !important;
+  top: calc(100% - 42px) !important;
+}
+
+.playback-style-pandora .scrub-row > span:first-child::after {
+  content: " |";
+  margin-left: 4px;
+}
+
+
+/* Pandora restart v6: move the entire right-side time/volume utility group left. */
+.playback-style-pandora .volume-row {
+  right: 74px !important;
+}
+
+.playback-style-pandora .scrub-row > span:first-child {
+  right: 232px !important;
+}
+
+.playback-style-pandora .scrub-row > span:last-child {
+  right: 194px !important;
+}
+
+
+/* Pandora restart v8: hover-only visual rail growth.
+   Keep the v6 geometry and timestamp/volume placement completely unchanged. */
+.playback-style-pandora .scrub-input::-moz-range-track,
+.playback-style-pandora .scrub-input::-moz-range-progress,
+.playback-style-pandora .scrub-input::-webkit-slider-runnable-track {
+  transition: height 90ms ease !important;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .playback-style-pandora .scrub-input:hover::-moz-range-track,
+  .playback-style-pandora .scrub-input:hover::-moz-range-progress,
+  .playback-style-pandora .scrub-input:hover::-webkit-slider-runnable-track {
+    height: 6px !important;
+  }
+}
+
+
+/* Pandora restart v9: move only the time readout farther left from the speaker. */
+.playback-style-pandora .scrub-row > span:first-child {
+  right: 238px !important;
+}
+
+.playback-style-pandora .scrub-row > span:last-child {
+  right: 198px !important;
+}
+
+
+/* Pandora restart v10: move only the time readout farther left again. */
+.playback-style-pandora .scrub-row > span:first-child {
+  right: 274px !important;
+}
+
+.playback-style-pandora .scrub-row > span:last-child {
+  right: 234px !important;
+}
