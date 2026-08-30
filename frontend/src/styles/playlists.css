@@ -230,8 +230,8 @@
   top: calc(100% + 0.35rem);
   right: 0;
   z-index: 35;
-  width: 160px;
-  padding: 0.35rem;
+  width: 205px;
+  padding: 0.4rem;
   border: 1px solid var(--border-soft);
   border-radius: 9px;
   background: color-mix(in srgb, var(--surface) 98%, transparent);
@@ -239,19 +239,63 @@
 }
 
 .playlist-track-menu-popover button {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
   width: 100%;
-  min-height: 36px;
+  min-height: 38px;
   margin: 0;
-  padding: 0.55rem 0.65rem;
+  padding: 0.5rem 0.65rem;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: var(--danger);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+  line-height: 1.2;
   text-align: left;
+  white-space: nowrap;
+}
+
+
+.playlist-track-menu-icon {
+  display: inline-flex;
+  flex: 0 0 1.1rem;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.playlist-track-menu-icon-subsonic {
+  font-size: 0.72rem;
+  letter-spacing: -0.04em;
+}
+
+.playlist-track-menu-popover button:hover .playlist-track-menu-icon {
+  color: var(--text);
 }
 
 .playlist-track-menu-popover button:hover {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.playlist-track-menu-popover button.danger {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.playlist-track-menu-popover button.danger:hover {
   background: color-mix(in srgb, var(--danger) 9%, transparent);
+}
+
+.playlist-track-menu-divider {
+  height: 1px;
+  margin: 0.3rem 0.2rem;
+  background: var(--border-soft);
 }
 
 .playlist-editor-add-panel {

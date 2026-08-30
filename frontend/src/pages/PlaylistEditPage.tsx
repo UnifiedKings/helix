@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { Link, useOutletContext, useParams } from 'react-router-dom'
 import { api } from '../api/client'
-import type { PlaylistDetail, PlaylistTrack, SearchMode, SearchSong } from '../api/types'
+import type { Capabilities, PlaylistDetail, PlaylistTrack, SearchMode, SearchSong } from '../api/types'
 import { Artwork } from '../components/Artwork'
 import { ArtistLink } from '../components/ArtistLink'
 import { AlbumLink } from '../components/AlbumLink'
@@ -66,6 +66,8 @@ export function PlaylistEditPage() {
   const [reorderBusy, setReorderBusy] = useState(false)
   const [openTrackMenuId, setOpenTrackMenuId] = useState('')
   const [importOpen, setImportOpen] = useState(false)
+  const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
+  const [subsonicQueuedTrackIds, setSubsonicQueuedTrackIds] = useState<Set<string>>(new Set())
 
   const playlist = detail?.playlist
   const isSystemPlaylist = Boolean(playlist?.system_key)
@@ -81,6 +83,12 @@ export function PlaylistEditPage() {
   }
 
   useEffect(() => { void load() }, [playlistId])
+
+  useEffect(() => {
+    api.capabilities()
+      .then(setCapabilities)
+      .catch(() => setCapabilities(null))
+  }, [])
 
   useEffect(() => {
     if (!openTrackMenuId) return
@@ -205,6 +213,33 @@ export function PlaylistEditPage() {
     }
   }
 
+  function playTrack(track: PlaylistTrack) {
+    setOpenTrackMenuId('')
+    player.run(() => api.playSong(track), 'play')
+  }
+
+  function queueTrack(track: PlaylistTrack) {
+    setOpenTrackMenuId('')
+    player.run(() => api.queueSong(track))
+  }
+
+  async function addTrackToSubsonic(track: PlaylistTrack) {
+    if (subsonicQueuedTrackIds.has(track.id)) return
+    setOpenTrackMenuId('')
+    setError('')
+    setSubsonicQueuedTrackIds((current) => new Set(current).add(track.id))
+    try {
+      await api.addSongToSubsonic(track)
+    } catch (err) {
+      setSubsonicQueuedTrackIds((current) => {
+        const next = new Set(current)
+        next.delete(track.id)
+        return next
+      })
+      setError(err instanceof Error ? err.message : 'Could not add track to Subsonic')
+    }
+  }
+
   return (
     <div className="page-stack playlist-editor-page">
       <Link className="playlist-editor-back" to="/playlists">← Playlists</Link>
@@ -292,13 +327,34 @@ export function PlaylistEditPage() {
                     </button>
                     {openTrackMenuId === track.id ? (
                       <div className="playlist-track-menu-popover" role="menu" onClick={(event) => event.stopPropagation()}>
+                        <button type="button" role="menuitem" onClick={() => playTrack(track)}>
+                          <span className="playlist-track-menu-icon" aria-hidden="true">▶</span>
+                          <span>Play now</span>
+                        </button>
+                        <button type="button" role="menuitem" onClick={() => queueTrack(track)}>
+                          <span className="playlist-track-menu-icon" aria-hidden="true">+</span>
+                          <span>Add to queue</span>
+                        </button>
+                        {capabilities?.features.subsonic_import && track.source !== 'subsonic' && !track.subsonic_song_id ? (
+                          <button
+                            type="button"
+                            role="menuitem"
+                            disabled={subsonicQueuedTrackIds.has(track.id)}
+                            onClick={() => void addTrackToSubsonic(track)}
+                          >
+                            <span className="playlist-track-menu-icon playlist-track-menu-icon-subsonic" aria-hidden="true">S+</span>
+                            <span>{subsonicQueuedTrackIds.has(track.id) ? 'Queued for Subsonic' : 'Add to Subsonic'}</span>
+                          </button>
+                        ) : null}
+                        <div className="playlist-track-menu-divider" />
                         <button
                           type="button"
                           role="menuitem"
+                          className="danger"
                           disabled={busyTrackId === track.id || reorderBusy}
                           onClick={() => void removeTrack(track.id)}
                         >
-                          {isSystemPlaylist ? 'Unlike track' : 'Remove from playlist'}
+                          <span>{isSystemPlaylist ? 'Unlike track' : 'Remove from playlist'}</span>
                         </button>
                       </div>
                     ) : null}
