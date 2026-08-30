@@ -16,6 +16,10 @@ function albumCacheKey(album: string, artist?: string | null) {
   return `${album.trim().toLocaleLowerCase()}::${(artist || '').trim().toLocaleLowerCase()}`
 }
 
+function normalized(value?: string | null) {
+  return (value || '').trim().toLocaleLowerCase()
+}
+
 export function AlbumLink({ album, artist, albumId, source, className = '' }: Props) {
   const navigate = useNavigate()
   const title = (album || '').trim()
@@ -29,7 +33,6 @@ export function AlbumLink({ album, artist, albumId, source, className = '' }: Pr
     let resolvedId = (albumId || '').trim()
     let resolvedSource = (source || '').trim() || undefined
     const cacheKey = albumCacheKey(title, artistName)
-
     if (!resolvedId) {
       const cached = resolvedAlbums.get(cacheKey)
       if (cached) {
@@ -40,18 +43,35 @@ export function AlbumLink({ album, artist, albumId, source, className = '' }: Pr
 
     if (!resolvedId) {
       try {
-        const payload = await api.search(title, 'hybrid')
-        const normalizedTitle = title.toLocaleLowerCase()
-        const normalizedArtist = artistName.toLocaleLowerCase()
-        const exactTitleMatches = payload.albums.filter((candidate) => candidate.title.trim().toLocaleLowerCase() === normalizedTitle)
-        const match = exactTitleMatches.find((candidate) => {
-          if (!normalizedArtist) return true
-          return (candidate.artist || '').trim().toLocaleLowerCase() === normalizedArtist
-        }) || exactTitleMatches[0] || payload.albums[0]
+        const normalizedTitle = normalized(title)
+        const normalizedArtist = normalized(artistName)
+        const searchQueries = artistName ? [`${artistName} ${title}`, title] : [title]
 
-        resolvedId = String(match?.yt_browse_id || match?.browse_id || match?.browseId || match?.subsonic_album_id || '')
-        resolvedSource = match?.source || resolvedSource
-        if (resolvedId) resolvedAlbums.set(cacheKey, { id: resolvedId, source: resolvedSource })
+        for (const query of searchQueries) {
+          const payload = await api.search(query, 'hybrid')
+          const exactTitleMatches = payload.albums.filter(
+            (candidate) => normalized(candidate.title) === normalizedTitle,
+          )
+
+          const match = normalizedArtist
+            ? exactTitleMatches.find((candidate) => normalized(candidate.artist) === normalizedArtist)
+            : exactTitleMatches[0] || payload.albums[0]
+
+          if (!match) continue
+
+          resolvedId = String(
+            match.yt_browse_id ||
+            match.browse_id ||
+            match.browseId ||
+            match.subsonic_album_id ||
+            '',
+          )
+          resolvedSource = match.source || resolvedSource
+          if (resolvedId) {
+            resolvedAlbums.set(cacheKey, { id: resolvedId, source: resolvedSource })
+            break
+          }
+        }
       } catch {
         return
       }
