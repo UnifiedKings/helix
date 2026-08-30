@@ -8,6 +8,8 @@ Helix is still early software. It is usable, but expect rough edges, breaking ch
 
 [![Join the Helix Discord](https://img.shields.io/badge/Discord-Join%20the%20Helix%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/jK6F9mmC7f)
 
+[![Support Helix on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Helix-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/unifiedkings)
+
 ## Features
 
 - Search and play music from a Subsonic-compatible library
