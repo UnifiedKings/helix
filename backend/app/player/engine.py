@@ -1726,12 +1726,13 @@ def queue_remove_item(queue_item_id: str, db: Session = Depends(get_db), user: U
 
 
 def queue_reorder(payload: PlayerQueueReorderRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """Reorder upcoming queue items while keeping playback anchored.
+    """Reorder the queue while keeping playback anchored to the current item.
 
-    Everything through the currently-playing item is an immutable prefix. Only
-    future items may change order. This keeps playback/history semantics stable
-    and also makes the server authoritative if the client sends a stale full
-    queue while station prefetch appends another item concurrently.
+    The client may reorder items on either side of the currently-playing track.
+    Playback stays attached to the same QueueItem id, and current_index is
+    recalculated after the reorder. Items appended concurrently (for example by
+    station prefetch) are preserved at the end if they were not present in the
+    client's payload.
     """
     sess = _get_or_create_session(db, user.id)
 
@@ -1768,17 +1769,15 @@ def queue_reorder(payload: PlayerQueueReorderRequest, db: Session = Depends(get_
             raise HTTPException(status_code=400, detail="Reorder payload contains an unknown queue item")
 
         current_index = max(0, min(int(sess.current_index or 0), len(rows) - 1))
-        fixed_prefix = rows[: current_index + 1]
-        future_rows = rows[current_index + 1 :]
-        future_ids = {row.id for row in future_rows}
+        current_row = rows[current_index]
 
-        requested_future = [by_id[item_id] for item_id in requested_ids if item_id in future_ids]
-        requested_future_ids = {row.id for row in requested_future}
+        requested_rows = [by_id[item_id] for item_id in requested_ids]
+        requested_row_ids = {row.id for row in requested_rows}
 
-        # Preserve items appended by station generation while the drag was in
-        # progress, placing them after the explicitly ordered future items.
-        ordered_future = requested_future + [row for row in future_rows if row.id not in requested_future_ids]
-        ordered_rows = fixed_prefix + ordered_future
+        # Preserve anything appended after the client began dragging. Those
+        # items were not in the submitted list, so retain them at the end rather
+        # than dropping them from the queue.
+        ordered_rows = requested_rows + [row for row in rows if row.id not in requested_row_ids]
 
         # QueueItem has UNIQUE(session_user_id, position), so first move every
         # row to a collision-free range before assigning contiguous positions.
@@ -1792,7 +1791,12 @@ def queue_reorder(payload: PlayerQueueReorderRequest, db: Session = Depends(get_
             row.position = position
             db.add(row)
 
-        sess.current_index = current_index
+        # The playing track remains the same queue item even if surrounding
+        # entries cross from one side of it to the other.
+        sess.current_index = next(
+            (index for index, row in enumerate(ordered_rows) if row.id == current_row.id),
+            current_index,
+        )
         db.add(sess)
         db.commit()
         db.expire_all()

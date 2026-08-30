@@ -8,9 +8,9 @@ import re
 import time
 from typing import Any
 
-from ...integrations.ytmusic import find_artist_by_name, get_artist_popular_songs
+from ...integrations.ytmusic import find_artist_by_name, get_album_tracks, get_artist_albums, get_artist_popular_songs
 from ..base import StationProvider
-from ..models import StationConfigOption, StationContext, StationResult
+from ..models import StationConfigOption, StationContext, StationResult, seed_artist_search
 
 LOG = logging.getLogger("helix.station_providers.artist_collection")
 
@@ -64,8 +64,14 @@ def _blocked_artists_for_cooldown(
 
 def _parse_artists(raw: Any) -> list[str]:
     if isinstance(raw, list):
-        parts = [str(item or "") for item in raw]
+        parts: list[str] = []
+        for item in raw:
+            if isinstance(item, dict):
+                parts.append(str(item.get("name") or item.get("artist") or item.get("label") or ""))
+            else:
+                parts.append(str(item or ""))
     else:
+        # Backward compatibility for stations created before the searchable picker.
         parts = re.split(r"[,\n]", str(raw or ""))
     artists: list[str] = []
     seen: set[str] = set()
@@ -98,7 +104,7 @@ class ArtistCollectionProvider(StationProvider):
     station_type = "artist_collection"
     display_name = "Artist Collection"
     description = "Uses YouTube Music artist catalogs and only plays tracks from the selected seed artists, with simple rotation and repeat controls."
-    version = "1.2.1"
+    version = "1.6.0"
     builtin = True
 
     def __init__(self) -> None:
@@ -136,15 +142,20 @@ class ArtistCollectionProvider(StationProvider):
 
     def config_options(self) -> list[StationConfigOption]:
         return [
-            StationConfigOption(
+            seed_artist_search(
+                100,
                 key="seed_artists",
                 label="Seed artists",
-                type="textarea",
-                description="Comma- or line-separated list of artists this station is allowed to play.",
+                description="Search YouTube Music and choose the artists this station is allowed to play.",
                 required=True,
-                default="",
+                category="seeds",
+                category_label="Seeds",
+                category_order=10,
             ),
             StationConfigOption(
+                category="behavior",
+                category_label="Behavior",
+                category_order=30,
                 key="rotation_mode",
                 label="Artist rotation",
                 type="select",
@@ -156,6 +167,9 @@ class ArtistCollectionProvider(StationProvider):
                 ],
             ),
             StationConfigOption(
+                category="behavior",
+                category_label="Behavior",
+                category_order=30,
                 key="artist_cooldown",
                 label="No repeated artist within",
                 type="integer",
@@ -166,18 +180,22 @@ class ArtistCollectionProvider(StationProvider):
                 step=1,
             ),
             StationConfigOption(
-                key="discovery_depth",
-                label="Discovery depth",
-                type="select",
-                description="Controls how far into each seed artist's YouTube Music catalog this station explores.",
-                default="balanced",
-                choices=[
-                    {"value": "safe", "label": "Safe - favor familiar songs"},
-                    {"value": "balanced", "label": "Balanced"},
-                    {"value": "deep", "label": "Deep - explore more of the catalog"},
-                ],
+                category="discovery",
+                category_label="Discovery",
+                category_order=20,
+                key="popular_track_pool_size",
+                label="Popular songs per artist",
+                type="integer",
+                description="How many popular songs Helix should consider from each seed artist. Set to 0 to use the artist's full available album and singles catalog instead.",
+                default=25,
+                min_value=0,
+                max_value=100,
+                step=1,
             ),
             StationConfigOption(
+                category="behavior",
+                category_label="Behavior",
+                category_order=30,
                 key="recent_track_window",
                 label="Recent track window",
                 type="integer",
@@ -188,6 +206,12 @@ class ArtistCollectionProvider(StationProvider):
                 step=1,
             ),
         ]
+
+    def cover_hint(self, config: dict[str, Any]) -> dict[str, Any] | None:
+        artists = _parse_artists(config.get("seed_artists"))
+        if not artists:
+            return None
+        return {"mode": "artists", "artists": artists[:4]}
 
     def validate_config(self, config: dict[str, Any]) -> None:
         super().validate_config(config)
@@ -215,12 +239,108 @@ class ArtistCollectionProvider(StationProvider):
             LOG.warning("Artist Collection YouTube Music artist lookup failed artist=%r err=%s", artist, exc)
             return {}
 
+    async def _full_catalog_recordings(self, artist: str, browse_id: str) -> list[dict[str, Any]]:
+        cache_key = ("full_catalog", browse_id)
+        cached = self._cache_get(cache_key)
+        if cached is not None:
+            return [dict(item) for item in cached]
+
+        try:
+            albums, singles = await asyncio.gather(
+                asyncio.wait_for(
+                    asyncio.to_thread(get_artist_albums, browse_id, limit=100, category="albums"),
+                    timeout=float(os.getenv("HELIX_YTMUSIC_ARTIST_ALBUMS_TIMEOUT_S", "15")),
+                ),
+                asyncio.wait_for(
+                    asyncio.to_thread(get_artist_albums, browse_id, limit=100, category="singles"),
+                    timeout=float(os.getenv("HELIX_YTMUSIC_ARTIST_ALBUMS_TIMEOUT_S", "15")),
+                ),
+            )
+        except Exception as exc:
+            LOG.warning("Artist Collection full catalog release lookup failed artist=%r browse_id=%s err=%s", artist, browse_id, exc)
+            return []
+
+        releases: list[dict[str, Any]] = []
+        seen_release_ids: set[str] = set()
+        for release in list(albums or []) + list(singles or []):
+            if not isinstance(release, dict):
+                continue
+            release_id = _clean(str(release.get("browse_id") or ""))
+            if not release_id or release_id in seen_release_ids:
+                continue
+            seen_release_ids.add(release_id)
+            releases.append(release)
+
+        # Album detail calls can be relatively expensive. Limit concurrency while
+        # still allowing a full catalog to populate much faster than serial calls.
+        semaphore = asyncio.Semaphore(max(1, _safe_int(os.getenv("HELIX_YTMUSIC_CATALOG_CONCURRENCY", "4"), 4)))
+        per_album_timeout = float(os.getenv("HELIX_YTMUSIC_ALBUM_TRACKS_TIMEOUT_S", "15"))
+
+        async def fetch_release(release: dict[str, Any]) -> list[dict[str, Any]]:
+            release_id = _clean(str(release.get("browse_id") or ""))
+            if not release_id:
+                return []
+            async with semaphore:
+                try:
+                    tracks = await asyncio.wait_for(
+                        asyncio.to_thread(get_album_tracks, release_id),
+                        timeout=per_album_timeout,
+                    ) or []
+                except Exception as exc:
+                    LOG.warning(
+                        "Artist Collection album track lookup failed artist=%r album=%r browse_id=%s err=%s",
+                        artist,
+                        release.get("title"),
+                        release_id,
+                        exc,
+                    )
+                    return []
+            album_title = _clean(str(release.get("title") or ""))
+            album_art = _clean(str(release.get("thumbnail_url") or ""))
+            cleaned: list[dict[str, Any]] = []
+            for track in tracks:
+                if not isinstance(track, dict) or not _recording_title(track):
+                    continue
+                cleaned.append(
+                    dict(
+                        track,
+                        album=album_title,
+                        thumbnail_url=_clean(str(track.get("thumbnail_url") or album_art)),
+                        _helix_seed_artist=artist,
+                        _helix_yt_artist_id=browse_id,
+                    )
+                )
+            return cleaned
+
+        groups = await asyncio.gather(*(fetch_release(release) for release in releases))
+
+        # The same recording can appear on albums, deluxe editions and singles.
+        # Keep one playable entry per title/artist identity so catalog mode does
+        # not unintentionally bias toward songs that were re-released frequently.
+        recordings: list[dict[str, Any]] = []
+        seen_recordings: set[str] = set()
+        for group in groups:
+            for recording in group:
+                key = _norm_pair(_recording_title(recording), artist)
+                if not key or key in seen_recordings:
+                    continue
+                seen_recordings.add(key)
+                recordings.append(recording)
+
+        self._cache_put(cache_key, [dict(item) for item in recordings])
+        return recordings
+
     async def _top_recordings(self, artist: str, limit: int) -> list[dict[str, Any]]:
         yt_artist = await self._yt_artist(artist)
         browse_id = _clean(str(yt_artist.get("browse_id") or yt_artist.get("artist_id") or ""))
         if not browse_id:
             return []
-        wanted = max(1, int(limit))
+
+        wanted = int(limit)
+        if wanted <= 0:
+            return await self._full_catalog_recordings(artist, browse_id)
+
+        wanted = max(1, wanted)
         cache_key = ("songs", browse_id, wanted)
         cached = self._cache_get(cache_key)
         if cached is not None:
@@ -257,12 +377,18 @@ class ArtistCollectionProvider(StationProvider):
         seed_artists = _parse_artists(cfg.get("seed_artists"))
         rotation_mode = str(cfg.get("rotation_mode") or "balanced").strip().lower()
         artist_cooldown = max(0, min(50, _safe_int(cfg.get("artist_cooldown"), 5)))
-        depth = str(cfg.get("discovery_depth") or "").strip().lower()
-        if depth in {"safe", "balanced", "deep"}:
-            pool_size = {"safe": 10, "balanced": 25, "deep": 100}[depth]
+        # Artist Collection now exposes an explicit popular-song pool size instead
+        # of the vague Safe/Balanced/Deep discovery preset. Keep interpreting the
+        # legacy preset for stations saved before this option changed.
+        legacy_depth = str(cfg.get("discovery_depth") or "").strip().lower()
+        if cfg.get("popular_track_pool_size") is None and legacy_depth in {"safe", "balanced", "deep"}:
+            pool_size = {"safe": 10, "balanced": 25, "deep": 100}[legacy_depth]
         else:
-            # Backward compatibility for stations saved before discovery_depth existed.
-            pool_size = max(1, min(1000, _safe_int(cfg.get("popular_track_pool_size"), 25)))
+            # 0 intentionally means "no popularity cutoff": build the seed
+            # artist's available album/singles catalog instead of using YTMusic's
+            # popular-songs endpoint. Positive values keep the popularity-limited
+            # behavior.
+            pool_size = max(0, min(100, _safe_int(cfg.get("popular_track_pool_size"), 25)))
         recent_window = max(0, min(500, _safe_int(cfg.get("recent_track_window"), 75)))
         wanted = max(1, int(count or 1))
 

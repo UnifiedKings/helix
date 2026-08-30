@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
-StationConfigOptionType = Literal["string", "number", "integer", "boolean", "select", "multiselect", "textarea"]
+StationConfigOptionType = Literal["string", "number", "integer", "boolean", "select", "multiselect", "textarea", "artist_search", "track_search"]
 
 
 @dataclass(frozen=True)
@@ -25,6 +25,12 @@ class StationConfigOption:
     max_value: float | int | None = None
     step: float | int | None = None
     choices: list[dict[str, Any]] = field(default_factory=list)
+    min_items: int | None = None
+    max_items: int | None = None
+    category: str = "options"
+    category_label: str = ""
+    category_order: int = 100
+    order: int = 100
 
     def to_dict(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -43,6 +49,15 @@ class StationConfigOption:
             out["step"] = self.step
         if self.choices:
             out["choices"] = list(self.choices)
+        if self.min_items is not None:
+            out["min_items"] = int(self.min_items)
+        if self.max_items is not None:
+            out["max_items"] = int(self.max_items)
+        out["category"] = str(self.category or "options")
+        if self.category_label:
+            out["category_label"] = self.category_label
+        out["category_order"] = int(self.category_order)
+        out["order"] = int(self.order)
         return out
 
 
@@ -120,3 +135,78 @@ class StationResult:
 
     def key(self) -> str:
         return f"{(self.title or '').strip().lower()}|{(self.artist or '').strip().lower()}"
+
+
+def seed_artist_search(
+    number_of_artists_allowed: int = 1,
+    *,
+    key: str = "seed_artists",
+    label: str = "Seed artists",
+    description: str = "Search YouTube Music and choose the artists this station should use.",
+    required: bool = True,
+    minimum: int | None = None,
+    default: Any = None,
+    category: str = "seeds",
+    category_label: str = "Seeds",
+    category_order: int = 10,
+    order: int = 100,
+) -> StationConfigOption:
+    """Create a searchable artist-seed config field for built-in or custom stations.
+
+    The saved value is a list of dictionaries with ``name`` and ``browse_id``
+    fields (plus artwork metadata when available). ``number_of_artists_allowed``
+    controls the maximum number of selected artists.
+    """
+    maximum = max(1, int(number_of_artists_allowed or 1))
+    minimum_items = int(minimum) if minimum is not None else (1 if required else 0)
+    return StationConfigOption(
+        key=key,
+        label=label,
+        type="artist_search",
+        description=description,
+        required=required,
+        default=[] if default is None else default,
+        min_items=max(0, minimum_items),
+        max_items=maximum,
+        category=category,
+        category_label=category_label,
+        category_order=category_order,
+        order=order,
+    )
+
+
+def seed_track_search(
+    number_of_tracks_allowed: int = 1,
+    *,
+    key: str = "seed_tracks",
+    label: str = "Seed tracks",
+    description: str = "Search YouTube Music and choose the tracks this station should use.",
+    required: bool = True,
+    minimum: int | None = None,
+    default: Any = None,
+    category: str = "seeds",
+    category_label: str = "Seeds",
+    category_order: int = 10,
+    order: int = 100,
+) -> StationConfigOption:
+    """Create a searchable track-seed config field for built-in or custom stations.
+
+    The saved value is a list of dictionaries containing track title, artist,
+    album, video id, and artwork metadata when available.
+    """
+    maximum = max(1, int(number_of_tracks_allowed or 1))
+    minimum_items = int(minimum) if minimum is not None else (1 if required else 0)
+    return StationConfigOption(
+        key=key,
+        label=label,
+        type="track_search",
+        description=description,
+        required=required,
+        default=[] if default is None else default,
+        min_items=max(0, minimum_items),
+        max_items=maximum,
+        category=category,
+        category_label=category_label,
+        category_order=category_order,
+        order=order,
+    )

@@ -75,9 +75,7 @@ function QueueRow({
         </span>
       </button>
       <span className="queue-duration">{formatDuration(item.duration_ms)}</span>
-      <button className="queue-remove-icon" onClick={onRemove} aria-label={`Remove ${item.title} from queue`}>
-        <span className="queue-remove-glyph" aria-hidden="true">×</span>
-      </button>
+      <button className="queue-remove-icon" onClick={onRemove} aria-label={`Remove ${item.title} from queue`}><span className="queue-remove-glyph" aria-hidden="true">×</span></button>
     </div>
   )
 }
@@ -93,6 +91,7 @@ export function QueuePanel({ player, refresh, run }: Props) {
   const reorderPendingRef = useRef(false)
   const suppressClicksUntilRef = useRef(0)
   const currentIndex = player?.current_index ?? -1
+  const currentItemId = queue[currentIndex]?.id ?? null
 
   useEffect(() => {
     // Do not let realtime player-state updates overwrite the optimistic drag
@@ -188,16 +187,16 @@ export function QueuePanel({ player, refresh, run }: Props) {
       {displayQueue.length === 0 ? <p className="muted">Nothing queued right now.</p> : null}
       <div className={`queue-list-redesign ${draggingId ? 'is-reordering' : ''}`}>
         {displayQueue.map((item, index) => {
-          // Do not let future tracks cross the currently-playing boundary. The
-          // backend preserves the current track too, but keeping that boundary
-          // fixed avoids turning a reordered future track into "already played".
-          const canDrag = index > currentIndex
+          // Keep only the currently playing item fixed. Every other queue item,
+          // including tracks before the current song, can be reordered.
+          const isCurrentItem = item.id === currentItemId
+          const canDrag = !isCurrentItem
           return (
             <QueueRow
               key={item.id}
               item={item}
-              active={index === currentIndex}
-              playing={index === currentIndex && Boolean(player?.is_playing)}
+              active={isCurrentItem}
+              playing={isCurrentItem && Boolean(player?.is_playing)}
               canDrag={canDrag}
               dragging={draggingId === item.id}
               onJump={() => run(() => api.jump(index), 'play')}
@@ -224,7 +223,7 @@ export function QueuePanel({ player, refresh, run }: Props) {
                 }
 
                 const draggedId = dragIdRef.current
-                if (!draggedId || draggedId === item.id || index <= currentIndex) return
+                if (!draggedId || draggedId === item.id || isCurrentItem) return
                 event.preventDefault()
                 setDisplayQueue((current) => {
                   const next = moveQueueItem(current, draggedId, item.id)

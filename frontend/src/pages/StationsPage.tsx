@@ -411,44 +411,66 @@ export function StationsPage() {
             </div>
 
             <div className="station-modal-body">
-              <form className="station-config-form station-modal-form" onSubmit={saveStation}>
-                <label className="station-config-field station-name-field">
-                  <span className="station-config-label">Station name</span>
-                  <input value={editingName} onChange={(event) => setEditingName(event.target.value)} />
-                </label>
-                <div className="station-config-field station-cover-field">
-                  <span className="station-config-label">Station cover</span>
-                  <small>Recommended: square image. PNG, JPG, or WebP. Non-square images are center-cropped.</small>
-                  <div className="station-cover-editor">
-                    <Artwork src={selectedCoverPreviewUrl || editingStation.cover_url || editingStation.thumbnail_url || `/api/stations/${editingStation.id}/cover`} alt={editingStation.name} size="md" />
-                    <div className="station-cover-actions">
-                      <input
-                        type="file"
-                        accept="image/png,image/jpeg,image/webp"
-                        disabled={coverBusy || busy}
-                        onChange={(event) => choosePendingCover(event.target.files?.[0])}
-                      />
-                      {selectedCoverFile ? (
-                        <div className="station-cover-pending">
-                          <span>Selected: {selectedCoverFile.name}</span>
-                          <button type="button" onClick={() => void uploadCover()} disabled={coverBusy || busy}>Upload cover now</button>
-                          <button type="button" className="ghost" onClick={clearPendingCover} disabled={coverBusy || busy}>Clear selection</button>
+              <form className="station-config-form station-modal-form station-tune-form" onSubmit={saveStation}>
+                <div className="station-tune-layout">
+                  <aside className="station-tune-overview" aria-label="Station overview">
+                    <label className="station-tune-flat-field station-name-field">
+                      <span className="station-config-label">Station name</span>
+                      <input value={editingName} onChange={(event) => setEditingName(event.target.value)} />
+                    </label>
+                    <div className="station-tune-flat-field station-cover-field">
+                      <span className="station-config-label">Station cover</span>
+                      <small>Square PNG, JPG, or WebP works best.</small>
+                      <div className="station-cover-editor station-cover-editor-compact">
+                        <Artwork src={selectedCoverPreviewUrl || editingStation.cover_url || editingStation.thumbnail_url || `/api/stations/${editingStation.id}/cover`} alt={editingStation.name} size="md" />
+                        <div className="station-cover-actions">
+                          <div className="station-cover-file-row">
+                            <label className={`station-cover-file-button ${(coverBusy || busy) ? 'is-disabled' : ''}`}>
+                              <span>{selectedCoverFile ? 'Change file' : 'Choose file'}</span>
+                              <input
+                                className="station-cover-file-input"
+                                type="file"
+                                accept="image/png,image/jpeg,image/webp"
+                                disabled={coverBusy || busy}
+                                onChange={(event) => choosePendingCover(event.target.files?.[0])}
+                              />
+                            </label>
+                            <span className={`station-cover-file-name ${selectedCoverFile ? 'has-file' : ''}`} title={selectedCoverFile?.name || 'No file selected'}>
+                              {selectedCoverFile?.name || 'No file selected'}
+                            </span>
+                          </div>
+                          {selectedCoverFile ? (
+                            <div className="station-cover-pending-actions">
+                              <button type="button" className="station-cover-upload-now" onClick={() => void uploadCover()} disabled={coverBusy || busy}>Upload now</button>
+                              <button type="button" className="ghost station-cover-clear-pending" onClick={clearPendingCover} disabled={coverBusy || busy}>Clear</button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              className="ghost station-cover-remove"
+                              onClick={() => void removeCustomCover()}
+                              disabled={coverBusy || busy || !editingStation.has_custom_cover}
+                            >
+                              Remove custom cover
+                            </button>
+                          )}
                         </div>
-                      ) : null}
-                      <button type="button" onClick={() => void removeCustomCover()} disabled={coverBusy || busy || !editingStation.has_custom_cover}>Remove custom cover</button>
-                      <small className="muted">Upload now, or save the station to apply it with your other changes.</small>
+                      </div>
                     </div>
-                  </div>
+                    <label className="station-tune-flat-field station-name-field">
+                      <span className="station-config-label">Provider</span>
+                      <small>Changing provider rebuilds the available options.</small>
+                      <select value={editingType} onChange={(event) => chooseEditingProvider(event.target.value)}>
+                        {visibleProviders.map((provider) => <option key={provider.station_type} value={provider.station_type}>{provider.display_name}</option>)}
+                      </select>
+                    </label>
+                    <div className="station-tune-provider-note"><strong>{editingProvider.display_name}</strong><span>{editingProvider.builtin ? 'Built-in provider' : 'Custom provider'} · v{editingProvider.version || '1.0.0'}</span><p>{editingProvider.description}</p></div>
+                  </aside>
+                  <section className="station-tune-options" aria-label="Station configuration">
+                    <StationConfigForm provider={editingProvider} config={editingConfig} onChange={setEditingConfig} />
+                  </section>
                 </div>
-                <label className="station-config-field station-name-field">
-                  <span className="station-config-label">Station provider</span>
-                  <small>Changing provider will rebuild the configurable option set.</small>
-                  <select value={editingType} onChange={(event) => chooseEditingProvider(event.target.value)}>
-                    {visibleProviders.map((provider) => <option key={provider.station_type} value={provider.station_type}>{provider.display_name}</option>)}
-                  </select>
-                </label>
-                <StationConfigForm provider={editingProvider} config={editingConfig} onChange={setEditingConfig} />
-                <div className="station-modal-footer">
+                <div className="station-modal-footer station-tune-footer">
                   <button type="button" className="ghost" onClick={closeEditor} disabled={busy || coverBusy}>Cancel</button>
                   <button className="primary" disabled={busy || coverBusy}>{selectedCoverFile ? 'Save station + cover' : 'Save station'}</button>
                   <button type="button" className="danger" onClick={() => void deleteStation(editingStation)} disabled={busy}>Delete station</button>

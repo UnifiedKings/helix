@@ -6,7 +6,7 @@ export function optionDefault(option: StationConfigOption): unknown {
   if (option.default !== undefined && option.default !== null) return option.default
   if (option.type === 'boolean') return false
   if (option.type === 'number' || option.type === 'integer') return option.min ?? 0
-  if (option.type === 'multiselect') return []
+  if (option.type === 'multiselect' || option.type === 'artist_search' || option.type === 'track_search') return []
   return ''
 }
 
@@ -100,6 +100,27 @@ export function configSummary(station: Station, provider?: StationProviderInfo) 
   const seed = String(config.seed_artist || station.seed_artist || config.seed_title || station.seed_title || '').trim()
   if (seed) return seed
   const firstRequired = provider?.config_options?.find((option) => option.required)
-  if (firstRequired && config[firstRequired.key]) return String(config[firstRequired.key])
+  if (firstRequired && config[firstRequired.key]) {
+    const value = config[firstRequired.key]
+    if (firstRequired.type === 'artist_search' && Array.isArray(value)) {
+      const names = value.map((item) => {
+        if (typeof item === 'string') return item.trim()
+        if (item && typeof item === 'object') return String((item as { name?: unknown }).name || '').trim()
+        return ''
+      }).filter(Boolean)
+      if (names.length) return names.join(', ')
+    }
+    if (firstRequired.type === 'track_search' && Array.isArray(value)) {
+      const labels = value.map((item) => {
+        if (!item || typeof item !== 'object') return ''
+        const row = item as { title?: unknown; artist?: unknown }
+        const title = String(row.title || '').trim()
+        const artist = String(row.artist || '').trim()
+        return title && artist ? `${artist} — ${title}` : title || artist
+      }).filter(Boolean)
+      if (labels.length) return labels.join(', ')
+    }
+    return String(value)
+  }
   return 'Configured station'
 }

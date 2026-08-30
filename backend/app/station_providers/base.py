@@ -49,11 +49,23 @@ class StationProvider(ABC):
         can override and call super() for cross-field validation.
         """
         for opt in self.config_options():
-            if not opt.required:
-                continue
             value = config.get(opt.key)
-            if value is None or (isinstance(value, str) and not value.strip()):
+            empty = (
+                value is None
+                or (isinstance(value, str) and not value.strip())
+                or (isinstance(value, (list, tuple, set, dict)) and len(value) == 0)
+            )
+            if opt.required and empty:
                 raise ValueError(f"{opt.label or opt.key} is required")
+
+            if opt.type not in {"artist_search", "track_search"} or empty:
+                continue
+            if not isinstance(value, list):
+                raise ValueError(f"{opt.label or opt.key} must be a list of selected items")
+            if opt.min_items is not None and len(value) < int(opt.min_items):
+                raise ValueError(f"{opt.label or opt.key} requires at least {int(opt.min_items)} selection(s)")
+            if opt.max_items is not None and len(value) > int(opt.max_items):
+                raise ValueError(f"{opt.label or opt.key} allows at most {int(opt.max_items)} selection(s)")
 
     @abstractmethod
     async def next_tracks(self, context: StationContext, count: int) -> list[StationResult]:

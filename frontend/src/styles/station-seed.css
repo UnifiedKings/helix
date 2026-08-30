@@ -35,12 +35,13 @@
 }
 
 .station-song-seed-result {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 0.7rem;
   width: 100%;
-  padding: 0.65rem 0.75rem;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
   text-align: left;
   border: 1px solid var(--border);
   border-radius: 10px;
@@ -49,6 +50,108 @@
   cursor: pointer;
 }
 
+.station-song-seed-result .artwork-sm {
+  width: 48px;
+  height: 48px;
+  min-width: 48px;
+  border-radius: 7px;
+}
+
+.station-song-seed-result-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.18rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.station-song-seed-result-copy strong,
+.station-song-seed-result-copy > span {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .station-song-seed-result:hover {
   background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+/* Generic searchable seed fields used by built-in and custom station providers. */
+.station-search-config-field {
+  min-width: 0;
+}
+
+.station-seed-selection-list {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.station-seed-selection {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 30px;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+  padding: 0.5rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--text) 2.5%, transparent);
+}
+
+.station-seed-selection .artwork-sm {
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  border-radius: 7px;
+}
+
+.station-seed-selection-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 0.15rem;
+}
+
+.station-seed-selection-copy strong,
+.station-seed-selection-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.station-seed-selection-copy span,
+.station-seed-selection-count {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.station-seed-selection-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.station-seed-selection-remove:hover,
+.station-seed-selection-remove:focus-visible {
+  color: var(--text);
+  background: var(--accent-soft);
+}
+
+.station-song-seed-result:disabled {
+  cursor: default;
+  opacity: 0.5;
 }

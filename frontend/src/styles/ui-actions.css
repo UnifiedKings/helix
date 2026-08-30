@@ -502,3 +502,153 @@
   white-space: inherit !important;
   vertical-align: baseline !important;
 }
+
+/* Station cover control: replace the browser-native file input chrome with a
+   compact Helix control while keeping the real file input accessible. */
+.station-cover-editor-compact {
+  grid-template-columns: 68px minmax(0, 1fr);
+  gap: 0.8rem;
+  margin-top: 0.35rem;
+}
+
+.station-cover-editor-compact .artwork-md,
+.station-cover-editor-compact .artwork {
+  width: 68px;
+  height: 68px;
+}
+
+.station-cover-editor-compact .station-cover-actions {
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 4px;
+  min-width: 0;
+  height: 68px;
+}
+
+.station-cover-file-row {
+  display: grid;
+  grid-template-rows: auto auto;
+  align-content: center;
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bg) 46%, transparent);
+  overflow: hidden;
+}
+
+.station-cover-file-button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 0;
+  padding: 0.28rem 0.7rem 0.05rem;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 750;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.station-cover-file-button:hover:not(.is-disabled) {
+  color: var(--accent-bright);
+}
+
+.station-cover-file-button.is-disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+.station-cover-file-input {
+  position: absolute;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0 !important;
+}
+
+.station-cover-file-button:focus-within {
+  outline: 2px solid var(--accent-border);
+  outline-offset: -2px;
+}
+
+.station-cover-file-name {
+  min-width: 0;
+  padding: 0 0.7rem 0.25rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--faint);
+  font-size: 0.62rem;
+  line-height: 1.05;
+}
+
+.station-cover-file-name.has-file {
+  color: var(--muted);
+}
+
+
+.station-cover-pending-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px;
+  min-height: 0;
+}
+
+.station-cover-pending-actions button {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 0.22rem 0.42rem;
+  border-radius: 8px !important;
+  font-size: 0.7rem;
+  line-height: 1.05;
+  white-space: nowrap;
+}
+
+.station-cover-upload-now {
+  font-weight: 800;
+}
+
+.station-cover-clear-pending {
+  padding-inline: 0.48rem !important;
+}
+
+.station-cover-remove {
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  padding: 0.22rem 0.42rem;
+  border-radius: 8px !important;
+  font-size: 0.7rem;
+  line-height: 1.05;
+}
+
+.station-cover-remove:disabled {
+  opacity: 0.34;
+  background: transparent;
+  border-color: var(--border-soft);
+  color: var(--muted);
+}
+
+@media (max-width: 720px) {
+  .station-cover-editor-compact {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+
+  .station-cover-editor-compact .artwork-md,
+  .station-cover-editor-compact .artwork {
+    width: 60px;
+    height: 60px;
+  }
+
+  .station-cover-editor-compact .station-cover-actions {
+    height: 60px;
+  }
+}

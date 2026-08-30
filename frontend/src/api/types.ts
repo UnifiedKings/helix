@@ -175,6 +175,12 @@ export type StationConfigOption = {
   max?: number
   step?: number
   choices?: Array<{ label?: string; value: unknown }>
+  min_items?: number
+  max_items?: number
+  category?: string
+  category_label?: string
+  category_order?: number
+  order?: number
 }
 
 export type StationProviderInfo = {

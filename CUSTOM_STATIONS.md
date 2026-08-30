@@ -269,7 +269,64 @@ boolean
 select
 multiselect
 textarea
+artist_search
+track_search
 ```
+
+`artist_search` and `track_search` render the same YouTube Music search-and-select widgets used by Helix's built-in stations. Plugin authors normally create them with the convenience helpers instead of constructing the option manually:
+
+```python
+from app.station_providers import seed_artist_search, seed_track_search
+
+def config_options(self):
+    return [
+        seed_artist_search(
+            4,
+            key="seed_artists",
+            label="Seed artists",
+            description="Choose up to four artists for this station.",
+        ),
+        seed_track_search(
+            8,
+            key="seed_tracks",
+            label="Reference tracks",
+            required=False,
+            description="Optional tracks that influence this station.",
+        ),
+    ]
+```
+
+The first argument is the maximum number of selections allowed. Both helpers save a list in `context.config`.
+
+Artist selections look like:
+
+```python
+[
+    {
+        "name": "Lord Huron",
+        "browse_id": "UC...",
+        "art_url": "https://...",
+        "thumbnail_url": "https://...",
+    }
+]
+```
+
+Track selections look like:
+
+```python
+[
+    {
+        "title": "The World Ender",
+        "artist": "Lord Huron",
+        "album": "Strange Trails",
+        "video_id": "...",
+        "art_url": "https://...",
+        "thumbnail_url": "https://...",
+    }
+]
+```
+
+Treat artwork and source IDs as optional metadata; `name` for artists and `title`/`artist` for tracks are the stable user-facing values a plugin should fall back to.
 
 A `StationConfigOption` can define:
 
@@ -284,7 +341,11 @@ min_value
 max_value
 step
 choices
+min_items
+max_items
 ```
+
+`min_items` and `max_items` apply to `artist_search` and `track_search`. The `seed_artist_search()` and `seed_track_search()` helpers set these automatically.
 
 For `select` or `multiselect`, choices use dictionaries such as:
 
@@ -631,3 +692,34 @@ or:
 ```text
 Failed to load custom station provider from <path>
 ```
+
+## Organizing tuning options into categories
+
+Each `StationConfigOption` can announce where it belongs in the tuning UI. Helix groups options with the same `category` and renders the categories in `category_order` order. Category IDs should be stable machine-friendly strings; `category_label` controls the user-facing label.
+
+```python
+StationConfigOption(
+    key="artist_cooldown",
+    label="No repeated artist within",
+    type="integer",
+    default=5,
+    category="behavior",
+    category_label="Behavior",
+    category_order=30,
+    order=10,
+)
+```
+
+Search helpers accept the same metadata:
+
+```python
+seed_artist_search(
+    25,
+    key="seed_artists",
+    category="seeds",
+    category_label="Seeds",
+    category_order=10,
+)
+```
+
+Recommended category IDs are `seeds`, `discovery`, `behavior`, `playback`, and `advanced`, but custom providers may use other IDs. Providers that do not announce categories remain compatible and are placed in a generic `Options` category.

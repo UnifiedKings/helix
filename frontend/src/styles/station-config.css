@@ -264,3 +264,270 @@
     transform: rotate(360deg);
   }
 }
+
+/* Schema-driven station tuning: flatter, provider-agnostic layout. */
+.station-tune-modal {
+  width: min(1120px, calc(100vw - 3rem));
+}
+
+.station-tune-form {
+  gap: 0;
+}
+
+.station-tune-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.7fr);
+  min-height: 560px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.station-tune-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-right: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+}
+
+.station-tune-flat-field,
+.station-tune-provider-note {
+  display: grid;
+  gap: 0.5rem;
+  padding: 1.1rem 1.25rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.station-tune-flat-field small,
+.station-tune-provider-note span,
+.station-tune-provider-note p {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.station-tune-provider-note strong,
+.station-tune-provider-note span {
+  display: block;
+}
+
+.station-tune-provider-note p {
+  margin: 0.35rem 0 0;
+  font-size: 0.84rem;
+}
+
+.station-cover-editor-compact {
+  align-items: start;
+}
+
+.station-cover-editor-compact .station-cover-actions {
+  min-width: 0;
+}
+
+.station-tune-options {
+  min-width: 0;
+  padding: 0;
+  background: color-mix(in srgb, var(--bg) 30%, transparent);
+}
+
+.station-config-categorized {
+  min-width: 0;
+}
+
+.station-config-tabs {
+  display: flex;
+  align-items: end;
+  min-height: 54px;
+  padding: 0 1.15rem;
+  border-bottom: 1px solid var(--border-soft);
+  overflow-x: auto;
+}
+
+.station-config-tabs button {
+  position: relative;
+  min-height: 54px;
+  padding: 0 1rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 750;
+}
+
+.station-config-tabs button::after {
+  content: '';
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  bottom: 0;
+  height: 2px;
+  background: transparent;
+}
+
+.station-config-tabs button:hover,
+.station-config-tabs button.active {
+  color: var(--text);
+  background: transparent;
+}
+
+.station-config-tabs button.active::after {
+  background: var(--accent);
+}
+
+.station-config-category {
+  padding: 1.2rem 1.25rem 1.45rem;
+}
+
+.station-config-category-heading {
+  display: grid;
+  gap: 0.2rem;
+  margin-bottom: 0.85rem;
+}
+
+.station-config-category-heading > span {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 850;
+}
+
+.station-config-category-heading small {
+  color: var(--muted);
+}
+
+.station-tune-options .station-config-grid {
+  grid-template-columns: 1fr;
+  gap: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+}
+
+.station-tune-options .station-config-field {
+  padding: 1rem;
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+.station-tune-options .station-config-grid > :last-child .station-config-field,
+.station-tune-options .station-config-grid > .station-config-field:last-child {
+  border-bottom: 0;
+}
+
+.station-tune-options .station-search-config-field,
+.station-tune-options .station-song-seed-picker {
+  min-width: 0;
+}
+
+.station-tune-options .station-seed-selection-list {
+  gap: 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.station-tune-options .station-seed-selection {
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 0;
+}
+
+.station-tune-options .station-seed-selection:last-child {
+  border-bottom: 0;
+}
+
+.station-tune-footer {
+  border-top: 1px solid var(--border-soft);
+}
+
+@media (max-width: 900px) {
+  .station-tune-modal {
+    width: min(760px, calc(100vw - 1rem));
+  }
+
+  .station-tune-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .station-tune-overview {
+    border-right: 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+}
+
+/* Tune modal polish: keep the footer outside the scrolling form content and
+   tighten the flatter two-column layout without changing provider-driven UI. */
+.station-tune-modal .station-modal-body {
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.station-tune-modal .station-tune-form {
+  height: 100%;
+  min-height: 0;
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.station-tune-modal .station-tune-layout {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.station-tune-modal .station-tune-footer {
+  position: static;
+  z-index: 3;
+  flex: 0 0 auto;
+  margin: 0 -1.25rem;
+  padding: 1.05rem 1.25rem 1.45rem;
+  border-top: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--bg) 96%, var(--surface));
+  box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.16);
+}
+
+.station-tune-overview .station-tune-flat-field,
+.station-tune-overview .station-tune-provider-note {
+  padding: 1rem 1.15rem;
+}
+
+.station-tune-overview .station-config-label {
+  margin-bottom: 0.05rem;
+}
+
+.station-tune-provider-note {
+  padding-bottom: 1.2rem;
+}
+
+.station-tune-provider-note p {
+  max-width: 30ch;
+}
+
+.station-tune-options .station-config-category {
+  padding: 1.05rem 1.15rem 1.35rem;
+}
+
+.station-tune-options .station-config-field {
+  padding: 0.95rem 1rem;
+}
+
+.station-tune-options .station-config-field > small {
+  max-width: 76ch;
+}
+
+.station-tune-options input,
+.station-tune-options select,
+.station-tune-options textarea {
+  border-radius: 8px;
+}
+
+@media (max-width: 900px) {
+  .station-tune-modal .station-tune-layout {
+    overflow-y: auto;
+  }
+
+  .station-tune-modal .station-tune-footer {
+    margin-left: -1.25rem;
+    margin-right: -1.25rem;
+  }
+}

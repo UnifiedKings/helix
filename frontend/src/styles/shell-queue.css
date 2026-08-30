@@ -397,8 +397,10 @@
     align-self: start;
     height: calc(100vh - 128px - 2.2rem);
     max-height: calc(100vh - 128px - 2.2rem);
-    overflow-y: auto;
-    overscroll-behavior: contain;
+    /* The queue list already owns vertical scrolling. Keeping the whole
+       panel scrollable creates nested scroll containers and breaks the
+       pointer hand-off used by queue reordering. */
+    overflow: hidden;
   }
 }
 

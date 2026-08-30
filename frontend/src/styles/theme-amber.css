@@ -1450,6 +1450,12 @@ button.primary svg,
 .queue-panel-redesign .queue-row-redesign.queue-row-draggable {
   cursor: grab;
   user-select: none;
+  touch-action: none;
+}
+
+.queue-panel-redesign .queue-row-redesign.queue-row-draggable .artwork {
+  -webkit-user-drag: none;
+  user-select: none;
 }
 
 .queue-panel-redesign .queue-row-redesign.queue-row-draggable:active,
