@@ -5,6 +5,7 @@ import type { PlaylistDetail, PlaylistTrack, SearchMode, SearchSong } from '../a
 import { Artwork } from '../components/Artwork'
 import { ArtistLink } from '../components/ArtistLink'
 import { AlbumLink } from '../components/AlbumLink'
+import { PlaylistImportModal } from '../components/PlaylistImportModal'
 import type { usePlayer } from '../hooks/usePlayer'
 
 const SEARCH_MODES: Array<{ id: SearchMode; label: string }> = [
@@ -64,6 +65,7 @@ export function PlaylistEditPage() {
   const [dragOverTrackId, setDragOverTrackId] = useState('')
   const [reorderBusy, setReorderBusy] = useState(false)
   const [openTrackMenuId, setOpenTrackMenuId] = useState('')
+  const [importOpen, setImportOpen] = useState(false)
 
   const playlist = detail?.playlist
   const isSystemPlaylist = Boolean(playlist?.system_key)
@@ -223,6 +225,9 @@ export function PlaylistEditPage() {
             <button onClick={() => player.run(() => api.playPlaylist(playlist.id, true), 'play')}>
               Shuffle Play
             </button>
+            <button type="button" onClick={() => setImportOpen(true)}>
+              Import playlist
+            </button>
           </div>
         ) : null}
       </header>
@@ -344,6 +349,14 @@ export function PlaylistEditPage() {
           </div>
         </aside>
       </section>
+
+      <PlaylistImportModal
+        open={importOpen}
+        playlistId={playlistId}
+        playlistName={playlist?.name ?? 'playlist'}
+        onClose={() => setImportOpen(false)}
+        onImported={load}
+      />
     </div>
   )
 }

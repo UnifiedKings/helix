@@ -454,3 +454,46 @@ export type Capabilities = {
     [key: string]: boolean
   }
 }
+
+export type PlaylistImportSource = 'helix' | 'ytmusic' | 'spotify' | 'pandora'
+
+export type PlaylistImportCandidate = {
+  title: string
+  artist: string
+  album?: string
+  duration_ms?: number
+  art_url?: string
+  source?: string
+  subsonic_song_id?: string
+  yt_video_id?: string
+  yt_browse_id?: string
+  confidence?: number
+}
+
+export type PlaylistImportTrack = {
+  index: number
+  source_track: {
+    source: string
+    source_track_id: string
+    title: string
+    artist: string
+    album?: string
+    duration_ms?: number
+    artwork_url?: string
+    isrc?: string
+    yt_video_id?: string
+  }
+  status: 'matched' | 'review' | 'unmatched' | 'duplicate'
+  confidence: number
+  candidate: PlaylistImportCandidate | null
+  alternatives: PlaylistImportCandidate[]
+}
+
+export type PlaylistImportPreview = {
+  source: PlaylistImportSource
+  playlist_name: string
+  reported_count?: number | null
+  parsed_count: number
+  counts: Record<'matched' | 'review' | 'unmatched' | 'duplicate', number>
+  tracks: PlaylistImportTrack[]
+}

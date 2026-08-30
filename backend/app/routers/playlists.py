@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import asyncio
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
@@ -20,12 +21,24 @@ from ..api_schemas.playlists import (
     PlaylistTrackAddRequest,
     PlaylistReorderRequest,
     PlaylistTrackResponse,
+    PlaylistImportPreviewRequest,
+    PlaylistImportApplyRequest,
 )
 from ..settings_store import get_settings
 from ..integrations.subsonic import SubsonicClient
 from ..playlist_covers import ensure_playlist_cover, invalidate_playlist_cover
 from ..validators import is_valid_yt_video_id
 from ..art_sources import yt_thumbnail_url, is_allowed_art_url
+from ..playlist_imports import (
+    ImportedTrack,
+    match_track,
+    parse_exportify_csv,
+    parse_helix_json,
+    parse_pandora_playlist_url,
+    parse_ytmusic_playlist_url,
+    parse_ytmusic_saved_html,
+    track_identity_keys,
+)
 
 router = APIRouter(prefix="/api/playlists", tags=["playlists"])
 
@@ -368,6 +381,207 @@ def playlist_reorder_tracks(playlist_id: str, payload: PlaylistReorderRequest, d
     invalidate_playlist_cover(p.id)
 
     return playlist_detail(p.id, db=db, user=user)
+
+
+
+
+def _playlist_existing_import_keys(db: Session, p: Playlist, user_id: str) -> set[str]:
+    keys: set[str] = set()
+    if _is_liked_playlist_row(p):
+        rows = db.execute(select(LikedTrack).where(LikedTrack.user_id == user_id)).scalars().all()
+    else:
+        rows = db.execute(select(PlaylistTrack).where(PlaylistTrack.playlist_id == p.id, PlaylistTrack.user_id == user_id)).scalars().all()
+    for row in rows:
+        key = (getattr(row, "key", "") or "").strip()
+        if key:
+            keys.add(key)
+        vid = (getattr(row, "yt_video_id", "") or "").strip()
+        if vid:
+            keys.add(f"yt:{vid}")
+        title = (getattr(row, "title", "") or "").strip().casefold()
+        artist = (getattr(row, "artist", "") or "").strip().casefold()
+        if title and artist:
+            keys.add(f"text:{title}|{artist}")
+    return keys
+
+
+def _import_source_row(track: ImportedTrack) -> dict[str, Any]:
+    return {
+        "source": track.source,
+        "source_track_id": track.source_track_id,
+        "title": track.title,
+        "artist": track.artist,
+        "album": track.album,
+        "duration_ms": int(track.duration_ms or 0),
+        "artwork_url": track.artwork_url,
+        "isrc": track.isrc,
+        "yt_video_id": track.yt_video_id,
+    }
+
+
+async def _preview_match_tracks(tracks: list[ImportedTrack], duplicate_flags: list[bool]) -> list[dict[str, Any]]:
+    semaphore = asyncio.Semaphore(5)
+
+    async def one(index: int, track: ImportedTrack) -> dict[str, Any]:
+        if duplicate_flags[index]:
+            return {
+                "index": index,
+                "source_track": _import_source_row(track),
+                "status": "duplicate",
+                "confidence": 1.0,
+                "candidate": None,
+                "alternatives": [],
+            }
+        async with semaphore:
+            result = await asyncio.to_thread(match_track, track)
+        return {"index": index, "source_track": _import_source_row(track), **result}
+
+    return await asyncio.gather(*(one(index, track) for index, track in enumerate(tracks)))
+
+
+@router.get("/{playlist_id}/export")
+def export_playlist(playlist_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    p = _resolve_user_playlist(db, user.id, playlist_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    detail = _liked_playlist_detail(db, user, p) if _is_liked_playlist_row(p) else playlist_detail(p.id, db=db, user=user)
+    tracks = []
+    for track in detail.tracks:
+        tracks.append({
+            "title": track.title,
+            "artist": track.artist,
+            "album": track.album,
+            "duration_ms": track.duration_ms,
+            "art_url": track.art_url,
+            "source": track.source,
+            "source_id": track.yt_video_id or track.subsonic_song_id or track.key,
+            "subsonic_song_id": track.subsonic_song_id,
+            "yt_video_id": track.yt_video_id,
+            "yt_browse_id": track.yt_browse_id,
+        })
+    return {
+        "format": "helix-playlist",
+        "version": 1,
+        "playlist": {"name": detail.playlist.name, "tracks": tracks},
+    }
+
+
+@router.post("/{playlist_id}/import/preview")
+async def preview_playlist_import(payload: PlaylistImportPreviewRequest, playlist_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    p = _resolve_user_playlist(db, user.id, playlist_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+
+    source = (payload.source or "").strip().lower()
+    content = payload.content or ""
+    url = (payload.url or "").strip()
+    reported_count: Optional[int] = None
+    imported_name = "Imported playlist"
+    try:
+        if source == "helix":
+            imported_name, tracks = parse_helix_json(content)
+        elif source == "spotify":
+            if not content:
+                raise ValueError("Export the Spotify playlist with Exportify, then upload its CSV file.")
+            tracks = parse_exportify_csv(content)
+            imported_name = (payload.filename or "Spotify playlist").rsplit(".", 1)[0].replace("_", " ")
+        elif source == "ytmusic":
+            if content:
+                reported_count, tracks = parse_ytmusic_saved_html(content)
+                imported_name = "YouTube Music Liked Music"
+            else:
+                imported_name, tracks = await asyncio.to_thread(parse_ytmusic_playlist_url, url)
+        elif source == "pandora":
+            imported_name, reported_count, tracks = await parse_pandora_playlist_url(url)
+        else:
+            raise ValueError("Unknown playlist import source.")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Could not read {source or 'playlist'} import: {exc}") from exc
+
+    if not tracks:
+        raise HTTPException(status_code=400, detail="No usable tracks were found in this import.")
+    if len(tracks) > 2500:
+        raise HTTPException(status_code=400, detail="Playlist imports are currently limited to 2,500 tracks at a time.")
+
+    existing_keys = _playlist_existing_import_keys(db, p, user.id)
+    duplicate_flags: list[bool] = []
+    for track in tracks:
+        possible = track_identity_keys(track)
+        # Also accept the playlist's historical text key format for local comparisons.
+        possible.add(f"text:{track.title}|{track.artist}")
+        possible.add(f"text:{track.title.casefold()}|{track.artist.casefold()}")
+        duplicate_flags.append(any(key in existing_keys for key in possible))
+
+    rows = await _preview_match_tracks(tracks, duplicate_flags)
+    counts = {"matched": 0, "review": 0, "unmatched": 0, "duplicate": 0}
+    for row in rows:
+        status = row.get("status") or "unmatched"
+        counts[status] = counts.get(status, 0) + 1
+
+    return {
+        "source": source,
+        "playlist_name": imported_name,
+        "reported_count": reported_count,
+        "parsed_count": len(tracks),
+        "counts": counts,
+        "tracks": rows,
+    }
+
+
+@router.post("/{playlist_id}/import/apply", response_model=PlaylistDetailResponse)
+def apply_playlist_import(payload: PlaylistImportApplyRequest, playlist_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    p = _resolve_user_playlist(db, user.id, playlist_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    if len(payload.tracks) > 2500:
+        raise HTTPException(status_code=400, detail="Too many tracks in one import.")
+
+    existing_keys = _playlist_existing_import_keys(db, p, user.id)
+    max_pos = -1
+    if not _is_liked_playlist_row(p):
+        max_pos = int(db.execute(select(func.max(PlaylistTrack.position)).where(PlaylistTrack.playlist_id == p.id)).scalar_one() or -1)
+
+    for incoming in payload.tracks:
+        add = PlaylistTrackAddRequest(**incoming.model_dump())
+        key = _stable_key(add)
+        text_key = f"text:{incoming.title.casefold()}|{incoming.artist.casefold()}"
+        if payload.skip_existing and (key in existing_keys or text_key in existing_keys):
+            continue
+        vid = (incoming.yt_video_id or "").strip()
+        if vid and not is_valid_yt_video_id(vid):
+            vid = ""
+        art_url = _safe_track_art_url(incoming.art_url, incoming.subsonic_song_id, vid)
+        values = dict(
+            user_id=user.id,
+            key=key,
+            title=(incoming.title or "").strip(),
+            artist=(incoming.artist or "").strip(),
+            album=(incoming.album or "").strip(),
+            duration_ms=int(incoming.duration_ms or 0),
+            art_url=art_url,
+            source=(incoming.source or "").strip(),
+            subsonic_song_id=(incoming.subsonic_song_id or "").strip(),
+            yt_video_id=vid,
+            yt_browse_id=(incoming.yt_browse_id or "").strip(),
+            mb_recording_id="",
+            mb_artist_id="",
+        )
+        if _is_liked_playlist_row(p):
+            db.add(LikedTrack(**values))
+        else:
+            max_pos += 1
+            db.add(PlaylistTrack(playlist_id=p.id, position=max_pos, **values))
+        existing_keys.add(key)
+        existing_keys.add(text_key)
+        if vid:
+            existing_keys.add(f"yt:{vid}")
+
+    p.updated_at = datetime.utcnow()
+    db.commit()
+    invalidate_playlist_cover(p.id)
+    return _liked_playlist_detail(db, user, p) if _is_liked_playlist_row(p) else playlist_detail(p.id, db=db, user=user)
 
 
 @router.get("/{playlist_id}/cover")

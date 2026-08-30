@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from pydantic import BaseModel
+from typing import List
+
+from pydantic import BaseModel, Field
 
 from .likes import LikeToggleRequest
 
@@ -54,3 +56,27 @@ class PlaylistDetailResponse(BaseModel):
 
 class DislikeResponse(BaseModel):
     disliked: bool
+
+
+class PlaylistImportPreviewRequest(BaseModel):
+    source: str
+    url: str = ""
+    filename: str = ""
+    content: str = ""
+
+
+class PlaylistImportApplyTrack(BaseModel):
+    title: str
+    artist: str
+    album: str = ""
+    duration_ms: int = 0
+    art_url: str = ""
+    source: str = ""
+    subsonic_song_id: str = ""
+    yt_video_id: str = ""
+    yt_browse_id: str = ""
+
+
+class PlaylistImportApplyRequest(BaseModel):
+    tracks: List[PlaylistImportApplyTrack] = Field(default_factory=list)
+    skip_existing: bool = True
