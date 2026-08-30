@@ -8,18 +8,17 @@ Helix is still early software. It is usable, but expect rough edges, breaking ch
 
 [![Join the Helix Discord](https://img.shields.io/badge/Discord-Join%20the%20Helix%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/jK6F9mmC7f)
 
-[![Support Helix on Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Helix-FF5E5B?logo=kofi&logoColor=white)](https://ko-fi.com/unifiedkings)
-
 ## Features
 
 - Search and play music from a Subsonic-compatible library
 - Play tracks, albums, playlists, and generated stations
 - Create stations from artists, artist collections, and tags
+- Import playlists from Helix, YouTube Music, Spotify, and Pandora with a review step before anything is added
 - Run shared listening lobbies with guest queue and playback controls
 - Join lobbies with simple 5-letter codes and optional password protection
 - Mirror a Helix lobby into Discord voice with the optional [HelixBot](https://github.com/UnifiedKings/helixbot) companion project
 - Use the optional native [Helix for Android](https://github.com/UnifiedKings/helix-android) client for mobile playback and control
-- Repair metadata before finalized imports
+- Repair metadata before finalized library imports
 - Use custom station providers through a plugin system
 - Continue working with or without a configured Subsonic server, with unsupported features hidden or disabled
 
@@ -94,6 +93,34 @@ Stations can be started directly inside a lobby and will populate its shared que
 ![Lobby station demo](docs/gifs/lobby_stations.gif)
 
 Lobbies maintain synchronized playback state across connected clients.
+
+## Playlist importing
+
+Helix can bring an existing playlist into a Helix playlist without blindly copying whatever metadata the source happens to provide. Imports are previewed first, matched against playable music, and only the tracks you approve are added.
+
+The current import sources are:
+
+- **Helix** — export a playlist from another Helix instance as JSON and upload the file.
+- **YouTube Music** — paste a normal playlist Share link. For **Liked Music**, save the Liked Music page from your browser as an HTML file and upload it.
+- **Spotify** — export a playlist or Liked Songs with [Exportify](https://exportify.net/) and upload the resulting CSV.
+- **Pandora** — open a playlist or **My Thumbs Up**, choose Share, and paste the public Pandora playlist link. Public Pandora playlists are imported using Pandora's anonymous web session flow; a Pandora login is not required.
+
+### Matching and cleanup
+
+For sources that do not already contain a clean playable Helix track reference, Helix tries to resolve each entry to a YouTube Music song before import. This is especially useful for ordinary YouTube-backed playlists, where the original item may be a lyric video, soundtrack upload, fan upload, or another video with messy title/channel metadata.
+
+Helix prefers canonical song metadata where it can find it, including the song title, artist, album information, duration, and proper square artwork. It also tries cleaned title/artist search variants rather than automatically trusting the original YouTube video metadata.
+
+Every previewed track is classified as one of the following:
+
+- **Matched** — Helix found a strong candidate and selects it by default.
+- **Review** — Helix found a possible match, but confidence is low enough that it should be checked before import.
+- **Unmatched** — no usable candidate was found automatically.
+- **Already here** — the destination playlist already contains the track.
+
+The review screen lets you choose exactly which tracks will be imported. You can also filter down to tracks that need attention and leave **Skip songs already in this playlist** enabled to avoid duplicates.
+
+Playlist importing does **not** automatically download every imported song into Subsonic. Imported playlist entries can play from their resolved source, and individual tracks can still be sent to **Add to Subsonic** separately when fulfillment is enabled.
 
 ## Important behavior
 
@@ -283,8 +310,6 @@ Lobby playback state is synchronized between connected clients so everyone can l
 HelixBot links a Discord server to a Helix lobby using its 5-letter join code, joins Discord voice, and mirrors the lobby's current playback. The bot follows track changes, pause/resume, seeks, and queue advancement rather than exposing separate Discord playback controls.
 
 HelixBot runs in its own Docker container and can be configured to connect to any reachable Helix instance.
-
-
 
 ## Helix for Android
 
