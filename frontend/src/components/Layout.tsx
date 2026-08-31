@@ -1,4 +1,4 @@
-import { Outlet, useNavigate } from 'react-router-dom'
+import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { PlaybackBar } from './PlaybackBar'
 import { QueuePanel } from './QueuePanel'
 import { Sidebar } from './navigation/Sidebar'
@@ -10,6 +10,8 @@ export function Layout() {
   const player = usePlayer()
   const auth = useAuth()
   const navigate = useNavigate()
+  const location = useLocation()
+  const isBigPicture = location.pathname === '/big-picture'
 
   async function logout() {
     await auth.logout()
@@ -17,21 +19,26 @@ export function Layout() {
   }
 
   return (
-    <>
-    <div className="app-shell app-shell-with-sidebar">
-      <Sidebar user={auth.user} onLogout={() => void logout()} />
+    <div className={`app-shell ${isBigPicture ? 'app-shell-big-picture' : 'app-shell-with-sidebar'}`}>
+      {!isBigPicture ? <Sidebar user={auth.user} onLogout={() => void logout()} /> : null}
       <div className="app-main-area">
-        <main className="main-grid dashboard-grid">
-          <section className="content-card dashboard-content-card">
-            {player.error ? <div className="error-banner">{player.error}</div> : null}
+        {isBigPicture ? (
+          <main className="big-picture-route-shell">
+            {player.error ? <div className="error-banner big-picture-layout-error">{player.error}</div> : null}
             <Outlet context={player} />
-          </section>
-          <QueuePanel player={player.player} refresh={player.refresh} run={player.run} />
-        </main>
+          </main>
+        ) : (
+          <main className="main-grid dashboard-grid">
+            <section className="content-card dashboard-content-card">
+              {player.error ? <div className="error-banner">{player.error}</div> : null}
+              <Outlet context={player} />
+            </section>
+            <QueuePanel player={player.player} refresh={player.refresh} run={player.run} />
+          </main>
+        )}
       </div>
       <ImportQueuedToast />
       <PlaybackBar player={player.player} audioIntent={player.audioIntent} run={player.run} setPlayer={player.setPlayer} setError={player.setError} />
     </div>
-    </>
   )
 }

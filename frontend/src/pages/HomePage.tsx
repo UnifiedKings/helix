@@ -106,7 +106,6 @@ export function HomePage() {
     return () => { cancelled = true }
   }, [current?.id, current?.title, current?.artist, current?.album, current?.duration_ms, current?.subsonic_song_id, current?.source, current?.yt_video_id])
 
-
   async function addCurrentToSubsonic() {
     if (!current || subsonicState !== 'missing') return
     try {
@@ -135,7 +134,6 @@ export function HomePage() {
     }
   }, [current])
 
-
   const activity = summary?.recent_activity ?? []
 
   return (
@@ -144,6 +142,13 @@ export function HomePage() {
 
       <section className={`home-session-card ${current ? 'active' : 'idle'}`}>
         {current?.art_url ? <div className="home-session-backdrop" style={{ backgroundImage: `url(${current.art_url})` }} /> : null}
+        {current ? (
+          <Link className="home-big-picture-action" to="/big-picture" aria-label="Open Big Picture" title="Big Picture">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5" />
+            </svg>
+          </Link>
+        ) : null}
         <div className="home-session-art">
           {current ? <Artwork src={current.art_url} alt={current.title} size="lg" /> : <span aria-hidden="true">{session.icon}</span>}
         </div>

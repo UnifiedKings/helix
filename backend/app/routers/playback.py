@@ -13,13 +13,14 @@ from ..api_schemas.player import (
     PlayerStateResponse,
 )
 from ..player import engine as player_engine
+from ..services import album_playback
 
 router = APIRouter(prefix="/api/playback", tags=["playback"])
 
 router.add_api_route("/state", player_engine.state, methods=["GET"], response_model=PlayerStateResponse)
 router.add_api_route("/autoplay", player_engine.set_autoplay, methods=["POST"], response_model=PlayerStateResponse)
 router.add_api_route("/track", player_engine.play_track, methods=["POST"], response_model=PlayerStateResponse)
-router.add_api_route("/album", player_engine.play_album, methods=["POST"], response_model=PlayerStateResponse)
+router.add_api_route("/album", album_playback.play_album, methods=["POST"], response_model=PlayerStateResponse)
 router.add_api_route("/playlist", player_engine.play_playlist, methods=["POST"], response_model=PlayerStateResponse)
 router.add_api_route("/ended", player_engine.ended, methods=["POST"], response_model=PlayerStateResponse)
 router.add_api_route("/jump", player_engine.jump_to, methods=["POST"], response_model=PlayerStateResponse)

@@ -4,6 +4,7 @@ import { Layout } from './components/Layout'
 import { UserThemeStyles } from './components/UserThemeStyles'
 import { AlbumDetailPage } from './pages/AlbumDetailPage'
 import { ArtistDetailPage } from './pages/ArtistDetailPage'
+import { BigPicturePage } from './pages/BigPicturePage'
 import { HistoryPage } from './pages/HistoryPage'
 import { HomePage } from './pages/HomePage'
 import { JoinLobbyPage } from './pages/JoinLobbyPage'
@@ -30,6 +31,7 @@ export function App() {
           <Route path="/lobby/:lobbyId" element={<LobbyPage />} />
           <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<HomePage />} />
+            <Route path="big-picture" element={<BigPicturePage />} />
             <Route path="search" element={<SearchPage />} />
             <Route path="stations" element={<StationsPage />} />
             <Route path="playlists" element={<PlaylistsPage />} />

@@ -21,6 +21,7 @@ from .routers.auth import router as auth_router
 from .routers.dislikes import router as dislikes_router
 from .routers.likes import router as likes_router
 from .routers.lobbies import router as lobbies_router
+from .routers.lyrics import router as lyrics_router
 from .routers.playback import router as playback_router
 from .routers.queue import router as queue_router
 from .routers.playback_history import router as playback_history_router
@@ -183,6 +184,7 @@ app.include_router(subsonic_router)
 app.include_router(subsonic_add_router)
 app.include_router(realtime_router)
 app.include_router(user_settings_router)
+app.include_router(lyrics_router)
 
 
 # --- Serve frontend (single-container mode) ---

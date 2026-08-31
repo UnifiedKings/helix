@@ -1,0 +1,227 @@
+.lyrics-launch {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+}
+
+.lyrics-launch svg {
+  width: 22px;
+  height: 22px;
+}
+
+.lyrics-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: color-mix(in srgb, var(--bg) 62%, transparent);
+  backdrop-filter: blur(12px);
+}
+
+.lyrics-panel {
+  width: min(760px, 100%);
+  height: min(78vh, 760px);
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  overflow: hidden;
+  background: var(--surface-raised);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: 24px;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.48);
+}
+
+.lyrics-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.35rem 1.45rem 0.9rem;
+}
+
+.lyrics-track-heading {
+  min-width: 0;
+}
+
+.lyrics-track-title {
+  margin-top: 0.15rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.lyrics-close {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  font-size: 1.9rem;
+  line-height: 1;
+}
+
+.lyrics-tabs {
+  display: flex;
+  gap: 0.45rem;
+  padding: 0 1.45rem 0.85rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+}
+
+.lyrics-tabs button {
+  padding: 0.5rem 0.8rem;
+  color: color-mix(in srgb, var(--text) 70%, transparent);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 10px;
+}
+
+.lyrics-tabs button[data-active='true'] {
+  color: var(--text);
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
+.lyrics-content {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.lyrics-state {
+  display: grid;
+  min-height: 260px;
+  place-items: center;
+  padding: 2rem;
+  text-align: center;
+}
+
+.lyrics-error {
+  color: color-mix(in srgb, var(--danger) 58%, var(--text));
+}
+
+.lyrics-synced {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 34vh 1.65rem;
+}
+
+.lyrics-line {
+  width: 100%;
+  padding: 0.55rem 0;
+  color: color-mix(in srgb, var(--text) 38%, transparent);
+  background: transparent;
+  border: 0;
+  text-align: left;
+  font: inherit;
+  font-size: clamp(1.15rem, 2vw, 1.7rem);
+  font-weight: 650;
+  line-height: 1.35;
+  cursor: pointer;
+  transition: color 150ms ease, transform 150ms ease, opacity 150ms ease;
+}
+
+.lyrics-line:hover {
+  color: color-mix(in srgb, var(--text) 72%, transparent);
+}
+
+.lyrics-line[data-past='true'] {
+  color: color-mix(in srgb, var(--text) 26%, transparent);
+}
+
+.lyrics-line[data-active='true'] {
+  color: var(--accent);
+  transform: translateX(0.35rem);
+  font-size: clamp(1.35rem, 2.35vw, 2rem);
+}
+
+.lyrics-start-line {
+  width: auto;
+  min-width: 44px;
+  min-height: 44px;
+  align-self: flex-start;
+  padding: 0.45rem 0.7rem;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.lyrics-start-line[data-active='true'] {
+  font-size: 1.65rem;
+}
+
+.lyrics-plain {
+  margin: 0;
+  padding: 1.5rem 1.65rem 2.5rem;
+  color: color-mix(in srgb, var(--text) 92%, transparent);
+  background: transparent;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 1.08rem;
+  line-height: 1.8;
+}
+
+.lyrics-source {
+  padding: 0.75rem 1.45rem 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+@media (max-width: 680px) {
+  .lyrics-backdrop {
+    padding: 0;
+    place-items: end stretch;
+  }
+
+  .lyrics-panel {
+    width: 100%;
+    height: min(88vh, 820px);
+    border-radius: 22px 22px 0 0;
+  }
+
+  .lyrics-synced {
+    padding-left: 1.2rem;
+    padding-right: 1.2rem;
+  }
+}
+
+/* Keep the lyrics control proportional across the selectable playbar layouts. */
+.playback-style-ytmusic .lyrics-launch {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  padding: 0.38rem;
+  color: var(--muted);
+  background: transparent !important;
+  border-color: transparent !important;
+}
+
+.playback-style-spotify .lyrics-launch {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0.35rem;
+  color: var(--muted);
+}
+
+.playback-style-pandora .lyrics-launch {
+  position: absolute;
+  right: -46px;
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  padding: 0.45rem;
+  color: var(--text);
+  pointer-events: auto;
+}
+
+@media (max-width: 1100px) {
+  .playback-style-pandora .lyrics-launch {
+    position: static;
+    width: 38px;
+    min-width: 38px;
+    height: 38px;
+  }
+}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import type { AudioIntent, PlayerState, UserSettings, UserSettingsPayload } from '../api/types'
 import type { AudioRunMode } from '../hooks/usePlayer'
@@ -61,11 +62,18 @@ function IconPause() {
   )
 }
 
+function IconLyrics() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h10" /><path d="M5 9h10" /><path d="M5 13h7" /><path d="M17 12v6.5a2.5 2.5 0 1 1-2-2.45V8l4-1" /></svg>
+  )
+}
+
 function isPlaybarStyle(value: unknown): value is PlaybarStyle {
   return value === 'helix' || value === 'ytmusic' || value === 'spotify' || value === 'pandora'
 }
 
 export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: Props) {
+  const navigate = useNavigate()
   const barRef = useRef<HTMLElement | null>(null)
   const [localPlaying, setLocalPlaying] = useState(false)
   const [liked, setLiked] = useState(false)
@@ -211,12 +219,15 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
           <div className="title">{now?.title ?? 'Nothing selected'}</div>
           <div className="muted now-playing-meta">{now ? <><ArtistLink artist={now.artist} />{now.album ? <><span className="now-playing-meta-separator" aria-hidden="true">•</span><AlbumLink album={now.album} artist={now.artist} source={now.source} /></> : null}</> : 'Search, queue, or start a station'}</div>
         </div>
-        <div className="rating-controls" aria-label="Track rating controls">
+        <div className="rating-controls" aria-label="Track controls">
           <button className="icon-button rating-button rating-dislike" aria-label="Dislike current track" title="Dislike" onClick={toggleDislike} disabled={!hasTrack || ratingBusy} data-active={disliked}>
             <IconThumbDown />
           </button>
           <button className="icon-button rating-button rating-like" aria-label="Like current track" title="Like" onClick={toggleLike} disabled={!hasTrack || ratingBusy} data-active={liked}>
             <IconThumbUp />
+          </button>
+          <button className="icon-button lyrics-launch" type="button" aria-label="Open lyrics" title="Lyrics" onClick={() => navigate('/big-picture?view=lyrics')} disabled={!hasTrack}>
+            <IconLyrics />
           </button>
         </div>
       </div>
