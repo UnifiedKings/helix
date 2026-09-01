@@ -1,0 +1,88 @@
+/* Typography settings live preview. */
+.settings-font-control {
+  width: min(100%, 360px);
+  display: grid;
+  gap: 0.5rem;
+}
+
+.settings-font-control select {
+  width: 100%;
+}
+
+.settings-font-preview {
+  display: block;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  overflow: hidden;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-soft) 82%, transparent);
+  color: var(--text);
+  font-size: 0.86rem;
+  font-weight: 600;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The global typography compatibility layer uses !important so old component
+   font declarations cannot win. Read the selected preview family from an
+   inline custom property so the sample still shows the exact selected font. */
+#root .settings-font-preview {
+  font-family: var(--settings-font-preview-family, var(--font-ui)) !important;
+}
+
+
+.settings-font-option + .settings-font-option {
+  border-top: 1px solid var(--border-soft);
+}
+
+.settings-external-font-row {
+  display: grid;
+  gap: 0.45rem;
+  padding: 0 0 0.9rem;
+}
+
+.settings-external-font-row > label {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.settings-external-font-row > label > strong,
+.settings-external-font-row > label > span {
+  display: block;
+}
+
+.settings-external-font-row > label > span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.settings-external-font-row input {
+  width: 100%;
+}
+
+.settings-font-url-status {
+  margin: 0;
+}
+
+.settings-font-url-status.invalid {
+  color: var(--danger);
+}
+
+
+/* External Google Font stays inside the same right-side font control column. */
+.settings-font-control .settings-external-font-input {
+  width: 100%;
+}
+
+.settings-font-control .settings-font-url-status {
+  display: block;
+  color: var(--muted);
+  font-size: 0.74rem;
+  line-height: 1.3;
+}
+
+.settings-font-control .settings-font-url-status.invalid {
+  color: var(--danger);
+}

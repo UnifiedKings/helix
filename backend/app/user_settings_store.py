@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from typing import Any
+from urllib.parse import parse_qs, urlparse
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,8 +14,6 @@ from .settings_store import get_settings
 
 USER_DEFAULTS: dict[str, Any] = {
     # Appearance
-    # Core palette. These map directly to Helix design tokens so users can
-    # recolor the application without relying on custom CSS for ordinary theming.
     "appearance_accent_color": "#a95f18",
     "appearance_accent_contrast_color": "#fff8ef",
     "appearance_logo_follow_accent": True,
@@ -37,10 +36,17 @@ USER_DEFAULTS: dict[str, Any] = {
     "appearance_artwork_backgrounds": True,
     "appearance_ui_density": "comfortable",
     "appearance_artwork_radius": "soft",
+    "appearance_font_single": True,
+    "appearance_font_ui": "jetbrains-mono",
+    "appearance_font_display": "jetbrains-mono",
+    "appearance_font_secondary": "jetbrains-mono",
+    "appearance_font_lyrics": "jetbrains-mono",
+    "appearance_google_font_url_ui": "",
+    "appearance_google_font_url_display": "",
+    "appearance_google_font_url_secondary": "",
+    "appearance_google_font_url_lyrics": "",
 
     # Queue
-    # Controls what "Add to queue" means for this user's normal playback queue.
-    # Playback actions themselves still intentionally replace the queue.
     "queue_add_position": "append",
     "queue_show_duration": True,
     "queue_show_playing_indicator": True,
@@ -51,7 +57,7 @@ USER_DEFAULTS: dict[str, Any] = {
     "search_default_mode": "hybrid",
     "search_default_tab": "songs",
 
-    # Stations. This is capped by the global station_queue_ahead_max setting.
+    # Stations
     "station_queue_ahead": 3,
 
     # Lobby creation defaults
@@ -63,11 +69,23 @@ USER_DEFAULTS: dict[str, Any] = {
     "notifications_import_queued": True,
     "notifications_duration": "normal",
 
-    # Power-user escape hatch. Loaded after normal Helix CSS.
+    # Power-user escape hatch
     "advanced_custom_css": "",
 }
 
 USER_SETTING_KEYS = frozenset(USER_DEFAULTS)
+
+FONT_IDS = {
+    "jetbrains-mono",
+    "ibm-plex-mono",
+    "fira-code",
+    "source-code-pro",
+    "space-mono",
+    "inter",
+    "ibm-plex-sans",
+    "space-grotesk",
+    "custom-google",
+}
 
 
 def _loads(value_json: str, fallback: Any) -> Any:
@@ -123,6 +141,7 @@ def _validated_value(db: Session, key: str, value: Any) -> Any:
         "appearance_logo_follow_accent",
         "appearance_reduce_motion",
         "appearance_artwork_backgrounds",
+        "appearance_font_single",
         "queue_show_duration",
         "queue_show_playing_indicator",
         "lobbies_default_guests_can_add",
@@ -130,6 +149,35 @@ def _validated_value(db: Session, key: str, value: Any) -> Any:
         "notifications_import_queued",
     }:
         return bool(value)
+
+    if key in {
+        "appearance_font_ui",
+        "appearance_font_display",
+        "appearance_font_secondary",
+        "appearance_font_lyrics",
+    }:
+        raw = str(value or "").strip().lower()
+        if raw not in FONT_IDS:
+            raise ValueError("Invalid font selection")
+        return raw
+
+    if key in {
+        "appearance_google_font_url_ui",
+        "appearance_google_font_url_display",
+        "appearance_google_font_url_secondary",
+        "appearance_google_font_url_lyrics",
+    }:
+        raw = str(value or "").strip()
+        if not raw:
+            return ""
+        if len(raw) > 2048:
+            raise ValueError("Google Font URL is too long")
+        parsed = urlparse(raw)
+        if parsed.scheme != "https" or parsed.hostname != "fonts.googleapis.com":
+            raise ValueError("External font must use an HTTPS fonts.googleapis.com URL")
+        if not parse_qs(parsed.query).get("family"):
+            raise ValueError("Google Font URL must include a family parameter")
+        return raw
 
     if key == "queue_add_position":
         raw = str(value or "").strip().lower()
@@ -212,8 +260,6 @@ def get_user_settings(db: Session, user_id: str) -> dict[str, Any]:
             continue
         out[row.key] = _loads(row.value_json, USER_DEFAULTS.get(row.key))
 
-    # Re-validate/clamp values against current admin ceilings. This means lowering
-    # a global maximum takes effect immediately without rewriting every user row.
     for key in tuple(out):
         try:
             out[key] = _validated_value(db, key, out[key])
@@ -260,11 +306,7 @@ def station_queue_ahead_for_user(db: Session, user_id: str) -> int:
 
 
 def queue_add_position_for_user(db: Session, user_id: str) -> str:
-    """Return where explicit Add-to-Queue actions should place new items.
-
-    This preference only affects the user's normal queue append endpoints.
-    Play-song/album/playlist actions continue to replace the queue.
-    """
+    """Return where explicit Add-to-Queue actions should place new items."""
     prefs = get_user_settings(db, user_id)
     value = str(prefs.get("queue_add_position", USER_DEFAULTS["queue_add_position"]) or "").strip().lower()
     return value if value in {"append", "next"} else "append"

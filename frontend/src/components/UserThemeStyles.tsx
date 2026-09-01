@@ -1,6 +1,24 @@
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
-import type { UserSettingsPayload } from '../api/types'
+import type { UserSettings, UserSettingsPayload } from '../api/types'
+import {
+  builtInGoogleFontUrl,
+  fontStackForId,
+  type HelixFontId,
+  validGoogleFontsUrl,
+} from '../lib/fonts'
+
+type FontSettings = UserSettings & {
+  appearance_font_single: boolean
+  appearance_font_ui: HelixFontId
+  appearance_font_display: HelixFontId
+  appearance_font_secondary: HelixFontId
+  appearance_font_lyrics: HelixFontId
+  appearance_google_font_url_ui: string
+  appearance_google_font_url_display: string
+  appearance_google_font_url_secondary: string
+  appearance_google_font_url_lyrics: string
+}
 
 function hexToRgb(hex: string) {
   const normalized = hex.replace('#', '')
@@ -20,8 +38,7 @@ function shift(hex: string, amount: number) {
 }
 
 function densityCss(density: UserSettingsPayload['settings']['appearance_ui_density']) {
-  if (density === 'compact') {
-    return `
+  if (density === 'compact') return `
 :root { --transport-control-gap: 0.62rem; }
 .side-link { min-height: 40px !important; padding-block: .55rem !important; }
 .queue-row-redesign, .queue-panel-redesign .queue-item { min-height: 62px !important; }
@@ -29,9 +46,7 @@ function densityCss(density: UserSettingsPayload['settings']['appearance_ui_dens
 .station-card-body { padding: .72rem .78rem !important; }
 .search-song-row, .history-row { min-height: 58px !important; }
 `
-  }
-  if (density === 'spacious') {
-    return `
+  if (density === 'spacious') return `
 :root { --transport-control-gap: 1.28rem; }
 .side-link { min-height: 52px !important; padding-block: .86rem !important; }
 .queue-row-redesign, .queue-panel-redesign .queue-item { min-height: 78px !important; }
@@ -39,10 +54,7 @@ function densityCss(density: UserSettingsPayload['settings']['appearance_ui_dens
 .station-card-body { padding: 1rem 1.05rem !important; }
 .search-song-row, .history-row { min-height: 72px !important; }
 `
-  }
-  return `
-:root { --transport-control-gap: 0.92rem; }
-`
+  return `:root { --transport-control-gap: 0.92rem; }`
 }
 
 function artworkRadiusCss(style: UserSettingsPayload['settings']['appearance_artwork_radius']) {
@@ -64,7 +76,7 @@ function artworkRadiusCss(style: UserSettingsPayload['settings']['appearance_art
 
 function themeCss(payload: UserSettingsPayload | null) {
   if (!payload) return ''
-  const { settings } = payload
+  const settings = payload.settings as FontSettings
   const accent = settings.appearance_accent_color || '#a95f18'
   const rgb = hexToRgb(accent) ?? { r: 169, g: 95, b: 24 }
   const borderRgb = hexToRgb(settings.appearance_border_color || '#252a31') ?? { r: 37, g: 42, b: 49 }
@@ -75,6 +87,15 @@ function themeCss(payload: UserSettingsPayload | null) {
   const reduceMotionCss = settings.appearance_reduce_motion
     ? '*, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }\n'
     : ''
+
+  const uiFont = settings.appearance_font_ui || 'jetbrains-mono'
+  const displayFont = settings.appearance_font_single ? uiFont : (settings.appearance_font_display || uiFont)
+  const secondaryFont = settings.appearance_font_single ? uiFont : (settings.appearance_font_secondary || uiFont)
+  const lyricsFont = settings.appearance_font_single ? uiFont : (settings.appearance_font_lyrics || uiFont)
+  const uiExternalUrl = settings.appearance_google_font_url_ui || ''
+  const displayExternalUrl = settings.appearance_google_font_url_display || ''
+  const secondaryExternalUrl = settings.appearance_google_font_url_secondary || ''
+  const lyricsExternalUrl = settings.appearance_google_font_url_lyrics || ''
 
   return `:root {
   --accent: ${accent};
@@ -101,26 +122,106 @@ function themeCss(payload: UserSettingsPayload | null) {
   --border-soft: rgba(${borderRgb.r}, ${borderRgb.g}, ${borderRgb.b}, 0.58);
   --danger: ${settings.appearance_danger_color || '#ff647d'};
   --good: ${settings.appearance_success_color || '#35e09b'};
+
+  --font-ui: ${fontStackForId(uiFont, uiExternalUrl)};
+  --font-display: ${fontStackForId(displayFont, settings.appearance_font_single ? uiExternalUrl : displayExternalUrl)};
+  --font-secondary: ${fontStackForId(secondaryFont, settings.appearance_font_single ? uiExternalUrl : secondaryExternalUrl)};
+  --font-lyrics: ${fontStackForId(lyricsFont, settings.appearance_font_single ? uiExternalUrl : lyricsExternalUrl)};
 }
 
-html,
-body,
-#root {
+/* Typography compatibility layer.
+   Older Helix styles sometimes set font-family directly. These rules make the
+   user's typography selection authoritative rather than relying on inheritance. */
+#root,
+#root button,
+#root input,
+#root select,
+#root textarea,
+#root label,
+#root a,
+#root p,
+#root span,
+#root small,
+#root strong,
+#root b,
+#root em,
+#root time,
+#root output,
+#root code,
+#root pre,
+#root summary,
+#root li,
+#root td,
+#root th {
+  font-family: var(--font-ui) !important;
+}
+
+#root h1,
+#root h2,
+#root h3,
+#root h4,
+#root h5,
+#root h6,
+#root .home-session-title-row h1,
+#root .big-picture-title,
+#root .big-picture-track-title,
+#root .stations-hero h1,
+#root .playlist-editor-heading h1,
+#root .lobby-dashboard-title-row h1,
+#root .detail-copy h1,
+#root .lobby-room-header h1,
+#root .search-hero h1 {
+  font-family: var(--font-display) !important;
+}
+
+#root .muted,
+#root .now-playing-meta,
+#root .home-session-copy > .muted,
+#root .home-session-artist-row,
+#root .home-session-station,
+#root .home-session-meta,
+#root .album-detail-meta,
+#root .album-track-artist,
+#root .queue-main .muted,
+#root .queue-artist,
+#root .queue-duration,
+#root .history-row .muted,
+#root .search-result-meta,
+#root .detail-meta,
+#root .settings-note,
+#root .settings-section-heading p,
+#root .playback-meta,
+#root .now-playing-info .muted {
+  font-family: var(--font-secondary) !important;
+}
+
+#root .lyrics-panel,
+#root .lyrics-panel *,
+#root .big-picture-lyrics-stage,
+#root .big-picture-lyrics-stage *,
+#root .big-picture-lyrics-line,
+#root .lyrics-line {
+  font-family: var(--font-lyrics) !important;
+}
+
+/* The S+ mark is a positioned glyph, not normal interface copy. */
+#root .splus-s,
+#root .splus-plus,
+#root .splus-glyph,
+#root .splus-glyph text {
+  font-family: Arial, Helvetica, sans-serif !important;
+}
+
+html, body, #root {
   background-color: var(--bg);
   color: var(--text);
 }
 
-/* Palette compatibility layer.
-   A lot of Helix predates user theming and still has literal dark/amber colors.
-   Keep these overrides here, after the bundled styles, so the user's palette
-   controls the global shell even before every page stylesheet is fully tokenized. */
 .app-shell,
 .app-shell-with-sidebar,
 .dashboard-grid,
 .dashboard-content-card,
-main {
-  color: var(--text);
-}
+main { color: var(--text); }
 
 .app-sidebar {
   background: var(--sidebar-bg) !important;
@@ -163,7 +264,6 @@ button.secondary,
   border-color: var(--border-soft);
 }
 
-/* Solid primary surfaces follow the selected primary color. */
 button.primary,
 .transport-main,
 .station-floating-play,
@@ -183,7 +283,6 @@ button.primary:hover:not(:disabled),
   background: var(--accent-strong) !important;
 }
 
-/* Selected / active UI should not remain amber when the primary color changes. */
 .app-sidebar .side-link.active,
 .queue-row-redesign.active,
 .settings-segmented button.active,
@@ -234,7 +333,6 @@ button.primary:hover:not(:disabled),
   border-color: var(--accent-border) !important;
 }
 
-/* Shared typography colors. */
 .muted,
 .queue-main .muted,
 .now-playing-info .muted,
@@ -249,7 +347,8 @@ button.primary:hover:not(:disabled),
 .queue-remove-icon {
   color: var(--faint) !important;
 }
-\n${reduceMotionCss}${densityCss(settings.appearance_ui_density)}${artworkRadiusCss(settings.appearance_artwork_radius)}${queueDurationCss}${queueIndicatorCss}${artworkBackgroundCss}${customDisabled ? '' : settings.advanced_custom_css}`
+
+${reduceMotionCss}${densityCss(settings.appearance_ui_density)}${artworkRadiusCss(settings.appearance_artwork_radius)}${queueDurationCss}${queueIndicatorCss}${artworkBackgroundCss}${customDisabled ? '' : settings.advanced_custom_css}`
 }
 
 export function UserThemeStyles() {
@@ -279,6 +378,74 @@ export function UserThemeStyles() {
     document.documentElement.dataset.helixDensity = density
     return () => { delete document.documentElement.dataset.helixDensity }
   }, [payload?.settings.appearance_ui_density])
+
+  useEffect(() => {
+    if (!payload) return
+    const settings = payload.settings as FontSettings
+    const ui = settings.appearance_font_ui || 'jetbrains-mono'
+
+    const selections = settings.appearance_font_single
+      ? [
+          {
+            slot: 'ui',
+            id: ui,
+            externalUrl: settings.appearance_google_font_url_ui || '',
+          },
+        ]
+      : [
+          {
+            slot: 'ui',
+            id: ui,
+            externalUrl: settings.appearance_google_font_url_ui || '',
+          },
+          {
+            slot: 'display',
+            id: settings.appearance_font_display || ui,
+            externalUrl: settings.appearance_google_font_url_display || '',
+          },
+          {
+            slot: 'secondary',
+            id: settings.appearance_font_secondary || ui,
+            externalUrl: settings.appearance_google_font_url_secondary || '',
+          },
+          {
+            slot: 'lyrics',
+            id: settings.appearance_font_lyrics || ui,
+            externalUrl: settings.appearance_google_font_url_lyrics || '',
+          },
+        ]
+
+    const keepIds = new Set<string>()
+
+    selections.forEach(({ slot, id, externalUrl }) => {
+      const elementId = `helix-google-font-${slot}`
+      keepIds.add(elementId)
+
+      const url = id === 'custom-google'
+        ? (validGoogleFontsUrl(externalUrl) ? externalUrl : '')
+        : builtInGoogleFontUrl(id)
+
+      let link = document.head.querySelector<HTMLLinkElement>(`#${elementId}`)
+
+      if (!url) {
+        link?.remove()
+        return
+      }
+
+      if (!link) {
+        link = document.createElement('link')
+        link.id = elementId
+        link.rel = 'stylesheet'
+        document.head.appendChild(link)
+      }
+
+      if (link.href !== url) link.href = url
+    })
+
+    document.head.querySelectorAll<HTMLLinkElement>('link[id^="helix-google-font-"]').forEach((link) => {
+      if (!keepIds.has(link.id)) link.remove()
+    })
+  }, [payload])
 
   return <style id="helix-user-custom-css">{themeCss(payload)}</style>
 }

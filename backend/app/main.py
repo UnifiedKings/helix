@@ -59,7 +59,16 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "Content-Security-Policy",
             os.getenv(
                 "HELIX_CONTENT_SECURITY_POLICY",
-                "default-src 'self'; img-src 'self' https: data: blob:; media-src 'self' blob:; connect-src 'self' ws: wss:; script-src 'self' 'sha256-ieoeWczDHkReVBsRBqaal5AFMlBtNjMzgwKvLqi/tSU='; script-src-elem 'self' 'sha256-ieoeWczDHkReVBsRBqaal5AFMlBtNjMzgwKvLqi/tSU='; style-src 'self' 'unsafe-inline'; base-uri 'self'; frame-ancestors 'none'",
+                "default-src 'self'; "
+                "img-src 'self' https: data: blob:; "
+                "media-src 'self' blob:; "
+                "connect-src 'self' ws: wss:; "
+                "script-src 'self' 'sha256-ieoeWczDHkReVBsRBqaal5AFMlBtNjMzgwKvLqi/tSU='; "
+                "script-src-elem 'self' 'sha256-ieoeWczDHkReVBsRBqaal5AFMlBtNjMzgwKvLqi/tSU='; "
+                "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                "font-src 'self' https://fonts.gstatic.com data:; "
+                "base-uri 'self'; "
+                "frame-ancestors 'none'",
             ),
         )
         return response
@@ -120,7 +129,6 @@ def _startup():
     except RuntimeError:
         pass
 
-    # Detect long-held SQLite connections while the app is running.
     try:
         asyncio.get_event_loop().create_task(db_watchdog_loop())
     except Exception:
@@ -136,10 +144,8 @@ def _startup():
         from .lobby_station import lobby_station_monitor_loop
         asyncio.get_event_loop().create_task(lobby_station_monitor_loop())
     except Exception:
-        logging.getLogger(__name__).exception("Failed to start lobby station monitor loop")
+        logging.getLogger(__name__).exception("Failed to start lobby station monitor")
 
-    # Start background download/finalize workers (YouTube Music fulfillment).
-    # The manager still owns the front-of-queue-only download enforcement.
     from .download_manager import DOWNLOAD_MANAGER
     from .settings_store import get_settings
 
@@ -160,7 +166,6 @@ async def _realtime_startup():
     HUB.bind_loop()
 
 
-# API routers are grouped by OpenAPI domain for easier docs navigation.
 app.include_router(system_router)
 app.include_router(auth_router)
 app.include_router(settings_router)
@@ -187,7 +192,6 @@ app.include_router(user_settings_router)
 app.include_router(lyrics_router)
 
 
-# --- Serve frontend (single-container mode) ---
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 

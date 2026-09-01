@@ -1,25 +1,23 @@
-/* Helix stylesheet entry point.
-   Files are imported in cascade order so component/page styles stay easy to find. */
-@import "./foundation.css";
-@import "./player.css";
-@import "./playbar-styles.css";
-@import "./lyrics.css";
-@import "./playlists.css";
-@import "./stations.css";
-@import "./search.css";
-@import "./library-detail-settings.css";
-@import "./lobbies.css";
-@import "./station-config.css";
-@import "./home.css";
-@import "./ui-actions.css";
-@import "./shell-queue.css";
-@import "./notifications.css";
-@import "./playlist-polish.css";
-@import "./history.css";
-@import "./station-seed.css";
-@import "./tokens.css";
-@import "./theme-amber.css";
-
-@import "./typography.css";
-
-@import "./settings.css";
+@import './tokens.css';
+@import './foundation.css';
+@import './shell-queue.css';
+@import './player.css';
+@import './stations.css';
+@import './station-config.css';
+@import './station-seed.css';
+@import './home.css';
+@import './search.css';
+@import './history.css';
+@import './playlists.css';
+@import './playlist-polish.css';
+@import './lobbies.css';
+@import './library-detail-settings.css';
+@import './settings.css';
+@import './notifications.css';
+@import './lyrics.css';
+@import './big-picture.css';
+@import './playbar-styles.css';
+@import './ui-actions.css';
+@import './theme-amber.css';
+@import './typography.css';
+@import './font-settings.css';
