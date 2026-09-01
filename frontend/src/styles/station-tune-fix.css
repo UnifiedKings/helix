@@ -1,0 +1,15 @@
+/* Tune station: keep overview controls inside the left column. */
+.station-tune-overview,
+.station-tune-overview .station-tune-flat-field,
+.station-tune-overview .station-tune-provider-note {
+  min-width: 0;
+}
+
+.station-tune-overview .station-tune-flat-field select,
+.station-tune-overview .station-tune-flat-field input,
+.station-tune-overview .station-tune-flat-field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}

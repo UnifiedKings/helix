@@ -1,0 +1,32 @@
+/* Selected like/dislike state: fill the thumb itself instead of drawing
+   a circular/ringed active button around it. Imported last so this wins over
+   theme and alternate-playbar active-state treatments. */
+
+.playback-bar .rating-button[data-active="true"] {
+  color: var(--accent-bright) !important;
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+.playback-bar .rating-button[data-active="true"] svg {
+  fill: currentColor !important;
+  stroke: currentColor !important;
+}
+
+/* Keep the selected state visually clean on hover too. */
+.playback-bar .rating-button[data-active="true"]:hover:not(:disabled) {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* The thumb glyph itself carries the selected state, so alternate layouts
+   should not add their own active button surface. */
+.playback-bar.playback-style-ytmusic .rating-button[data-active="true"],
+.playback-bar.playback-style-spotify .rating-button[data-active="true"],
+.playback-bar.playback-style-pandora .rating-button[data-active="true"] {
+  background: transparent !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
