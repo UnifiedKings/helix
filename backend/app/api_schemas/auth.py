@@ -20,10 +20,19 @@ class MeResponse(BaseModel):
     role: str
 
 
+class ChangePasswordRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=8, max_length=256)
+
+
 class AdminCreateUserRequest(BaseModel):
     username: str = Field(min_length=3, max_length=64)
     password: str = Field(min_length=8, max_length=256)
-    role: str = Field(default="user")  # "admin" | "user"
+    role: str = Field(default="user")
+
+
+class AdminResetPasswordRequest(BaseModel):
+    new_password: str = Field(min_length=8, max_length=256)
 
 
 class AdminUserResponse(BaseModel):

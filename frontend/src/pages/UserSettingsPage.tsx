@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import type { UserSettings, UserSettingsPayload } from '../api/types'
 import { TypographySettings } from '../components/TypographySettings'
 import type { HelixFontId } from '../lib/fonts'
+import '../styles/account-management.css'
 
 type Settings = UserSettings & {
   appearance_font_single: boolean
@@ -19,6 +20,7 @@ type Settings = UserSettings & {
 type SettingsPayload = Omit<UserSettingsPayload, 'settings'> & { settings: Settings }
 
 const SECTIONS = [
+  ['account', 'Account'],
   ['appearance', 'Appearance'],
   ['playback', 'Playback'],
   ['search', 'Search & Discovery'],
@@ -137,12 +139,29 @@ function ColorField({ label, description, value, onChange }: { label: string; de
   </label>
 }
 
+async function accountRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, {
+    credentials: 'include',
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
+  })
+  const responseText = await response.text()
+  if (!response.ok) {
+    let detail = responseText || `${response.status} ${response.statusText}`
+    try { detail = JSON.parse(responseText).detail || detail } catch { /* use response text */ }
+    throw new Error(detail)
+  }
+  return responseText ? JSON.parse(responseText) as T : undefined as T
+}
+
 export function UserSettingsPage() {
   const [section, setSection] = useState<SectionKey>('appearance')
   const [payload, setPayload] = useState<SettingsPayload>(DEFAULT_PAYLOAD)
   const [draft, setDraft] = useState<Settings>(DEFAULT_SETTINGS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [passwordSaving, setPasswordSaving] = useState(false)
+  const [passwordDraft, setPasswordDraft] = useState({ current: '', next: '', confirm: '' })
   const [previewing, setPreviewing] = useState(false)
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
@@ -214,6 +233,25 @@ export function UserSettingsPage() {
       setError(err instanceof Error ? err.message : 'Could not save your settings')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function changePassword() {
+    if (passwordSaving) return
+    if (passwordDraft.next.length < 8) { setError('New password must be at least 8 characters.'); return }
+    if (passwordDraft.next !== passwordDraft.confirm) { setError('New passwords do not match.'); return }
+    setPasswordSaving(true); setError(''); setStatus('')
+    try {
+      await accountRequest<{ ok: boolean }>('/auth/change-password', {
+        method: 'POST',
+        body: JSON.stringify({ current_password: passwordDraft.current, new_password: passwordDraft.next }),
+      })
+      setPasswordDraft({ current: '', next: '', confirm: '' })
+      setStatus('Password changed. Other signed-in sessions were logged out.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not change password')
+    } finally {
+      setPasswordSaving(false)
     }
   }
 
@@ -291,6 +329,17 @@ export function UserSettingsPage() {
         </nav>
 
         <section className="settings-section-content" aria-busy={loading}>
+          {section === 'account' ? <>
+            <div className="settings-section-heading"><h2>Account</h2><p>Manage your Helix account credentials.</p></div>
+            <div className="settings-card account-password-card">
+              <div className="settings-card-heading-row"><div><h3>Change password</h3><p>Enter your current password, then choose a new password with at least 8 characters.</p></div></div>
+              <label className="settings-control-row"><div><strong>Current password</strong><span>Required to confirm this account change.</span></div><input type="password" autoComplete="current-password" value={passwordDraft.current} onChange={(event) => setPasswordDraft((current) => ({ ...current, current: event.target.value }))} /></label>
+              <label className="settings-control-row"><div><strong>New password</strong><span>Use at least 8 characters.</span></div><input type="password" autoComplete="new-password" value={passwordDraft.next} onChange={(event) => setPasswordDraft((current) => ({ ...current, next: event.target.value }))} /></label>
+              <label className="settings-control-row"><div><strong>Confirm new password</strong><span>Enter the new password again.</span></div><input type="password" autoComplete="new-password" value={passwordDraft.confirm} onChange={(event) => setPasswordDraft((current) => ({ ...current, confirm: event.target.value }))} /></label>
+              <div className="account-password-actions"><button type="button" className="primary" disabled={passwordSaving || !passwordDraft.current || passwordDraft.next.length < 8 || passwordDraft.next !== passwordDraft.confirm} onClick={() => void changePassword()}>{passwordSaving ? 'Changing…' : 'Change password'}</button></div>
+            </div>
+          </> : null}
+
           {section === 'appearance' ? <>
             <div className="settings-section-heading"><h2>Appearance</h2><p>Personalize Helix without changing the experience for anyone else.</p></div>
 

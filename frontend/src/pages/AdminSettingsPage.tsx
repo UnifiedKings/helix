@@ -1,6 +1,7 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import type { AdminUser } from '../api/types'
+import '../styles/account-management.css'
 
 type AdminSection = 'overview' | 'users' | 'library' | 'playback' | 'downloads' | 'search' | 'advanced'
 
@@ -18,7 +19,7 @@ const DEFINITIONS: Record<string, { label: string; description: string; group: A
   subsonic_client_name: { label: 'Client name', description: 'Advanced Subsonic API client identifier.', group: 'advanced' },
   subsonic_api_version: { label: 'API version', description: 'Advanced Subsonic protocol version.', group: 'advanced' },
   station_queue_ahead_max: { label: 'Maximum station tracks ahead', description: 'Hard ceiling for each user’s personal station queue-ahead preference.', group: 'playback', kind: 'number' },
-  download_prefetch_ahead: { label: 'Download tracks ahead', description: 'How many upcoming queue items Helix proactively downloads. This is separate from how many station tracks a user keeps logically queued.', group: 'downloads', kind: 'number' },
+  download_prefetch_ahead: { label: 'Download tracks ahead', description: 'How many upcoming queue items Helix proactively downloads.', group: 'downloads', kind: 'number' },
   listen_history_retention: { label: 'History rows retained per user', description: 'Global storage limit for playback history.', group: 'playback', kind: 'number' },
   search_default_country: { label: 'Preferred release country', description: 'Country Helix favors when selecting representative releases.', group: 'search' },
   search_hide_non_official: { label: 'Hide unofficial releases', description: 'Hide unofficial releases when alternate versions are listed.', group: 'search', kind: 'boolean' },
@@ -31,23 +32,42 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (checked: b
   return <button type="button" className={`settings-toggle ${checked ? 'on' : ''}`} role="switch" aria-checked={checked} onClick={() => onChange(!checked)}><span className="settings-toggle-thumb" /></button>
 }
 
+async function accountRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(path, {
+    credentials: 'include',
+    ...options,
+    headers: { 'Content-Type': 'application/json', ...(options.headers ?? {}) },
+  })
+  const text = await response.text()
+  if (!response.ok) {
+    let detail = text || `${response.status} ${response.statusText}`
+    try { detail = JSON.parse(text).detail || detail } catch { /* use text */ }
+    throw new Error(detail)
+  }
+  return text ? JSON.parse(text) as T : undefined as T
+}
+
 export function AdminSettingsPage() {
   const [section, setSection] = useState<AdminSection>('overview')
   const [health, setHealth] = useState<Record<string, unknown>>({})
   const [settings, setSettings] = useState<Record<string, unknown>>({})
   const [draft, setDraft] = useState<Record<string, unknown>>({})
   const [users, setUsers] = useState<AdminUser[]>([])
+  const [currentUserId, setCurrentUserId] = useState('')
   const [newUser, setNewUser] = useState({ username: '', password: '', role: 'user' as 'user' | 'admin' })
+  const [passwordUserId, setPasswordUserId] = useState('')
+  const [resetPassword, setResetPassword] = useState('')
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const [saving, setSaving] = useState(false)
+  const [accountBusy, setAccountBusy] = useState('')
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(settings), [draft, settings])
 
   async function load() {
     try {
-      const [nextHealth, nextSettings, nextUsers] = await Promise.all([api.health(), api.adminSettings(), api.adminUsers()])
-      setHealth(nextHealth); setSettings(nextSettings); setDraft(nextSettings); setUsers(nextUsers); setError('')
+      const [nextHealth, nextSettings, nextUsers, me] = await Promise.all([api.health(), api.adminSettings(), api.adminUsers(), api.me()])
+      setHealth(nextHealth); setSettings(nextSettings); setDraft(nextSettings); setUsers(nextUsers); setCurrentUserId(me.id); setError('')
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not load admin settings') }
   }
   useEffect(() => { void load() }, [])
@@ -64,7 +84,7 @@ export function AdminSettingsPage() {
   }
 
   async function createUser(event: FormEvent) {
-    event.preventDefault()
+    event.preventDefault(); setError(''); setStatus('')
     try {
       const created = await api.createAdminUser(newUser)
       setUsers((current) => [created, ...current]); setNewUser({ username: '', password: '', role: 'user' }); setStatus(`Created ${created.username}.`)
@@ -72,10 +92,36 @@ export function AdminSettingsPage() {
   }
 
   async function updateUser(user: AdminUser, patch: { is_active?: boolean; role?: 'admin' | 'user'; subsonic_import_override?: boolean }) {
+    setError(''); setStatus('')
     try {
       const next = await api.updateAdminUser(user.id, patch)
       setUsers((current) => current.map((item) => item.id === next.id ? next : item))
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not update user') }
+  }
+
+  async function submitPasswordReset(user: AdminUser) {
+    if (resetPassword.length < 8) return
+    setAccountBusy(user.id); setError(''); setStatus('')
+    try {
+      await accountRequest<{ ok: boolean }>(`/admin/users/${encodeURIComponent(user.id)}/reset-password`, {
+        method: 'POST', body: JSON.stringify({ new_password: resetPassword }),
+      })
+      setPasswordUserId(''); setResetPassword('')
+      setStatus(`Password reset for ${user.username}. Existing sessions were signed out.`)
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not reset password') }
+    finally { setAccountBusy('') }
+  }
+
+  async function deleteUser(user: AdminUser) {
+    if (!window.confirm(`Delete ${user.username}? This permanently removes the account and its Helix user data.`)) return
+    setAccountBusy(user.id); setError(''); setStatus('')
+    try {
+      await accountRequest<{ ok: boolean }>(`/admin/users/${encodeURIComponent(user.id)}`, { method: 'DELETE' })
+      setUsers((current) => current.filter((item) => item.id !== user.id))
+      if (passwordUserId === user.id) { setPasswordUserId(''); setResetPassword('') }
+      setStatus(`Deleted ${user.username}.`)
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not delete user') }
+    finally { setAccountBusy('') }
   }
 
   function field(key: string) {
@@ -99,12 +145,27 @@ export function AdminSettingsPage() {
       <nav className="settings-section-nav" aria-label="Admin settings sections">{SECTIONS.map(([key, label]) => <button type="button" className={section === key ? 'active' : ''} key={key} onClick={() => setSection(key)}>{label}</button>)}</nav>
       <section className="settings-section-content">
         {section === 'overview' ? <><div className="settings-section-heading"><h2>Overview</h2><p>Server-wide status and configuration at a glance.</p></div><div className="admin-status-grid"><div><span>Backend</span><strong className="status-ok">● Online</strong></div><div><span>Users</span><strong>{users.length}</strong></div><div><span>Configuration</span><strong>{Object.keys(settings).length} keys</strong></div></div><details className="settings-diagnostics"><summary>View raw diagnostics</summary><pre>{JSON.stringify(health, null, 2)}</pre></details></> : null}
-        {section === 'users' ? <><div className="settings-section-heading"><h2>Users</h2><p>Create accounts and control server-level access.</p></div><form className="admin-create-user" onSubmit={createUser}><input placeholder="Username" value={newUser.username} onChange={(e) => setNewUser((c) => ({ ...c, username: e.target.value }))} /><input type="password" placeholder="Temporary password" value={newUser.password} onChange={(e) => setNewUser((c) => ({ ...c, password: e.target.value }))} /><select value={newUser.role} onChange={(e) => setNewUser((c) => ({ ...c, role: e.target.value as 'user' | 'admin' }))}><option value="user">User</option><option value="admin">Administrator</option></select><button className="primary" disabled={newUser.username.trim().length < 3 || newUser.password.length < 8}>Create user</button></form><div className="admin-settings-user-list">{users.map((user) => <div key={user.id}>
-  <span><strong>{user.username}</strong><small>{user.is_active ? 'Active' : 'Disabled'} · {user.can_import_subsonic ? 'Can add to Subsonic' : 'No Subsonic import access'}</small></span>
-  <select value={user.role} onChange={(e) => void updateUser(user, { role: e.target.value as 'admin' | 'user' })}><option value="user">User</option><option value="admin">Administrator</option></select>
-  {user.role === 'admin' ? <span className="admin-user-permission-fixed">Subsonic: Always allowed</span> : <label className="admin-user-permission-toggle"><span>Allow Subsonic import</span><Toggle checked={user.subsonic_import_override} onChange={(checked) => void updateUser(user, { subsonic_import_override: checked })} /></label>}
-  <button onClick={() => void updateUser(user, { is_active: !user.is_active })}>{user.is_active ? 'Disable' : 'Enable'}</button>
-</div>)}</div></> : null}
+
+        {section === 'users' ? <>
+          <div className="settings-section-heading"><h2>Users</h2><p>Create accounts, manage access, reset passwords, or remove users.</p></div>
+          <form className="admin-create-user" onSubmit={createUser}><input placeholder="Username" value={newUser.username} onChange={(e) => setNewUser((c) => ({ ...c, username: e.target.value }))} /><input type="password" placeholder="Temporary password" value={newUser.password} onChange={(e) => setNewUser((c) => ({ ...c, password: e.target.value }))} /><select value={newUser.role} onChange={(e) => setNewUser((c) => ({ ...c, role: e.target.value as 'user' | 'admin' }))}><option value="user">User</option><option value="admin">Administrator</option></select><button className="primary" disabled={newUser.username.trim().length < 3 || newUser.password.length < 8}>Create user</button></form>
+          <div className="admin-settings-user-list admin-account-user-list">{users.map((user) => <div className="admin-account-user" key={user.id}>
+            <span className="admin-account-user-identity"><strong>{user.username}</strong><small>{user.is_active ? 'Active' : 'Disabled'} · {user.can_import_subsonic ? 'Can add to Subsonic' : 'No Subsonic import access'}</small></span>
+            <select value={user.role} disabled={accountBusy === user.id} onChange={(e) => void updateUser(user, { role: e.target.value as 'admin' | 'user' })}><option value="user">User</option><option value="admin">Administrator</option></select>
+            {user.role === 'admin' ? <span className="admin-user-permission-fixed">Subsonic: Always allowed</span> : <label className="admin-user-permission-toggle"><span>Allow Subsonic import</span><Toggle checked={user.subsonic_import_override} onChange={(checked) => void updateUser(user, { subsonic_import_override: checked })} /></label>}
+            <button disabled={accountBusy === user.id} onClick={() => void updateUser(user, { is_active: !user.is_active })}>{user.is_active ? 'Disable' : 'Enable'}</button>
+            <div className="admin-account-actions">
+              <button type="button" disabled={user.id === currentUserId || accountBusy === user.id} title={user.id === currentUserId ? 'Change your own password under personal Settings → Account.' : 'Reset password'} onClick={() => { setPasswordUserId((id) => id === user.id ? '' : user.id); setResetPassword('') }}>Reset password</button>
+              <button type="button" className="danger" disabled={user.id === currentUserId || accountBusy === user.id} title={user.id === currentUserId ? 'You cannot delete the account you are signed in with.' : 'Delete user'} onClick={() => void deleteUser(user)}>Delete</button>
+            </div>
+            {passwordUserId === user.id ? <div className="admin-password-reset-row">
+              <input type="password" autoComplete="new-password" placeholder="New password (8+ characters)" value={resetPassword} onChange={(event) => setResetPassword(event.target.value)} />
+              <button type="button" className="primary" disabled={resetPassword.length < 8 || accountBusy === user.id} onClick={() => void submitPasswordReset(user)}>{accountBusy === user.id ? 'Resetting…' : 'Set password'}</button>
+              <button type="button" disabled={accountBusy === user.id} onClick={() => { setPasswordUserId(''); setResetPassword('') }}>Cancel</button>
+            </div> : null}
+          </div>)}</div>
+        </> : null}
+
         {(['library', 'playback', 'downloads', 'search'] as AdminSection[]).includes(section) ? <><div className="settings-section-heading"><h2>{SECTIONS.find(([key]) => key === section)?.[1]}</h2><p>{section === 'playback' ? 'Global resource limits and playback storage policy.' : section === 'downloads' ? 'Control how aggressively the server prepares media ahead of playback.' : section === 'library' ? 'Connection details for the shared music library.' : 'Server-wide catalog selection behavior.'}</p></div><div className="settings-card">{groupFields(section)}</div></> : null}
         {section === 'advanced' ? <><div className="settings-section-heading"><h2>Advanced</h2><p>Low-level settings and legacy configuration. These are intentionally separated from normal administration.</p></div><div className="settings-card">{groupFields('advanced')}</div><div className="settings-obsolete-note"><strong>Review later</strong><p>The following existing settings appear unused or obsolete in the current backend and are intentionally not editable here yet:</p><code>{Array.from(OBSOLETE_CANDIDATES).join(', ')}</code></div></> : null}
       </section>

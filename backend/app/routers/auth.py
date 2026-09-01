@@ -7,9 +7,10 @@ from sqlalchemy.orm import Session
 from ..auth import SESSION_COOKIE, cookie_secure, get_current_user
 from ..db import get_db
 from ..models import User, SessionToken
-from ..api_schemas.auth import LoginRequest, MeResponse, SetupRequest
+from ..api_schemas.auth import ChangePasswordRequest, LoginRequest, MeResponse, SetupRequest
 from ..services.accounts import authenticate_user, create_initial_admin, setup_enabled as setup_is_enabled
 from ..rate_limit import RATE_LIMITER
+from ..security import hash_password, verify_password
 
 router = APIRouter(tags=["auth"])
 
@@ -19,7 +20,6 @@ COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
 def _client_ip(request: Request) -> str:
     forwarded = (request.headers.get("x-forwarded-for") or "").split(",", 1)[0].strip()
     return forwarded or getattr(getattr(request, "client", None), "host", "") or ""
-
 
 
 def _set_session_cookie(response: Response, token: str) -> None:
@@ -85,3 +85,32 @@ def logout(request: Request, response: Response, db: Session = Depends(get_db)):
 @router.get("/auth/me", response_model=MeResponse)
 def me(user: User = Depends(get_current_user)):
     return MeResponse(id=user.id, username=user.username, role=user.role)
+
+
+@router.post("/auth/change-password")
+def change_password(
+    payload: ChangePasswordRequest,
+    request: Request,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    account = db.get(User, user.id)
+    if not account:
+        raise HTTPException(status_code=404, detail="User not found")
+    if not verify_password(payload.current_password, account.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    if verify_password(payload.new_password, account.password_hash):
+        raise HTTPException(status_code=400, detail="New password must be different from the current password")
+
+    account.password_hash = hash_password(payload.new_password)
+
+    # Keep the session used for this password change alive, but revoke all other
+    # browser/device sessions for the account.
+    current_token = request.cookies.get(SESSION_COOKIE) or ""
+    query = db.query(SessionToken).filter(SessionToken.user_id == user.id)
+    if current_token:
+        query = query.filter(SessionToken.token != current_token)
+    query.delete(synchronize_session=False)
+    db.add(account)
+    db.commit()
+    return {"ok": True}

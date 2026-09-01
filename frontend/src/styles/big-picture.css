@@ -445,6 +445,77 @@ button.big-picture-button { cursor: pointer; }
   align-self: center;
 }
 
+.big-picture-left-controls {
+  grid-column: 1;
+  justify-self: start;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+
+.big-picture-left-controls .big-picture-lyrics-control {
+  order: 1;
+  margin-right: clamp(2.75rem, 5vw, 4.5rem);
+}
+
+.big-picture-left-controls .big-picture-rating-dislike {
+  order: 2;
+}
+
+.big-picture-left-controls .big-picture-rating-like {
+  order: 3;
+}
+
+.big-picture-rating-button {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255,255,255,0.68);
+  box-shadow: none;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.big-picture-rating-button svg {
+  width: 19px;
+  height: 19px;
+  overflow: visible;
+}
+
+.big-picture-rating-button:hover:not(:disabled) {
+  color: #fff;
+  border-color: transparent;
+  background: transparent;
+  filter: drop-shadow(0 0 9px color-mix(in srgb, var(--accent) 34%, transparent));
+  transform: translateY(-1px);
+}
+
+.big-picture-rating-button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.big-picture-rating-button.active {
+  color: var(--accent-strong);
+  border-color: color-mix(in srgb, var(--accent) 52%, transparent);
+  background: color-mix(in srgb, var(--accent) 11%, rgba(5,6,7,0.28));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 18%, transparent);
+  filter: none;
+}
+
+.big-picture-rating-dislike.active {
+  color: color-mix(in srgb, var(--danger) 88%, white);
+  border-color: color-mix(in srgb, var(--danger) 54%, transparent);
+  background: color-mix(in srgb, var(--danger) 12%, rgba(5,6,7,0.28));
+  box-shadow: 0 0 18px color-mix(in srgb, var(--danger) 20%, transparent);
+  filter: none;
+}
+
 .big-picture-volume {
   grid-column: 3;
   justify-self: end;
@@ -803,10 +874,14 @@ button.big-picture-button { cursor: pointer; }
     grid-row: 1;
   }
 
-  .big-picture-lyrics-control {
+  .big-picture-left-controls {
     grid-column: 1;
     grid-row: 1;
     justify-self: start;
+  }
+
+  .big-picture-left-controls .big-picture-lyrics-control {
+    margin-right: 1.75rem;
   }
 
   .big-picture-volume {
@@ -1183,9 +1258,9 @@ button.big-picture-button { cursor: pointer; }
   display: grid;
   place-items: center;
   padding: 0;
-  border: 1px solid rgba(255,255,255,0.10);
+  border: 1px solid transparent;
   border-radius: 50%;
-  background: rgba(5, 6, 7, 0.20);
+  background: transparent;
   color: rgba(255,255,255,0.62);
   box-shadow: none;
   cursor: pointer;
@@ -1200,8 +1275,9 @@ button.big-picture-button { cursor: pointer; }
 
 .big-picture-lyrics-control:hover {
   color: #fff;
-  border-color: color-mix(in srgb, var(--accent) 34%, transparent);
-  background: color-mix(in srgb, var(--accent) 7%, rgba(5,6,7,0.24));
+  border-color: transparent;
+  background: transparent;
+  filter: drop-shadow(0 0 9px color-mix(in srgb, var(--accent) 34%, transparent));
 }
 
 .big-picture-lyrics-control.active {
@@ -1209,6 +1285,7 @@ button.big-picture-button { cursor: pointer; }
   border-color: color-mix(in srgb, var(--accent) 52%, transparent);
   background: color-mix(in srgb, var(--accent) 11%, rgba(5,6,7,0.28));
   box-shadow: 0 0 18px color-mix(in srgb, var(--accent) 18%, transparent);
+  filter: none;
 }
 
 .big-picture-page.lyrics-view {

@@ -1,0 +1,89 @@
+/* Account management additions for personal and administrator settings. */
+
+.account-password-card input,
+.admin-password-reset-row input {
+  width: min(100%, 360px);
+}
+
+.account-password-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 0.9rem 1rem 1rem;
+  border-top: 1px solid var(--border-soft);
+}
+
+.admin-account-user-list > .admin-account-user {
+  grid-template-columns: minmax(220px, 1fr) 170px minmax(220px, auto) auto minmax(190px, auto);
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.admin-account-user-identity {
+  min-width: 0;
+}
+
+.admin-account-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.admin-account-actions button {
+  white-space: nowrap;
+}
+
+.admin-account-actions .danger,
+.admin-password-reset-row .danger {
+  color: var(--danger);
+}
+
+.admin-password-reset-row {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) auto auto;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.75rem 0 0.2rem;
+  border-top: 1px solid var(--border-soft);
+}
+
+.admin-password-reset-row input {
+  width: 100%;
+  max-width: none;
+}
+
+@media (max-width: 1250px) {
+  .admin-account-user-list > .admin-account-user {
+    grid-template-columns: minmax(210px, 1fr) 160px minmax(210px, 1fr) auto;
+  }
+
+  .admin-account-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+
+@media (max-width: 820px) {
+  .admin-account-user-list > .admin-account-user {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
+  .admin-account-actions,
+  .admin-password-reset-row {
+    grid-column: 1;
+  }
+
+  .admin-account-actions {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .admin-password-reset-row {
+    grid-template-columns: 1fr;
+  }
+
+  .account-password-card input {
+    width: 100%;
+  }
+}

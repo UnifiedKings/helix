@@ -51,6 +51,38 @@ function formatDuration(ms?: number) {
   return `${minutes}:${seconds.toString().padStart(2, '0')}`
 }
 
+function IconThumbDown({ filled = false }: { filled?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path
+        d="M7 3h9.2c1.1 0 2 .72 2.3 1.78l1.2 4.3c.12.42.18.85.18 1.28V12c0 1.1-.9 2-2 2h-4.6l.74 3.5c.13.62-.06 1.27-.51 1.72L12.4 20.33 6.9 14.8V5.1C6.9 3.94 5.96 3 4.8 3H4v11h2.9"
+        fill={filled ? 'currentColor' : 'none'}
+        stroke={filled ? 'none' : 'currentColor'}
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function IconThumbUp({ filled = false }: { filled?: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <g transform="translate(24 0) scale(-1 1)">
+        <path
+          d="M17 21H7.8c-1.1 0-2-.72-2.3-1.78l-1.2-4.3a4.7 4.7 0 0 1-.18-1.28V12c0-1.1.9-2 2-2h4.6l-.74-3.5c-.13-.62.06-1.27.51-1.72L11.6 3.67l5.5 5.53v9.7c0 1.16.94 2.1 2.1 2.1h.8V10h-2.9"
+          fill={filled ? 'currentColor' : 'none'}
+          stroke="currentColor"
+          strokeWidth={1.8}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </g>
+    </svg>
+  )
+}
+
 function boostedAverageColor(data: Uint8ClampedArray) {
   let red = 0
   let green = 0
@@ -109,6 +141,7 @@ export function BigPicturePage() {
   const queue = player.player?.queue ?? []
   const currentIndex = player.player?.current_index ?? -1
   const currentQueueItemId = queue[currentIndex]?.id ?? null
+  const trackIdentity = `${current?.subsonic_song_id ?? ''}|${current?.yt_video_id ?? ''}|${current?.id ?? ''}`
   const [displayQueue, setDisplayQueue] = useState<QueueItem[]>(queue)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [reorderError, setReorderError] = useState('')
@@ -119,6 +152,9 @@ export function BigPicturePage() {
   const suppressClicksUntilRef = useRef(0)
   const [glowColor, setGlowColor] = useState('216 145 44')
   const [actionError, setActionError] = useState('')
+  const [liked, setLiked] = useState(false)
+  const [disliked, setDisliked] = useState(false)
+  const [ratingBusy, setRatingBusy] = useState(false)
   const [queueOpen, setQueueOpen] = useState(false)
   const [positionSeconds, setPositionSeconds] = useState(0)
   const [durationSeconds, setDurationSeconds] = useState(Math.max(0, (current?.duration_ms ?? 0) / 1000))
@@ -212,6 +248,37 @@ export function BigPicturePage() {
   }, [lyricsView, current?.id, current?.title, current?.artist, current?.album, current?.duration_ms])
 
   useEffect(() => {
+    let cancelled = false
+
+    async function loadRatingState() {
+      if (!current) {
+        setLiked(false)
+        setDisliked(false)
+        return
+      }
+
+      try {
+        const [likeState, dislikeState] = await Promise.all([
+          api.isLiked(current),
+          api.isDisliked(current),
+        ])
+        if (cancelled) return
+        setLiked(Boolean(likeState.liked))
+        setDisliked(Boolean(dislikeState.disliked))
+      } catch {
+        if (cancelled) return
+        setLiked(false)
+        setDisliked(false)
+      }
+    }
+
+    void loadRatingState()
+    return () => {
+      cancelled = true
+    }
+  }, [trackIdentity])
+
+  useEffect(() => {
     const syncPosition = () => {
       const input = document.querySelector<HTMLInputElement>('.playback-bar .scrub-input')
       if (!input) {
@@ -291,6 +358,36 @@ export function BigPicturePage() {
       setPlaybackVolume(0)
     } else {
       setPlaybackVolume(Math.max(0.05, lastAudibleVolumeRef.current || 0.85))
+    }
+  }
+
+  async function toggleLike() {
+    if (!current || ratingBusy) return
+    setRatingBusy(true)
+    try {
+      setActionError('')
+      const result = await api.toggleLike(current)
+      setLiked(result.liked)
+      if (result.liked) setDisliked(false)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not update liked state')
+    } finally {
+      setRatingBusy(false)
+    }
+  }
+
+  async function toggleDislike() {
+    if (!current || ratingBusy) return
+    setRatingBusy(true)
+    try {
+      setActionError('')
+      const result = await api.toggleDislike(current)
+      setDisliked(result.disliked)
+      if (result.disliked) setLiked(false)
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : 'Could not update disliked state')
+    } finally {
+      setRatingBusy(false)
     }
   }
 
@@ -658,20 +755,46 @@ export function BigPicturePage() {
             </div>
           </div>
           <div className="big-picture-control-row">
-            <button
-              type="button"
-              className={`big-picture-lyrics-control ${lyricsView ? 'active' : ''}`}
-              aria-label={lyricsView ? 'Return to Now Playing' : 'Show lyrics'}
-              aria-pressed={lyricsView}
-              title={lyricsView ? 'Now Playing' : 'Lyrics'}
-              onClick={() => setLyricsView((shown) => !shown)}
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M9.2 17.4V6.6l9-1.8v10.4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                <circle cx="6.8" cy="17.7" r="2.6" fill="currentColor" />
-                <circle cx="15.8" cy="15.8" r="2.6" fill="currentColor" />
-              </svg>
-            </button>
+            <div className="big-picture-left-controls" aria-label="Track actions">
+              <button
+                type="button"
+                className={`big-picture-rating-button big-picture-rating-dislike ${disliked ? 'active' : ''}`}
+                aria-label="Dislike current track"
+                aria-pressed={disliked}
+                title="Dislike"
+                onClick={() => void toggleDislike()}
+                disabled={!current || ratingBusy}
+              >
+                <IconThumbDown filled={disliked} />
+              </button>
+
+              <button
+                type="button"
+                className={`big-picture-lyrics-control ${lyricsView ? 'active' : ''}`}
+                aria-label={lyricsView ? 'Return to Now Playing' : 'Show lyrics'}
+                aria-pressed={lyricsView}
+                title={lyricsView ? 'Now Playing' : 'Lyrics'}
+                onClick={() => setLyricsView((shown) => !shown)}
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M9.2 17.4V6.6l9-1.8v10.4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  <circle cx="6.8" cy="17.7" r="2.6" fill="currentColor" />
+                  <circle cx="15.8" cy="15.8" r="2.6" fill="currentColor" />
+                </svg>
+              </button>
+
+              <button
+                type="button"
+                className={`big-picture-rating-button big-picture-rating-like ${liked ? 'active' : ''}`}
+                aria-label="Like current track"
+                aria-pressed={liked}
+                title="Like"
+                onClick={() => void toggleLike()}
+                disabled={!current || ratingBusy}
+              >
+                <IconThumbUp filled={liked} />
+              </button>
+            </div>
 
             <div className="big-picture-transport" aria-label="Playback controls">
               <button type="button" className="big-picture-skip big-picture-skip-previous" aria-label="Previous track" onClick={() => void skip('previous')}>
