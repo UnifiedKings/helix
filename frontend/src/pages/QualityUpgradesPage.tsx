@@ -17,6 +17,8 @@ type UpgradeJob = {
   upgraded_at?: string | null
   reverted_at?: string | null
   completion_source: string
+  provenance?: string
+  fingerprinted?: boolean
   original: Quality
   current: Quality
 }
@@ -27,6 +29,15 @@ type FilterDef = {
   alwaysShow?: boolean
 }
 
+type AuditEvent = { id: string; event: string; message: string; data_json: string; created_at: string }
+type AuditDetail = {
+  job: UpgradeJob
+  provenance: string
+  fingerprinted: boolean
+  active_search_id: string
+  events: AuditEvent[]
+}
+
 const FILTERS: FilterDef[] = [
   { value: 'all', label: 'All', alwaysShow: true },
   { value: 'pending', label: 'Pending', alwaysShow: true },
@@ -35,6 +46,8 @@ const FILTERS: FilterDef[] = [
   { value: 'waiting_peer', label: 'Peer queue', alwaysShow: true },
   { value: 'no_match', label: 'No match', alwaysShow: true },
   { value: 'upgraded', label: 'Upgraded', alwaysShow: true },
+  { value: 'satisfied', label: 'Satisfied' },
+  { value: 'reverting', label: 'Reverting' },
   { value: 'failed', label: 'Failed', alwaysShow: true },
   { value: 'dormant', label: 'Dormant' },
   { value: 'externally_modified', label: 'Manually modified', alwaysShow: true },
@@ -56,32 +69,13 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return text ? JSON.parse(text) as T : undefined as T
 }
 
-function qualityCodec(q: Quality) {
-  return q?.codec ? q.codec.toUpperCase() : '—'
-}
-
-function qualityDetails(q: Quality) {
-  if (!q?.codec) return ''
-  const parts: string[] = []
+function qualityLabel(q: Quality) {
+  if (!q?.codec) return 'Waiting for library copy'
+  const parts = [q.codec.toUpperCase()]
   if (q.bit_depth) parts.push(`${q.bit_depth}-bit`)
   if (q.sample_rate) parts.push(`${(q.sample_rate / 1000).toFixed(q.sample_rate % 1000 ? 1 : 0)} kHz`)
-  if (q.bitrate && !['flac', 'alac', 'wav', 'aiff', 'aif'].includes(q.codec.toLowerCase())) {
-    parts.push(`${Math.round(q.bitrate / 1000)} kbps`)
-  }
+  if (q.bitrate && !['flac', 'alac', 'wav', 'aiff', 'aif'].includes(q.codec.toLowerCase())) parts.push(`${Math.round(q.bitrate / 1000)} kbps`)
   return parts.join(' • ')
-}
-
-function hasActualUpgrade(job: UpgradeJob) {
-  if (job.status === 'upgraded') return true
-  const originalCodec = (job.original?.codec || '').toLowerCase()
-  const currentCodec = (job.current?.codec || '').toLowerCase()
-  if (!originalCodec || !currentCodec) return false
-  return (
-    originalCodec !== currentCodec
-    || Number(job.original?.bit_depth || 0) !== Number(job.current?.bit_depth || 0)
-    || Number(job.original?.sample_rate || 0) !== Number(job.current?.sample_rate || 0)
-    || Number(job.original?.bitrate || 0) !== Number(job.current?.bitrate || 0)
-  )
 }
 
 function prettyStatus(status: string) {
@@ -175,6 +169,16 @@ function statusMeta(job: UpgradeJob) {
         title: 'Replacing',
         detail: 'Moving upgraded file into library',
       }
+    case 'reverting':
+      return {
+        title: 'Reverting',
+        detail: 'Preparing a fresh YTMusic copy before replacing the upgraded file',
+      }
+    case 'satisfied':
+      return {
+        title: 'Satisfied',
+        detail: 'The Helix-owned library copy already satisfies the configured quality policy',
+      }
     case 'reverted':
       return {
         title: 'Reverted',
@@ -200,17 +204,49 @@ function statusMeta(job: UpgradeJob) {
 
 type JobAction = 'retry' | 'revert' | 'enable' | 'delete'
 
+
+function RevertIcon() {
+  return (
+    <svg className="quality-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M11 6 5 12l6 6" />
+      <path d="m18 6-6 6 6 6" />
+    </svg>
+  )
+}
+
+function TrashIcon() {
+  return (
+    <svg className="quality-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h16" />
+      <path d="M9 7V4h6v3" />
+      <path d="m6 7 1 13h10l1-13" />
+      <path d="M10 11v5M14 11v5" />
+    </svg>
+  )
+}
+
+function InfoIcon() {
+  return (
+    <svg className="quality-action-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10v6" />
+      <path d="M12 7.25h.01" />
+    </svg>
+  )
+}
+
 function actionsFor(job: UpgradeJob): JobAction[] {
   if (job.status === 'upgraded') return ['revert', 'delete']
-  if (['reverted', 'externally_modified'].includes(job.status)) return ['enable', 'delete']
+  if (['reverted', 'externally_modified', 'satisfied'].includes(job.status)) return ['enable', 'delete']
+  if (job.status === 'reverting') return []
   if (['pending', 'searching', 'waiting_search', 'waiting_peer', 'downloading', 'validating', 'tagging', 'replacing', 'no_match', 'dormant', 'failed'].includes(job.status)) return ['retry', 'delete']
   return ['delete']
 }
 
 function statusDotClass(status: string) {
-  if (status === 'upgraded') return 'is-success'
+  if (status === 'upgraded' || status === 'satisfied') return 'is-success'
   if (status === 'failed' || status === 'no_match') return 'is-danger'
-  if (status === 'searching' || status === 'downloading' || status === 'validating' || status === 'tagging' || status === 'replacing') return 'is-info'
+  if (status === 'searching' || status === 'downloading' || status === 'validating' || status === 'tagging' || status === 'replacing' || status === 'reverting') return 'is-info'
   if (status === 'pending' || status === 'waiting_search' || status === 'waiting_peer' || status === 'dormant' || status === 'reverted') return 'is-warn'
   return 'is-muted'
 }
@@ -222,6 +258,8 @@ export function QualityUpgradesPage() {
   const [appliedQuery, setAppliedQuery] = useState('')
   const [error, setError] = useState('')
   const [showSearchInput, setShowSearchInput] = useState(true)
+  const [audit, setAudit] = useState<AuditDetail | null>(null)
+  const [auditLoading, setAuditLoading] = useState(false)
   const refreshInFlight = useRef(false)
 
   const refreshItems = useCallback(async () => {
@@ -294,6 +332,17 @@ export function QualityUpgradesPage() {
       if (socket && socket.readyState < WebSocket.CLOSING) socket.close()
     }
   }, [refreshItems])
+
+  async function openAudit(job: UpgradeJob) {
+    setAuditLoading(true)
+    try {
+      setAudit(await request<AuditDetail>(`/api/quality-upgrades/${encodeURIComponent(job.id)}/events`))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load quality upgrade details')
+    } finally {
+      setAuditLoading(false)
+    }
+  }
 
   async function deleteJob(job: UpgradeJob) {
     const confirmed = window.confirm(
@@ -416,45 +465,17 @@ export function QualityUpgradesPage() {
             </div>
 
             <div className="quality-cell quality-change-cell" data-label="From → To">
-              {job.original?.codec ? (
-                hasActualUpgrade(job) ? (
-                  <div className="quality-change-pair">
-                    <div className="quality-format-block">
-                      <span className="quality-format-title">{qualityCodec(job.original)}</span>
-                      {qualityDetails(job.original) ? <span className="quality-format-meta">{qualityDetails(job.original)}</span> : null}
-                    </div>
-                    <span className="quality-arrow">→</span>
-                    <div className="quality-format-block">
-                      <span className="quality-format-title">{qualityCodec(job.current)}</span>
-                      {qualityDetails(job.current) ? <span className="quality-format-meta">{qualityDetails(job.current)}</span> : null}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="quality-change-pair quality-change-pending">
-                    <div className="quality-format-block">
-                      <span className="quality-format-title">{qualityCodec(job.original)}</span>
-                      {qualityDetails(job.original) ? <span className="quality-format-meta">{qualityDetails(job.original)}</span> : null}
-                    </div>
-                    <span className="quality-arrow">→</span>
-                    <div className="quality-format-block">
-                      <span className="quality-format-title quality-format-muted">Not upgraded yet</span>
-                      <span className="quality-format-meta">Current library copy</span>
-                    </div>
-                  </div>
-                )
-              ) : (
-                <div className="quality-change-pair quality-change-pending">
-                  <div className="quality-format-block">
-                    <span className="quality-format-title">—</span>
-                    <span className="quality-format-meta">Waiting for library copy</span>
-                  </div>
-                  <span className="quality-arrow">→</span>
-                  <div className="quality-format-block">
-                    <span className="quality-format-title">—</span>
-                    <span className="quality-format-meta">Not searched yet</span>
-                  </div>
+              <div className="quality-change-pair">
+                <div className="quality-format-block">
+                  <span className="quality-format-title">{job.original?.codec ? job.original.codec.toUpperCase() : '—'}</span>
+                  <span className="quality-format-meta">{qualityLabel(job.original)}</span>
                 </div>
-              )}
+                <span className="quality-arrow">→</span>
+                <div className="quality-format-block">
+                  <span className="quality-format-title">{job.current?.codec ? job.current.codec.toUpperCase() : '—'}</span>
+                  <span className="quality-format-meta">{qualityLabel(job.current)}</span>
+                </div>
+              </div>
             </div>
 
             <div className="quality-cell quality-details-cell" data-label="Details">
@@ -468,15 +489,63 @@ export function QualityUpgradesPage() {
 
             <div className="quality-cell quality-actions-cell" data-label="Actions">
               <div className="quality-actions quality-actions-v2">
-                {actions.includes('retry') ? <button className="quality-action-button" onClick={() => void action(job, 'retry')}>{['searching', 'waiting_search', 'waiting_peer', 'downloading', 'validating', 'tagging', 'replacing'].includes(job.status) ? 'Restart' : 'Retry'}</button> : null}
-                {actions.includes('revert') ? <button className="quality-action-button" onClick={() => void action(job, 'revert')}>Revert</button> : null}
-                {actions.includes('enable') ? <button className="quality-action-button" onClick={() => void action(job, 'enable')}>Enable upgrades</button> : null}
-                <button className="quality-action-button quality-action-danger" onClick={() => void deleteJob(job)}>Delete</button>
+                {actions.includes('retry') ? <button className="quality-action-button quality-action-text" onClick={() => void action(job, 'retry')}>{['searching', 'waiting_search', 'waiting_peer', 'downloading', 'validating', 'tagging', 'replacing'].includes(job.status) ? 'Restart' : 'Retry'}</button> : null}
+                {actions.includes('enable') ? <button className="quality-action-button quality-action-text" onClick={() => void action(job, 'enable')}>Enable upgrades</button> : null}
+                {actions.includes('revert') ? (
+                  <button
+                    className="quality-icon-action quality-icon-action-revert"
+                    aria-label={`Revert ${job.title}`}
+                    title="Revert to original Helix copy"
+                    onClick={() => void action(job, 'revert')}
+                  >
+                    <RevertIcon />
+                  </button>
+                ) : null}
+                {job.status !== 'reverting' ? (
+                  <button
+                    className="quality-icon-action quality-icon-action-danger"
+                    aria-label={`Delete quality upgrade record for ${job.title}`}
+                    title="Delete quality upgrade record"
+                    onClick={() => void deleteJob(job)}
+                  >
+                    <TrashIcon />
+                  </button>
+                ) : null}
+                <button
+                  className="quality-icon-action quality-icon-action-info"
+                  disabled={auditLoading}
+                  aria-label={`View upgrade details for ${job.title}`}
+                  title="View upgrade details"
+                  onClick={() => void openAudit(job)}
+                >
+                  <InfoIcon />
+                </button>
               </div>
             </div>
           </article>
         })}
       </div>
     </section>
+
+    {audit ? <div className="quality-audit-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setAudit(null) }}>
+      <aside className="quality-audit-panel" role="dialog" aria-modal="true" aria-label={`Quality upgrade details for ${audit.job.title}`}>
+        <div className="quality-audit-header">
+          <div><span className="eyebrow">Upgrade audit</span><h2>{audit.job.title}</h2><p>{audit.job.artist}{audit.job.album ? ` • ${audit.job.album}` : ''}</p></div>
+          <button className="quality-action-button" onClick={() => setAudit(null)}>Close</button>
+        </div>
+        <div className="quality-audit-summary">
+          <div><span>Ownership</span><strong>{audit.provenance === 'helix_imported' ? 'Helix-added track' : audit.provenance}</strong></div>
+          <div><span>Content fingerprint</span><strong>{audit.fingerprinted ? 'Recorded' : 'Pending'}</strong></div>
+          <div><span>Active slskd search</span><strong>{audit.active_search_id || 'None'}</strong></div>
+        </div>
+        <div className="quality-audit-events">
+          {audit.events.length ? audit.events.map((event) => <div className="quality-audit-event" key={event.id}>
+            <time>{parseBackendDate(event.created_at).toLocaleString()}</time>
+            <strong>{prettyStatus(event.event)}</strong>
+            {event.message ? <p>{event.message}</p> : null}
+          </div>) : <p className="muted">No audit events recorded yet.</p>}
+        </div>
+      </aside>
+    </div> : null}
   </div>
 }

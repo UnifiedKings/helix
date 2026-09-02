@@ -69,6 +69,8 @@ export function PlaylistEditPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const [subsonicQueuedTrackIds, setSubsonicQueuedTrackIds] = useState<Set<string>>(new Set())
+  const [subsonicAvailability, setSubsonicAvailability] = useState<Record<string, boolean>>({})
+  const [subsonicCheckingTrackIds, setSubsonicCheckingTrackIds] = useState<Set<string>>(new Set())
 
   const playlist = detail?.playlist
   const isSystemPlaylist = Boolean(playlist?.system_key)
@@ -224,6 +226,66 @@ export function PlaylistEditPage() {
     player.run(() => api.queueSong(track))
   }
 
+  function trackIsInSubsonic(track: PlaylistTrack) {
+    return track.source === 'subsonic'
+      || Boolean(track.subsonic_song_id)
+      || subsonicAvailability[track.id] === true
+  }
+
+  async function resolveTrackSubsonicAvailability(track: PlaylistTrack) {
+    if (
+      !capabilities?.features.subsonic_import
+      || trackIsInSubsonic(track)
+      || subsonicCheckingTrackIds.has(track.id)
+      || subsonicAvailability[track.id] === false
+    ) return
+
+    setSubsonicCheckingTrackIds((current) => new Set(current).add(track.id))
+    try {
+      const resolverKey = `playlist-track:${track.id}`
+      const payload = await api.resolveSubsonicSongs([{
+        key: resolverKey,
+        title: track.title,
+        artist: track.artist,
+        album: track.album || undefined,
+        duration_ms: track.duration_ms || undefined,
+        yt_video_id: track.yt_video_id || undefined,
+      }])
+      const resolved = payload.songs?.[resolverKey]
+      const available = Boolean(resolved?.available)
+      setSubsonicAvailability((current) => ({ ...current, [track.id]: available }))
+
+      const subsonicSongId = resolved?.subsonic_song_id
+      if (available && subsonicSongId) {
+        setDetail((current) => current ? normalizeDetail({
+          ...current,
+          tracks: current.tracks.map((item) => item.id === track.id
+            ? { ...item, subsonic_song_id: subsonicSongId }
+            : item),
+        }) : current)
+      }
+    } catch {
+      // Supplemental check only. Keep the menu usable if Subsonic is unavailable.
+    } finally {
+      setSubsonicCheckingTrackIds((current) => {
+        const next = new Set(current)
+        next.delete(track.id)
+        return next
+      })
+    }
+  }
+
+  async function toggleTrackMenu(track: PlaylistTrack) {
+    if (openTrackMenuId === track.id) {
+      setOpenTrackMenuId('')
+      return
+    }
+    setOpenTrackMenuId(track.id)
+    if (!trackIsInSubsonic(track)) {
+      await resolveTrackSubsonicAvailability(track)
+    }
+  }
+
   async function addTrackToSubsonic(track: PlaylistTrack) {
     if (subsonicQueuedTrackIds.has(track.id)) return
     setOpenTrackMenuId('')
@@ -322,7 +384,7 @@ export function PlaylistEditPage() {
                       aria-expanded={openTrackMenuId === track.id}
                       onClick={(event) => {
                         event.stopPropagation()
-                        setOpenTrackMenuId((current) => current === track.id ? '' : track.id)
+                        void toggleTrackMenu(track)
                       }}
                     >
                       ⋯
@@ -337,16 +399,23 @@ export function PlaylistEditPage() {
                           <span className="playlist-track-menu-icon" aria-hidden="true">+</span>
                           <span>Add to queue</span>
                         </button>
-                        {capabilities?.features.subsonic_import && track.source !== 'subsonic' && !track.subsonic_song_id ? (
-                          <button
-                            type="button"
-                            role="menuitem"
-                            disabled={subsonicQueuedTrackIds.has(track.id)}
-                            onClick={() => void addTrackToSubsonic(track)}
-                          >
-                            <span className="playlist-track-menu-icon playlist-track-menu-icon-subsonic" aria-hidden="true">S+</span>
-                            <span>{subsonicQueuedTrackIds.has(track.id) ? 'Queued for Subsonic' : 'Add to Subsonic'}</span>
-                          </button>
+                        {capabilities?.features.subsonic_import && !trackIsInSubsonic(track) ? (
+                          subsonicCheckingTrackIds.has(track.id) ? (
+                            <button type="button" role="menuitem" disabled>
+                              <span className="playlist-track-menu-icon playlist-track-menu-icon-subsonic" aria-hidden="true">⇩</span>
+                              <span>Checking library…</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              role="menuitem"
+                              disabled={subsonicQueuedTrackIds.has(track.id)}
+                              onClick={() => void addTrackToSubsonic(track)}
+                            >
+                              <span className="playlist-track-menu-icon playlist-track-menu-icon-subsonic" aria-hidden="true">⇩</span>
+                              <span>{subsonicQueuedTrackIds.has(track.id) ? 'Queued for Subsonic' : 'Add to Subsonic'}</span>
+                            </button>
+                          )
                         ) : null}
                         <div className="playlist-track-menu-divider" />
                         <button

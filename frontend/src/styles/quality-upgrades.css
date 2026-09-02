@@ -442,3 +442,167 @@
 .quality-change-pending .quality-arrow {
   opacity: 0.6;
 }
+
+/* Quality upgrade audit/detail panel. */
+.quality-audit-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: flex-end;
+  background: rgba(0, 0, 0, 0.48);
+}
+
+.quality-audit-panel {
+  width: min(520px, 92vw);
+  height: 100%;
+  overflow: auto;
+  padding: 1.2rem;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: -22px 0 60px rgba(0, 0, 0, 0.36);
+}
+
+.quality-audit-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.quality-audit-header h2 { margin: .15rem 0 .25rem; }
+.quality-audit-header p { margin: 0; color: var(--muted); }
+
+.quality-audit-summary {
+  display: grid;
+  grid-template-columns: 1fr;
+  margin: 1rem 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.quality-audit-summary > div {
+  display: grid;
+  grid-template-columns: minmax(120px, .8fr) minmax(0, 1.2fr);
+  gap: .8rem;
+  padding: .75rem .85rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+.quality-audit-summary > div:last-child { border-bottom: 0; }
+.quality-audit-summary span { color: var(--muted); font-size: .76rem; }
+.quality-audit-summary strong { min-width: 0; overflow-wrap: anywhere; font-size: .82rem; }
+
+.quality-audit-events { display: grid; gap: 0; border-top: 1px solid var(--border-soft); }
+.quality-audit-event { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: .25rem .8rem; padding: .8rem 0; border-bottom: 1px solid var(--border-soft); }
+.quality-audit-event time { color: var(--faint); font-size: .72rem; }
+.quality-audit-event strong { font-size: .82rem; text-transform: capitalize; }
+.quality-audit-event p { grid-column: 2; margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.4; }
+
+@media (max-width: 620px) {
+  .quality-audit-event { grid-template-columns: 1fr; }
+  .quality-audit-event p { grid-column: 1; }
+}
+
+
+/* Compact icon actions for Quality Upgrades. */
+.quality-actions-v2 {
+  align-items: center;
+  gap: 7px;
+  flex-wrap: nowrap;
+}
+
+.quality-action-text {
+  min-width: 0;
+  min-height: 34px;
+  padding: 0.42rem 0.68rem;
+  border-radius: 7px;
+  white-space: nowrap;
+}
+
+.quality-icon-action {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 34px;
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface-raised, var(--surface)) 74%, transparent);
+  color: var(--muted);
+  box-shadow: none;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease,
+    transform 120ms ease;
+}
+
+.quality-icon-action:hover:not(:disabled),
+.quality-icon-action:focus-visible:not(:disabled) {
+  color: var(--text);
+  border-color: color-mix(in srgb, var(--text) 24%, transparent);
+  background: color-mix(in srgb, var(--text) 6%, var(--surface));
+  transform: translateY(-1px);
+  box-shadow: none;
+}
+
+.quality-icon-action:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.quality-action-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.quality-icon-action-revert {
+  color: color-mix(in srgb, var(--accent) 72%, var(--text));
+}
+
+.quality-icon-action-revert:hover:not(:disabled),
+.quality-icon-action-revert:focus-visible:not(:disabled) {
+  color: var(--accent-bright, var(--accent));
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.quality-icon-action-danger {
+  color: var(--danger, #e16a6a);
+  border-color: color-mix(in srgb, var(--danger, #e16a6a) 24%, transparent);
+}
+
+.quality-icon-action-danger:hover:not(:disabled),
+.quality-icon-action-danger:focus-visible:not(:disabled) {
+  color: var(--danger, #e16a6a);
+  border-color: color-mix(in srgb, var(--danger, #e16a6a) 60%, transparent);
+  background: color-mix(in srgb, var(--danger, #e16a6a) 9%, transparent);
+}
+
+.quality-icon-action-info {
+  border-radius: 50%;
+  color: color-mix(in srgb, var(--muted) 86%, var(--text));
+}
+
+.quality-icon-action-info:hover:not(:disabled),
+.quality-icon-action-info:focus-visible:not(:disabled) {
+  color: var(--accent-bright, var(--accent));
+  border-color: var(--accent-border);
+  background: var(--accent-soft);
+}
+
+.quality-actions-v2 .quality-action-button {
+  min-width: 0;
+}

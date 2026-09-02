@@ -68,3 +68,36 @@ class AdminNotification(Base):
     body: Mapped[str] = mapped_column(Text, nullable=False, default="")
     data_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class QualityUpgradeMetadata(Base):
+    """Extensible per-job metadata kept separate from the original job table.
+
+    Keeping this in a sidecar table lets existing installations gain stronger
+    provenance/fingerprint/resume data without rebuilding quality_upgrade_jobs.
+    It also leaves a clean path for a future opt-in "adopt existing library"
+    workflow while today's automatic upgrades remain Helix-owned only.
+    """
+    __tablename__ = "quality_upgrade_metadata"
+
+    job_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    provenance: Mapped[str] = mapped_column(String(32), nullable=False, default="helix_imported", index=True)
+    original_sha256: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    current_sha256: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    slskd_search_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    slskd_search_query: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    candidate_pool_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    candidate_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    operation_generation: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class QualityUpgradeEvent(Base):
+    __tablename__ = "quality_upgrade_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    job_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    event: Mapped[str] = mapped_column(String(64), nullable=False, default="", index=True)
+    message: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    data_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow, index=True)

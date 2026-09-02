@@ -6,18 +6,19 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from ..auth import get_current_user, require_admin
-from ..db import get_db
+from ..db import SessionLocal, get_db
 from ..download_manager import DOWNLOAD_MANAGER, DownloadJob
 from ..integrations.slskd import SlskdClient
 from ..models import User
-from ..quality_models import AdminNotification, QualityUpgradeJob
+from ..quality_models import AdminNotification, QualityUpgradeEvent, QualityUpgradeJob, QualityUpgradeMetadata
 from ..realtime import schedule_quality_upgrades_changed
 from ..settings_store import get_settings, patch_settings
 from ..subsonic_permissions import can_import_to_subsonic
+from ..quality_upgrade_service import revert_quality_upgrade_job
 
 router = APIRouter(prefix="/api/quality-upgrades", tags=["quality-upgrades"])
 
@@ -135,35 +136,60 @@ async def revert_upgrade(
     if job.status != "upgraded":
         raise HTTPException(status_code=409, detail="Only upgraded tracks can be reverted")
 
-    # Revert deliberately uses Helix's normal reliable YTMusic pipeline.
-    await DOWNLOAD_MANAGER.enqueue_normal(DownloadJob(
-        video_id=job.yt_video_id,
-        url=f"https://music.youtube.com/watch?v={job.yt_video_id}",
-        title=job.title,
-        artist=job.artist,
-        album=job.album,
-        album_artist=job.album_artist,
-        browse_id=job.yt_browse_id,
-        art_url=job.art_url,
-        track_no=job.track_no,
-        duration_ms=job.duration_ms,
-        persist_to_subsonic=True,
-        user_id=str(user.id),
-        priority=30,
-    ))
+    # Close over only identifiers here; the actual revert service uses short DB
+    # transactions and does not hold this request session while yt-dlp/ffmpeg or
+    # Navidrome are doing network/filesystem work.
+    db.close()
+    try:
+        await revert_quality_upgrade_job(job_id, str(user.id))
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
-    # Remove the upgraded file first only after the fresh YT download has been
-    # queued; the current file remains available during the download. The
-    # finalize pipeline may need to replace it after import, so mark this job
-    # suppressed immediately to prevent the slskd worker racing it.
-    job.status = "reverted"
-    job.reverted_at = datetime.utcnow()
-    job.completion_source = "user_revert"
-    job.next_search_at = None
-    job.updated_at = datetime.utcnow()
-    db.commit()
-    schedule_quality_upgrades_changed()
-    return _job_payload(job)
+    refresh_db = SessionLocal()
+    try:
+        refreshed = refresh_db.get(QualityUpgradeJob, job_id)
+        if refreshed is None:
+            raise HTTPException(status_code=404, detail="Upgrade job not found")
+        return _job_payload(refreshed)
+    finally:
+        refresh_db.close()
+
+
+@router.get("/{job_id}/events")
+def upgrade_events(
+    job_id: str,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    _require_access(db, user)
+    job = db.get(QualityUpgradeJob, job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Upgrade job not found")
+    rows = db.execute(
+        select(QualityUpgradeEvent)
+        .where(QualityUpgradeEvent.job_id == job_id)
+        .order_by(QualityUpgradeEvent.created_at.desc())
+        .limit(200)
+    ).scalars().all()
+    meta = db.get(QualityUpgradeMetadata, job_id)
+    return {
+        "job": _job_payload(job),
+        "provenance": (meta.provenance if meta else "helix_imported"),
+        "fingerprinted": bool(meta and meta.original_sha256),
+        "active_search_id": (meta.slskd_search_id if meta else ""),
+        "events": [
+            {
+                "id": row.id,
+                "event": row.event,
+                "message": row.message,
+                "data_json": row.data_json,
+                "created_at": row.created_at,
+            }
+            for row in rows
+        ],
+    }
 
 
 @router.get("/admin/notifications")
@@ -197,6 +223,7 @@ async def test_slskd(
     db: Session = Depends(get_db),
 ):
     settings = get_settings(db)
+    db.close()
     url = str(settings.get("slskd_url") or "").strip()
     key = str(settings.get("slskd_api_key") or "").strip()
     if not url or not key:
@@ -220,6 +247,10 @@ def delete_upgrade_job(
     if not job:
         raise HTTPException(status_code=404, detail="Quality upgrade job not found")
 
+    db.execute(delete(QualityUpgradeEvent).where(QualityUpgradeEvent.job_id == job_id))
+    meta = db.get(QualityUpgradeMetadata, job_id)
+    if meta is not None:
+        db.delete(meta)
     db.delete(job)
     db.commit()
     schedule_quality_upgrades_changed()
@@ -239,6 +270,12 @@ def get_slskd_config(
         "slskd_downloads_path": settings.get("slskd_downloads_path") or "",
         "slskd_concurrent_searches": int(settings.get("slskd_concurrent_searches") or 2),
         "slskd_match_threshold": float(settings.get("slskd_match_threshold") or 78),
+        "quality_upgrade_lossless_only": bool(settings.get("quality_upgrade_lossless_only", True)),
+        "quality_upgrade_min_sample_rate": int(settings.get("quality_upgrade_min_sample_rate") or 44100),
+        "quality_upgrade_min_bit_depth": int(settings.get("quality_upgrade_min_bit_depth") or 16),
+        "quality_upgrade_replace_lossless": bool(settings.get("quality_upgrade_replace_lossless", False)),
+        "quality_upgrade_management_scope": "helix_owned",
+        "quality_upgrade_future_adoption_supported": True,
         "slskd_url_locked": bool(os.getenv("SLSKD_URL")),
         "slskd_api_key_locked": bool(os.getenv("SLSKD_API_KEY")),
         "slskd_downloads_path_locked": bool(os.getenv("SLSKD_DOWNLOADS_PATH")),
@@ -258,6 +295,10 @@ def patch_slskd_config(
         "slskd_downloads_path",
         "slskd_concurrent_searches",
         "slskd_match_threshold",
+        "quality_upgrade_lossless_only",
+        "quality_upgrade_min_sample_rate",
+        "quality_upgrade_min_bit_depth",
+        "quality_upgrade_replace_lossless",
     }
     clean = {k: v for k, v in payload.items() if k in allowed}
     if os.getenv("SLSKD_URL"):
@@ -272,5 +313,13 @@ def patch_slskd_config(
         clean["slskd_concurrent_searches"] = max(1, min(3, int(clean["slskd_concurrent_searches"])))
     if "slskd_match_threshold" in clean:
         clean["slskd_match_threshold"] = max(50.0, min(100.0, float(clean["slskd_match_threshold"])))
+    if "quality_upgrade_min_sample_rate" in clean:
+        clean["quality_upgrade_min_sample_rate"] = max(8000, min(384000, int(clean["quality_upgrade_min_sample_rate"])))
+    if "quality_upgrade_min_bit_depth" in clean:
+        clean["quality_upgrade_min_bit_depth"] = max(8, min(32, int(clean["quality_upgrade_min_bit_depth"])))
+    if "quality_upgrade_lossless_only" in clean:
+        clean["quality_upgrade_lossless_only"] = bool(clean["quality_upgrade_lossless_only"])
+    if "quality_upgrade_replace_lossless" in clean:
+        clean["quality_upgrade_replace_lossless"] = bool(clean["quality_upgrade_replace_lossless"])
     patch_settings(db, clean)
     return get_slskd_config(admin=admin, db=db)

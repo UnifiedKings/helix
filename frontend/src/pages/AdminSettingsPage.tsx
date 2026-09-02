@@ -6,6 +6,8 @@ import '../styles/account-management.css'
 
 type AdminSection = 'overview' | 'users' | 'library' | 'quality' | 'playback' | 'downloads' | 'search' | 'advanced'
 
+type QualityAdminNotification = { id: string; title: string; body: string; created_at: string }
+
 const SECTIONS: Array<[AdminSection, string]> = [
   ['overview', 'Overview'], ['users', 'Users'], ['library', 'Library & Subsonic'], ['quality', 'Quality Upgrades'],
   ['playback', 'Playback'], ['downloads', 'Downloads & Prefetch'], ['search', 'Search & Catalog'], ['advanced', 'Advanced'],
@@ -62,13 +64,20 @@ export function AdminSettingsPage() {
   const [status, setStatus] = useState('')
   const [saving, setSaving] = useState(false)
   const [accountBusy, setAccountBusy] = useState('')
+  const [qualityNotifications, setQualityNotifications] = useState<QualityAdminNotification[]>([])
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(settings), [draft, settings])
 
   async function load() {
     try {
-      const [nextHealth, nextSettings, nextUsers, me] = await Promise.all([api.health(), api.adminSettings(), api.adminUsers(), api.me()])
-      setHealth(nextHealth); setSettings(nextSettings); setDraft(nextSettings); setUsers(nextUsers); setCurrentUserId(me.id); setError('')
+      const [nextHealth, nextSettings, nextUsers, me, notifications] = await Promise.all([
+        api.health(),
+        api.adminSettings(),
+        api.adminUsers(),
+        api.me(),
+        accountRequest<{ items: QualityAdminNotification[] }>('/api/quality-upgrades/admin/notifications').catch(() => ({ items: [] })),
+      ])
+      setHealth(nextHealth); setSettings(nextSettings); setDraft(nextSettings); setUsers(nextUsers); setCurrentUserId(me.id); setQualityNotifications(notifications.items ?? []); setError('')
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not load admin settings') }
   }
   useEffect(() => { void load() }, [])
@@ -145,7 +154,18 @@ export function AdminSettingsPage() {
     <div className="settings-layout">
       <nav className="settings-section-nav" aria-label="Admin settings sections">{SECTIONS.map(([key, label]) => <button type="button" className={section === key ? 'active' : ''} key={key} onClick={() => setSection(key)}>{label}</button>)}</nav>
       <section className="settings-section-content">
-        {section === 'overview' ? <><div className="settings-section-heading"><h2>Overview</h2><p>Server-wide status and configuration at a glance.</p></div><div className="admin-status-grid"><div><span>Backend</span><strong className="status-ok">● Online</strong></div><div><span>Users</span><strong>{users.length}</strong></div><div><span>Configuration</span><strong>{Object.keys(settings).length} keys</strong></div></div><details className="settings-diagnostics"><summary>View raw diagnostics</summary><pre>{JSON.stringify(health, null, 2)}</pre></details></> : null}
+        {section === 'overview' ? <>
+          <div className="settings-section-heading"><h2>Overview</h2><p>Server-wide status and configuration at a glance.</p></div>
+          <div className="admin-status-grid"><div><span>Backend</span><strong className="status-ok">● Online</strong></div><div><span>Users</span><strong>{users.length}</strong></div><div><span>Configuration</span><strong>{Object.keys(settings).length} keys</strong></div></div>
+          {qualityNotifications.length ? <div className="settings-card">
+            <div className="settings-card-heading-row"><div><h3>Recent quality upgrades</h3><p>Successful slskd replacements recorded for administrators.</p></div></div>
+            {qualityNotifications.slice(0, 5).map((notification) => <div className="settings-control-row" key={notification.id}>
+              <div><strong>{notification.title}</strong><span style={{ whiteSpace: 'pre-line' }}>{notification.body}</span></div>
+              <time className="muted">{new Date(notification.created_at.endsWith('Z') ? notification.created_at : `${notification.created_at}Z`).toLocaleString()}</time>
+            </div>)}
+          </div> : null}
+          <details className="settings-diagnostics"><summary>View raw diagnostics</summary><pre>{JSON.stringify(health, null, 2)}</pre></details>
+        </> : null}
 
         {section === 'users' ? <>
           <div className="settings-section-heading"><h2>Users</h2><p>Create accounts, manage access, reset passwords, or remove users.</p></div>

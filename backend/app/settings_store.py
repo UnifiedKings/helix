@@ -45,6 +45,13 @@ DEFAULTS: dict[str, Any] = {
     "slskd_max_results": 200,
     "slskd_concurrent_searches": 2,
     "slskd_match_threshold": 78.0,
+    # Conservative quality policy. These apply only to Helix-owned tracks for
+    # now; provenance metadata intentionally leaves room for a future opt-in
+    # adoption workflow for pre-existing library files.
+    "quality_upgrade_lossless_only": True,
+    "quality_upgrade_min_sample_rate": 44100,
+    "quality_upgrade_min_bit_depth": 16,
+    "quality_upgrade_replace_lossless": False,
 }
 
 

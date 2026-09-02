@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import os
 import re
 import shutil
+import subprocess
 from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
@@ -14,9 +16,10 @@ from typing import Any
 from sqlalchemy import select
 
 from .db import SessionLocal
+from .download_manager import DOWNLOAD_MANAGER, DownloadJob
 from .integrations.slskd import SlskdCandidate, SlskdClient
 from .integrations.subsonic import SubsonicClient
-from .quality_models import AdminNotification, QualityUpgradeJob
+from .quality_models import AdminNotification, QualityUpgradeEvent, QualityUpgradeJob, QualityUpgradeMetadata
 from .realtime import schedule_quality_upgrades_changed
 from .settings_store import get_settings
 
@@ -53,6 +56,136 @@ async def _wait_for_search_start_slot() -> None:
 def _commit_quality_change(db: Session) -> None:
     db.commit()
     schedule_quality_upgrades_changed()
+
+
+def _job_metadata(db: Session, job_id: str) -> QualityUpgradeMetadata:
+    row = db.get(QualityUpgradeMetadata, job_id)
+    if row is None:
+        row = QualityUpgradeMetadata(job_id=job_id, provenance="helix_imported")
+        db.add(row)
+        db.flush()
+    return row
+
+
+def _record_event(
+    db: Session,
+    job_id: str,
+    event: str,
+    message: str = "",
+    data: dict[str, Any] | None = None,
+) -> None:
+    db.add(QualityUpgradeEvent(
+        job_id=job_id,
+        event=event,
+        message=message,
+        data_json=json.dumps(data or {}, ensure_ascii=False),
+    ))
+
+
+def _persist_active_search(job_id: str, search_id: str, query: str) -> None:
+    db = SessionLocal()
+    try:
+        meta = _job_metadata(db, job_id)
+        meta.slskd_search_id = search_id
+        meta.slskd_search_query = query
+        meta.updated_at = datetime.utcnow()
+        _record_event(db, job_id, "search_started", f"Soulseek search started: {query}", {"search_id": search_id, "query": query})
+        _commit_quality_change(db)
+    finally:
+        db.close()
+
+
+def _clear_active_search(db: Session, job_id: str) -> None:
+    meta = _job_metadata(db, job_id)
+    meta.slskd_search_id = ""
+    meta.slskd_search_query = ""
+    meta.updated_at = datetime.utcnow()
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        while True:
+            chunk = handle.read(1024 * 1024)
+            if not chunk:
+                break
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _candidate_to_dict(candidate: SlskdCandidate, score: float = 0.0) -> dict[str, Any]:
+    return {
+        "username": candidate.username,
+        "filename": candidate.filename,
+        "size": int(candidate.size or 0),
+        "bitrate": int(candidate.bitrate or 0),
+        "sample_rate": int(candidate.sample_rate or 0),
+        "bit_depth": int(candidate.bit_depth or 0),
+        "duration_ms": int(candidate.duration_ms or 0),
+        "free_upload_slots": bool(candidate.free_upload_slots),
+        "queue_length": int(candidate.queue_length or 0),
+        "score": float(score),
+    }
+
+
+def _candidate_from_dict(data: dict[str, Any]) -> SlskdCandidate | None:
+    username = str(data.get("username") or "").strip()
+    filename = str(data.get("filename") or "").strip()
+    if not username or not filename:
+        return None
+    return SlskdCandidate(
+        username=username,
+        filename=filename,
+        size=int(data.get("size") or 0),
+        bitrate=int(data.get("bitrate") or 0),
+        sample_rate=int(data.get("sample_rate") or 0),
+        bit_depth=int(data.get("bit_depth") or 0),
+        duration_ms=int(data.get("duration_ms") or 0),
+        free_upload_slots=bool(data.get("free_upload_slots")),
+        queue_length=int(data.get("queue_length") or 0),
+    )
+
+
+def _candidate_meets_policy(candidate: SlskdCandidate, settings: dict[str, Any], job: Any | None = None) -> bool:
+    if bool(settings.get("quality_upgrade_lossless_only", True)) and not _is_lossless(candidate):
+        return False
+    min_sr = max(0, int(settings.get("quality_upgrade_min_sample_rate") or 0))
+    min_depth = max(0, int(settings.get("quality_upgrade_min_bit_depth") or 0))
+    # Missing Soulseek attributes are not treated as proof of low quality; the
+    # downloaded file is validated again with Mutagen before replacement.
+    if candidate.sample_rate and min_sr and candidate.sample_rate < min_sr:
+        return False
+    if candidate.bit_depth and min_depth and candidate.bit_depth < min_depth:
+        return False
+
+    if job is not None:
+        current_codec = str(getattr(job, "current_codec", "") or "").lower()
+        current_lossless = current_codec in {"flac", "alac", "wav", "aiff", "aif"}
+        if current_lossless:
+            if not bool(settings.get("quality_upgrade_replace_lossless", False)):
+                return False
+            current_rank = (
+                1,
+                int(getattr(job, "current_bit_depth", 0) or 0),
+                int(getattr(job, "current_sample_rate", 0) or 0),
+                int(getattr(job, "current_bitrate", 0) or 0),
+            )
+            if _candidate_rank(candidate) <= current_rank:
+                return False
+    return True
+
+
+def _quality_info_meets_policy(info: dict[str, Any], settings: dict[str, Any]) -> bool:
+    codec = str(info.get("codec") or "").lower()
+    if bool(settings.get("quality_upgrade_lossless_only", True)) and codec not in {"flac", "alac", "wav", "aiff", "aif"}:
+        return False
+    min_sr = max(0, int(settings.get("quality_upgrade_min_sample_rate") or 0))
+    min_depth = max(0, int(settings.get("quality_upgrade_min_bit_depth") or 0))
+    if min_sr and int(info.get("sample_rate") or 0) and int(info.get("sample_rate") or 0) < min_sr:
+        return False
+    if min_depth and int(info.get("bit_depth") or 0) and int(info.get("bit_depth") or 0) < min_depth:
+        return False
+    return True
 
 
 def _set_search_job_status(job_id: str, status: str, *, mark_started: bool = False) -> None:
@@ -219,7 +352,7 @@ def create_upgrade_job(
         ).scalars().first()
         if existing:
             return
-        db.add(QualityUpgradeJob(
+        job = QualityUpgradeJob(
             requested_by_user_id=user_id,
             yt_video_id=yt_video_id,
             yt_browse_id=yt_browse_id,
@@ -231,7 +364,11 @@ def create_upgrade_job(
             track_no=int(track_no or 0),
             art_url=art_url,
             status="pending",
-        ))
+        )
+        db.add(job)
+        db.flush()
+        _job_metadata(db, job.id).provenance = "helix_imported"
+        _record_event(db, job.id, "enrolled", "Track enrolled for Helix-owned quality upgrades")
         _commit_quality_change(db)
     finally:
         db.close()
@@ -633,6 +770,16 @@ def _find_download_file_once(
     matches: list[Path] = []
     try:
         matches = [p for p in download_root.rglob(basename) if p.is_file()]
+        # slskd may avoid overwriting an older staging file by appending a
+        # numeric suffix such as " (1)". Accept that variant only when the
+        # extension and expected byte size still match the selected candidate.
+        if not matches:
+            wanted = Path(basename)
+            for p in download_root.rglob(f"*{wanted.suffix}"):
+                if not p.is_file():
+                    continue
+                if p.stem == wanted.stem or re.fullmatch(re.escape(wanted.stem) + r" \(\d+\)", p.stem):
+                    matches.append(p)
     except OSError:
         matches = []
 
@@ -939,8 +1086,13 @@ async def _finish_downloaded_upgrade(
         _copy_original_tags(original, downloaded, job)
 
     new_info = _audio_info(downloaded)
-    if str(new_info["codec"]).lower() not in {"flac", "alac", "wav", "aiff", "aif"}:
-        raise RuntimeError("Selected Soulseek result is not actually lossless")
+    settings_db = SessionLocal()
+    try:
+        policy_settings = get_settings(settings_db)
+    finally:
+        settings_db.close()
+    if not _quality_info_meets_policy(new_info, policy_settings):
+        raise RuntimeError("Selected Soulseek result does not meet the configured quality policy")
 
     # Re-check ownership immediately before destructive replacement.
     if not original.exists():
@@ -973,14 +1125,26 @@ async def _finish_downloaded_upgrade(
         return
 
     size, mtime = _fingerprint_file(original)
-    if size != job.original_size:
+    meta = _job_metadata(db, job.id)
+    ownership_changed = False
+    if size != job.original_size or mtime != job.original_mtime_ns:
+        if meta.original_sha256:
+            try:
+                ownership_changed = _sha256_file(original) != meta.original_sha256
+            except Exception:
+                ownership_changed = size != job.original_size
+        else:
+            ownership_changed = size != job.original_size
+
+    if ownership_changed:
         job.status = "externally_modified"
         job.updated_at = datetime.utcnow()
+        _record_event(db, job.id, "ownership_changed", "Library copy changed outside Helix before replacement")
         _commit_quality_change(db)
         return
 
-    # mtime-only drift is not recording identity drift.
-    if mtime != job.original_mtime_ns:
+    if size != job.original_size or mtime != job.original_mtime_ns:
+        job.original_size = size
         job.original_mtime_ns = mtime
         job.updated_at = datetime.utcnow()
         _commit_quality_change(db)
@@ -1001,6 +1165,12 @@ async def _finish_downloaded_upgrade(
     job.current_bitrate = int(new_info["bitrate"])
     job.current_sample_rate = int(new_info["sample_rate"])
     job.current_bit_depth = int(new_info["bit_depth"])
+    meta = _job_metadata(db, job.id)
+    try:
+        meta.current_sha256 = _sha256_file(target)
+    except Exception:
+        LOG.exception("[quality-upgrade] could not fingerprint upgraded file job=%s path=%r", job.id, str(target))
+    meta.updated_at = datetime.utcnow()
     job.status = "upgraded"
     job.completion_source = "slskd"
     job.upgraded_at = datetime.utcnow()
@@ -1011,7 +1181,8 @@ async def _finish_downloaded_upgrade(
     body = (
         f"{job.artist} — {job.title}\n"
         f"{job.original_codec.upper() or 'Original'} → "
-        f"{job.current_codec.upper() or 'Lossless'}"
+        f"{job.current_codec.upper() or 'Lossless'}\n"
+        "Source: slskd"
     )
     db.add(AdminNotification(
         kind="quality_upgrade",
@@ -1036,6 +1207,11 @@ async def _finish_downloaded_upgrade(
             "match_confidence": job.best_match_score,
         }),
     ))
+    _record_event(db, job.id, "upgraded", "Track quality upgraded from Helix-owned source", {
+        "source": "slskd",
+        "path": str(target),
+        "match_confidence": float(job.best_match_score or 0.0),
+    })
     _commit_quality_change(db)
 
     # slskd's API transfer history is intentionally untouched; this removes only
@@ -1086,6 +1262,46 @@ async def _process_job(job_id: str) -> None:
         if not job:
             return
         settings = get_settings(db)
+
+        if job.status == "reverting":
+            # Recovery for a Helix restart during a revert. The atomic file swap
+            # happens before the DB commit, so filesystem state tells us which
+            # side of that boundary we were on.
+            original = Path(job.original_path or "")
+            upgraded = Path(job.library_path or "")
+            if original.exists() and (not upgraded.exists() or original == upgraded):
+                info = _audio_info(original)
+                size, mtime = _fingerprint_file(original)
+                meta = _job_metadata(db, job.id)
+                job.library_path = str(original)
+                job.original_size = size
+                job.original_mtime_ns = mtime
+                job.current_codec = str(info.get("codec") or "")
+                job.current_bitrate = int(info.get("bitrate") or 0)
+                job.current_sample_rate = int(info.get("sample_rate") or 0)
+                job.current_bit_depth = int(info.get("bit_depth") or 0)
+                job.status = "reverted"
+                job.reverted_at = job.reverted_at or datetime.utcnow()
+                job.completion_source = "user_revert"
+                job.next_search_at = None
+                job.last_error = ""
+                try:
+                    digest = _sha256_file(original)
+                    meta.original_sha256 = digest
+                    meta.current_sha256 = digest
+                except Exception:
+                    pass
+                meta.updated_at = datetime.utcnow()
+                _record_event(db, job.id, "revert_recovered", "Recovered a completed revert after Helix restart")
+                _commit_quality_change(db)
+            else:
+                job.status = "upgraded"
+                job.last_error = "Revert was interrupted by a Helix restart before replacement; retry the revert."
+                job.updated_at = datetime.utcnow()
+                _record_event(db, job.id, "revert_interrupted", job.last_error)
+                _commit_quality_change(db)
+            return
+
         if not settings.get("slskd_enabled"):
             return
 
@@ -1162,6 +1378,11 @@ async def _process_job(job_id: str) -> None:
             return out
 
         title_variants = _library_title_variants(job.title)
+
+        # Library resolution can spend many seconds in Subsonic. Detach the
+        # already-loaded job and release SQLite before any network waits.
+        db.close()
+        db = None
 
         if not song:
             for title_variant in title_variants:
@@ -1289,6 +1510,13 @@ async def _process_job(job_id: str) -> None:
                 except Exception:
                     song = {"path": str(direct_library_path)}
 
+        # Re-open only when state must be persisted. All Subsonic waits above
+        # ran without holding a pooled DB connection.
+        db = SessionLocal()
+        job = db.get(QualityUpgradeJob, job_id)
+        if job is None:
+            return
+
         if not song:
             # Do not leave a permanently-unresolvable job looking like it is
             # simply "waiting" forever. Retry automatically for a while, then
@@ -1376,7 +1604,23 @@ async def _process_job(job_id: str) -> None:
             job.current_bitrate = job.original_bitrate
             job.current_sample_rate = job.original_sample_rate
             job.current_bit_depth = job.original_bit_depth
+            meta = _job_metadata(db, job.id)
+            meta.provenance = meta.provenance or "helix_imported"
+            try:
+                meta.original_sha256 = _sha256_file(current_path)
+                meta.current_sha256 = meta.original_sha256
+            except Exception:
+                LOG.exception("[quality-upgrade] could not fingerprint original job=%s path=%r", job.id, str(current_path))
+            meta.updated_at = datetime.utcnow()
+            _record_event(db, job.id, "library_copy_resolved", "Helix-owned library copy resolved", {"path": str(current_path), "codec": job.original_codec})
+            if str(job.original_codec or "").lower() in {"flac", "alac", "wav", "aiff", "aif"} and not bool(settings.get("quality_upgrade_replace_lossless", False)):
+                job.status = "satisfied"
+                job.completion_source = "helix_library"
+                job.next_search_at = None
+                _record_event(db, job.id, "satisfied", "Existing Helix-owned file already satisfies the configured lossless policy")
             _commit_quality_change(db)
+            if job.status == "satisfied":
+                return
         else:
             # If the user replaced/touched Helix's original file, respect it.
             original = Path(job.original_path)
@@ -1413,13 +1657,30 @@ async def _process_job(job_id: str) -> None:
                 # A size change remains a conservative stop signal until Helix
                 # gains an audio-content fingerprint that can distinguish
                 # metadata-only edits from a replaced recording.
-                if size != job.original_size:
+                meta = _job_metadata(db, job.id)
+                fingerprint_changed = False
+                if size != job.original_size or mtime != job.original_mtime_ns:
+                    if meta.original_sha256:
+                        try:
+                            fingerprint_changed = _sha256_file(original) != meta.original_sha256
+                        except Exception:
+                            # If the strong check itself fails, remain conservative.
+                            fingerprint_changed = size != job.original_size
+                    else:
+                        fingerprint_changed = size != job.original_size
+
+                if fingerprint_changed:
                     job.status = "externally_modified"
                     job.updated_at = datetime.utcnow()
+                    _record_event(db, job.id, "ownership_changed", "Library copy changed outside Helix")
                     _commit_quality_change(db)
                     return
 
-                if mtime != job.original_mtime_ns:
+                if size != job.original_size or mtime != job.original_mtime_ns:
+                    # Metadata-only edits / timestamp changes can alter file size
+                    # without changing the recording. Refresh the bookkeeping
+                    # when the strong audio file hash still matches.
+                    job.original_size = size
                     job.original_mtime_ns = mtime
                     job.updated_at = datetime.utcnow()
                     _commit_quality_change(db)
@@ -1643,9 +1904,19 @@ async def _process_job(job_id: str) -> None:
             duration_ms=search_duration_ms,
         )
 
-        if job.status in {"searching", "waiting_search"}:
+        meta = _job_metadata(db, job.id)
+        resume_search_id = ""
+        resume_search_query = ""
+        if job.status in {"searching", "waiting_search"} and meta.slskd_search_id:
+            resume_search_id = str(meta.slskd_search_id or "").strip()
+            resume_search_query = str(meta.slskd_search_query or "").strip()
             LOG.info(
-                "[quality-upgrade] restarting/interleaving Soulseek search job=%s status=%s",
+                "[quality-upgrade] resuming persisted Soulseek search job=%s search_id=%s query=%r",
+                job.id, resume_search_id, resume_search_query,
+            )
+        elif job.status in {"searching", "waiting_search"}:
+            LOG.info(
+                "[quality-upgrade] restarting Soulseek search job=%s status=%s (no persisted search id)",
                 job.id,
                 job.status,
             )
@@ -1700,11 +1971,36 @@ async def _process_job(job_id: str) -> None:
             # The start gate is already released here, so another quality job
             # can begin its own search after the short interval while this one
             # continues waiting for Soulseek responses.
-            batch = await slskd.search(
-                query,
-                timeout_s=search_timeout,
-                max_results=query_max_results,
-            )
+            active_resume_id = resume_search_id if resume_search_id and query.casefold() == resume_search_query.casefold() else ""
+            try:
+                batch = await slskd.search(
+                    query,
+                    timeout_s=search_timeout,
+                    max_results=query_max_results,
+                    search_id=active_resume_id,
+                    on_search_started=lambda sid, q=query: _persist_active_search(job_id, sid, q),
+                )
+            except FileNotFoundError:
+                # slskd may have pruned the persisted search while Helix was
+                # offline. Start the same query again instead of skipping it.
+                LOG.info(
+                    "[quality-upgrade] persisted slskd search disappeared job=%s search_id=%s; starting replacement search query=%r",
+                    job_id, active_resume_id, query,
+                )
+                batch = await slskd.search(
+                    query,
+                    timeout_s=search_timeout,
+                    max_results=query_max_results,
+                    on_search_started=lambda sid, q=query: _persist_active_search(job_id, sid, q),
+                )
+            resume_search_id = ""
+            resume_search_query = ""
+            clear_db = SessionLocal()
+            try:
+                _clear_active_search(clear_db, job_id)
+                clear_db.commit()
+            finally:
+                clear_db.close()
             for candidate in batch:
                 key = (
                     str(candidate.username or ""),
@@ -1766,7 +2062,7 @@ async def _process_job(job_id: str) -> None:
                 candidate.username,
             )
 
-        valid = [(s, c) for s, c in scored if s >= min_score and _is_lossless(c)]
+        valid = [(s, c) for s, c in scored if s >= min_score and _candidate_meets_policy(c, settings, job)]
         LOG.info("[quality-upgrade] job=%s acceptable_candidates=%s", job.id, len(valid))
         if not valid:
             _schedule_no_match(job)
@@ -1787,6 +2083,15 @@ async def _process_job(job_id: str) -> None:
         )
 
         candidates_to_try = valid[:5]
+        meta = _job_metadata(db, job.id)
+        meta.candidate_pool_json = json.dumps([_candidate_to_dict(candidate, score) for score, candidate in candidates_to_try])
+        meta.candidate_index = 0
+        meta.updated_at = datetime.utcnow()
+        _record_event(db, job.id, "candidates_ranked", f"{len(candidates_to_try)} verified Soulseek candidates retained", {
+            "count": len(candidates_to_try),
+            "threshold": min_score,
+        })
+        _commit_quality_change(db)
         download_timeout_s = int(settings.get("slskd_download_timeout_s") or 900)
         failure_reasons: list[str] = []
         downloaded: Path | None = None
@@ -1800,6 +2105,15 @@ async def _process_job(job_id: str) -> None:
             job.slskd_size = candidate.size
             job.last_error = ""
             job.updated_at = datetime.utcnow()
+            meta = _job_metadata(db, job.id)
+            meta.candidate_index = candidate_index - 1
+            meta.updated_at = datetime.utcnow()
+            _record_event(db, job.id, "candidate_selected", f"Trying Soulseek peer {candidate.username}", {
+                "candidate_index": candidate_index - 1,
+                "score": float(score),
+                "username": candidate.username,
+                "filename": candidate.filename,
+            })
             _commit_quality_change(db)
             db.close()
             db = None
@@ -1862,6 +2176,12 @@ async def _process_job(job_id: str) -> None:
                     break
 
                 failure_reasons.append(f"{candidate.username}: {reason}")
+                event_db = SessionLocal()
+                try:
+                    _record_event(event_db, job_id, "candidate_failed", f"Soulseek peer {candidate.username} failed: {reason}", {"username": candidate.username, "reason": reason})
+                    event_db.commit()
+                finally:
+                    event_db.close()
                 LOG.warning(
                     "[quality-upgrade] job=%s candidate %s/%s stalled/failed: %s; trying next acceptable peer",
                     job_id,
@@ -1926,29 +2246,211 @@ async def _process_job(job_id: str) -> None:
             db.close()
 
 
+async def revert_quality_upgrade_job(job_id: str, user_id: str) -> None:
+    """Restore an upgraded track to a fresh Helix/YTMusic Opus copy safely.
+
+    The upgraded file remains untouched while the fresh source downloads and is
+    remuxed/tagged. Only after the replacement is fully validated do we atomically
+    place the .opus file, remove the upgraded sibling, and request one Navidrome
+    scan. Automatic upgrades remain suppressed afterward.
+    """
+    db = SessionLocal()
+    try:
+        job = db.get(QualityUpgradeJob, job_id)
+        if job is None:
+            raise LookupError("Upgrade job not found")
+        if job.status != "upgraded":
+            raise RuntimeError("Only upgraded tracks can be reverted")
+        current_path = Path(job.library_path or "")
+        original_path = Path(job.original_path or "")
+        if not current_path.exists():
+            raise RuntimeError("Current upgraded library file is missing")
+        if not original_path.name:
+            raise RuntimeError("Original Helix library path is unavailable")
+
+        meta = _job_metadata(db, job.id)
+        expected_current_hash = str(meta.current_sha256 or "")
+        snapshot = {
+            "yt_video_id": job.yt_video_id,
+            "yt_browse_id": job.yt_browse_id,
+            "title": job.title,
+            "artist": job.artist,
+            "album": job.album,
+            "album_artist": job.album_artist,
+            "art_url": job.art_url,
+            "track_no": job.track_no,
+            "duration_ms": job.duration_ms,
+            "current_path": str(current_path),
+            "original_path": str(original_path),
+        }
+        job.status = "reverting"
+        job.last_error = ""
+        job.updated_at = datetime.utcnow()
+        _record_event(db, job.id, "revert_started", "Downloading a fresh YTMusic copy for revert")
+        _commit_quality_change(db)
+    finally:
+        db.close()
+
+    download_job = DownloadJob(
+        video_id=str(snapshot["yt_video_id"]),
+        url=f"https://music.youtube.com/watch?v={snapshot['yt_video_id']}",
+        title=str(snapshot["title"]),
+        artist=str(snapshot["artist"]),
+        album=str(snapshot["album"]),
+        album_artist=str(snapshot["album_artist"]),
+        browse_id=str(snapshot["yt_browse_id"]),
+        art_url=str(snapshot["art_url"]),
+        track_no=int(snapshot["track_no"] or 0),
+        duration_ms=int(snapshot["duration_ms"] or 0),
+        persist_to_subsonic=False,
+        user_id=str(user_id),
+        priority=5,
+    )
+
+    fresh_source: Path | None = None
+    temp_target: Path | None = None
+    replaced = False
+    try:
+        fresh_source = Path(await DOWNLOAD_MANAGER.ensure_downloaded(download_job))
+        if not fresh_source.exists():
+            raise RuntimeError("Fresh YTMusic revert download did not materialize")
+
+        current_path = Path(str(snapshot["current_path"]))
+        original_path = Path(str(snapshot["original_path"]))
+        original_path.parent.mkdir(parents=True, exist_ok=True)
+        temp_target = original_path.with_name(original_path.stem + ".helix-revert.opus")
+        temp_target.unlink(missing_ok=True)
+
+        # YTMusic normally yields Opus-in-WebM. First try a lossless stream-copy
+        # remux into Ogg Opus; fall back to a normal Opus encode if necessary.
+        copy_cmd = ["ffmpeg", "-y", "-i", str(fresh_source), "-vn", "-c:a", "copy", str(temp_target)]
+        copied = subprocess.run(copy_cmd, capture_output=True, text=True)
+        if copied.returncode != 0 or not temp_target.exists():
+            encode_cmd = ["ffmpeg", "-y", "-i", str(fresh_source), "-vn", "-c:a", "libopus", "-b:a", "160k", str(temp_target)]
+            encoded = subprocess.run(encode_cmd, capture_output=True, text=True)
+            if encoded.returncode != 0 or not temp_target.exists():
+                raise RuntimeError("Could not prepare fresh Opus file for revert")
+
+        tag_source = current_path if current_path.exists() else fresh_source
+        tag_job = SimpleNamespace(
+            title=snapshot["title"], artist=snapshot["artist"], album=snapshot["album"],
+            album_artist=snapshot["album_artist"], track_no=snapshot["track_no"],
+        )
+        _copy_original_tags(tag_source, temp_target, tag_job)
+        new_info = _audio_info(temp_target)
+        if str(new_info.get("codec") or "").lower() not in {"opus", "oggopus"}:
+            raise RuntimeError("Fresh revert copy is not Opus")
+
+        # Re-check the upgraded file before replacing it. This closes the race
+        # where a user edits the file while the fresh source is downloading.
+        if not current_path.exists():
+            raise RuntimeError("Current upgraded file changed while revert was downloading")
+        if expected_current_hash:
+            current_hash = _sha256_file(current_path)
+            if current_hash != expected_current_hash:
+                raise RuntimeError("Current upgraded file changed outside Helix while revert was downloading")
+
+        os.replace(temp_target, original_path)
+        replaced = True
+        if current_path != original_path:
+            current_path.unlink(missing_ok=True)
+
+        final_size, final_mtime = _fingerprint_file(original_path)
+        final_hash = _sha256_file(original_path)
+
+        db = SessionLocal()
+        try:
+            job = db.get(QualityUpgradeJob, job_id)
+            if job is None:
+                raise LookupError("Upgrade job disappeared during revert")
+            meta = _job_metadata(db, job.id)
+            job.library_path = str(original_path)
+            job.original_path = str(original_path)
+            job.original_size = final_size
+            job.original_mtime_ns = final_mtime
+            job.current_codec = str(new_info.get("codec") or "opus")
+            job.current_bitrate = int(new_info.get("bitrate") or 0)
+            job.current_sample_rate = int(new_info.get("sample_rate") or 0)
+            job.current_bit_depth = int(new_info.get("bit_depth") or 0)
+            job.status = "reverted"
+            job.reverted_at = datetime.utcnow()
+            job.completion_source = "user_revert"
+            job.next_search_at = None
+            job.last_error = ""
+            job.updated_at = datetime.utcnow()
+            meta.original_sha256 = final_hash
+            meta.current_sha256 = final_hash
+            meta.slskd_search_id = ""
+            meta.slskd_search_query = ""
+            meta.candidate_pool_json = "[]"
+            meta.candidate_index = 0
+            meta.updated_at = datetime.utcnow()
+            _record_event(db, job.id, "reverted", "Restored a fresh YTMusic Opus copy; automatic upgrades suppressed", {"path": str(original_path)})
+            _commit_quality_change(db)
+            settings = get_settings(db)
+        finally:
+            db.close()
+
+        sub = _subsonic(settings)
+        if sub is not None:
+            try:
+                await sub.start_scan()
+                try:
+                    await sub.wait_for_scan_complete(timeout_s=120, poll_s=1.0)
+                except Exception:
+                    LOG.exception("[quality-upgrade] Navidrome scan wait failed after revert job=%s", job_id)
+            finally:
+                await sub.close()
+    except Exception as exc:
+        LOG.exception("Quality upgrade revert failed job_id=%s", job_id)
+        if temp_target is not None and temp_target.exists() and not replaced:
+            temp_target.unlink(missing_ok=True)
+        db = SessionLocal()
+        try:
+            job = db.get(QualityUpgradeJob, job_id)
+            if job is not None and job.status == "reverting":
+                # The upgraded copy is still intact unless replacement already
+                # completed. If it did complete, preserve the reverted state.
+                if replaced:
+                    job.status = "reverted"
+                    job.reverted_at = datetime.utcnow()
+                    job.completion_source = "user_revert"
+                else:
+                    job.status = "upgraded"
+                job.last_error = f"Revert failed: {str(exc)[:1500]}"
+                job.updated_at = datetime.utcnow()
+                _record_event(db, job.id, "revert_failed", job.last_error)
+                _commit_quality_change(db)
+        finally:
+            db.close()
+        raise
+
+
 async def quality_upgrade_worker_loop() -> None:
     while True:
         try:
             db = SessionLocal()
             try:
                 settings = get_settings(db)
-                if not settings.get("slskd_enabled"):
-                    await asyncio.sleep(10)
-                    continue
+                enabled = bool(settings.get("slskd_enabled"))
                 now = datetime.utcnow()
-                jobs = db.execute(
+                jobs = [] if not enabled else db.execute(
                     select(QualityUpgradeJob)
                     .where(QualityUpgradeJob.status.in_([
                         "pending", "no_match", "failed",
-                        "searching", "waiting_search", "waiting_peer", "downloading", "validating", "tagging", "replacing",
+                        "searching", "waiting_search", "waiting_peer", "downloading", "validating", "tagging", "replacing", "reverting",
                     ]))
                     .where((QualityUpgradeJob.next_search_at.is_(None)) | (QualityUpgradeJob.next_search_at <= now))
                     .order_by(QualityUpgradeJob.created_at.asc())
                     .limit(max(1, int(settings.get("slskd_concurrent_searches") or 2)))
-                ).scalars().all()
+                ).scalars().all() if enabled else []
                 ids = [j.id for j in jobs]
             finally:
                 db.close()
+
+            if not enabled:
+                await asyncio.sleep(10)
+                continue
 
             if ids:
                 await asyncio.gather(*(_process_job(job_id) for job_id in ids))

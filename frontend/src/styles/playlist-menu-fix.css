@@ -1,0 +1,41 @@
+/* Playlist track overflow menu polish.
+   Keep disabled/queued actions visually intentional rather than letting
+   browser disabled-button defaults wash them out. */
+
+.playlist-track-menu-popover {
+  width: 218px;
+}
+
+.playlist-track-menu-popover button {
+  min-height: 40px;
+  padding: 0.52rem 0.7rem;
+}
+
+.playlist-track-menu-popover button:disabled {
+  opacity: 1;
+  cursor: default;
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
+  background: transparent;
+  box-shadow: none;
+}
+
+.playlist-track-menu-popover button:disabled:hover {
+  background: transparent;
+  color: color-mix(in srgb, var(--muted) 88%, transparent);
+}
+
+.playlist-track-menu-popover button:disabled .playlist-track-menu-icon {
+  color: color-mix(in srgb, var(--muted) 72%, transparent);
+}
+
+.playlist-track-menu-icon-subsonic {
+  flex-basis: 1.1rem;
+  width: 1.1rem;
+  font-size: 0.9rem;
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.playlist-track-menu-divider {
+  margin: 0.35rem 0.2rem;
+}

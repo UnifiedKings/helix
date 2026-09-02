@@ -5,7 +5,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 from pathlib import PurePath
-from typing import Any
+from typing import Any, Callable
 
 import httpx
 
@@ -194,9 +194,20 @@ class SlskdClient:
                 last = str(exc)
         return {"ok": False, "error": locals().get("last", "Could not connect to slskd")}
 
-    async def search(self, query: str, *, timeout_s: float = 35.0, max_results: int = 200) -> list[SlskdCandidate]:
-        # Generate the search ID client-side and send it explicitly.
-        search_id = str(uuid.uuid4())
+    async def search(
+        self,
+        query: str,
+        *,
+        timeout_s: float = 35.0,
+        max_results: int = 200,
+        search_id: str = "",
+        on_search_started: Callable[[str], None] | None = None,
+    ) -> list[SlskdCandidate]:
+        # Helix persists the active slskd search id. On restart, passing the
+        # existing id reconnects to the same slskd search instead of creating a
+        # duplicate Soulseek search.
+        resume_existing = bool((search_id or "").strip())
+        search_id = (search_id or "").strip() or str(uuid.uuid4())
 
         # This is the lifetime slskd itself should use for the Soulseek search.
         # Keep it within a sane range, but do not use it as Helix's "no match"
@@ -211,43 +222,55 @@ class SlskdClient:
         }
 
         global _LAST_SEARCH_STARTED_AT
-        async with _search_start_lock():
-            loop = asyncio.get_running_loop()
-            since_last = loop.time() - _LAST_SEARCH_STARTED_AT
-            if since_last < _SEARCH_MIN_INTERVAL_S:
-                await asyncio.sleep(_SEARCH_MIN_INTERVAL_S - since_last)
+        loop = asyncio.get_running_loop()
+        if resume_existing:
+            probe = await self._http.get(
+                f"/api/v0/searches/{search_id}",
+                params={"includeResponses": "false"},
+            )
+            if probe.status_code == 404:
+                raise FileNotFoundError(f"slskd search {search_id} no longer exists")
+            probe.raise_for_status()
+            LOG.info("[slskd] resuming search id=%s query=%r", search_id, query)
+        else:
+            async with _search_start_lock():
+                since_last = loop.time() - _LAST_SEARCH_STARTED_AT
+                if since_last < _SEARCH_MIN_INTERVAL_S:
+                    await asyncio.sleep(_SEARCH_MIN_INTERVAL_S - since_last)
 
-            # A 429 is infrastructure backpressure, not a failed track match.
-            # Honor Retry-After when present and otherwise back off briefly.
-            r = None
-            for retry_index in range(4):
-                r = await self._http.post("/api/v0/searches", json=create_payload)
-                if r.status_code != 429:
-                    break
-                retry_after_raw = str(r.headers.get("Retry-After") or "").strip()
-                try:
-                    retry_after = float(retry_after_raw)
-                except ValueError:
-                    retry_after = float(2 ** (retry_index + 1))
-                retry_after = max(1.0, min(30.0, retry_after))
-                LOG.warning(
-                    "[slskd] search creation rate-limited query=%r retry_in=%.1fs attempt=%s/4",
-                    query,
-                    retry_after,
-                    retry_index + 1,
-                )
-                await asyncio.sleep(retry_after)
+                # A 429 is infrastructure backpressure, not a failed track match.
+                # Honor Retry-After when present and otherwise back off briefly.
+                r = None
+                for retry_index in range(4):
+                    r = await self._http.post("/api/v0/searches", json=create_payload)
+                    if r.status_code != 429:
+                        break
+                    retry_after_raw = str(r.headers.get("Retry-After") or "").strip()
+                    try:
+                        retry_after = float(retry_after_raw)
+                    except ValueError:
+                        retry_after = float(2 ** (retry_index + 1))
+                    retry_after = max(1.0, min(30.0, retry_after))
+                    LOG.warning(
+                        "[slskd] search creation rate-limited query=%r retry_in=%.1fs attempt=%s/4",
+                        query,
+                        retry_after,
+                        retry_index + 1,
+                    )
+                    await asyncio.sleep(retry_after)
 
-            assert r is not None
-            r.raise_for_status()
-            _LAST_SEARCH_STARTED_AT = loop.time()
+                assert r is not None
+                r.raise_for_status()
+                _LAST_SEARCH_STARTED_AT = loop.time()
+            if on_search_started is not None:
+                on_search_started(search_id)
 
-        LOG.info(
-            "[slskd] search started id=%s query=%r timeout_ms=%s",
-            search_id,
-            query,
-            search_timeout_ms,
-        )
+            LOG.info(
+                "[slskd] search started id=%s query=%r timeout_ms=%s",
+                search_id,
+                query,
+                search_timeout_ms,
+            )
 
         loop = asyncio.get_running_loop()
 
