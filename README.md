@@ -16,6 +16,9 @@ Helix is still early software. It is usable, but expect rough edges, breaking ch
 - Play tracks, albums, playlists, and generated stations
 - Create stations from artists, artist collections, and tags
 - Import playlists from Helix, YouTube Music, Spotify, and Pandora with a review step before anything is added
+- Add individual tracks or entire Helix playlists to Subsonic, skipping tracks that are already in the library
+- Optionally use slskd to asynchronously replace Helix-added tracks with verified higher-quality copies
+- Review Quality Upgrade status, match confidence, audit details, and compact revert/delete/info actions from the web UI
 - Run shared listening lobbies with guest queue and playback controls
 - Join lobbies with simple 5-letter codes and optional password protection
 - Mirror a Helix lobby into Discord voice with the optional [HelixBot](https://github.com/UnifiedKings/helixbot) companion project
@@ -124,6 +127,8 @@ The review screen lets you choose exactly which tracks will be imported. You can
 
 Playlist importing does **not** automatically download every imported song into Subsonic. Imported playlist entries can play from their resolved source, and individual tracks can still be sent to **Add to Subsonic** separately when fulfillment is enabled.
 
+Helix playlists can also be sent to Subsonic in bulk. Helix checks the playlist tracks against the configured Subsonic library first and skips tracks that are already available there.
+
 ## Important behavior
 
 Helix is designed to be conservative with fulfillment.
@@ -132,6 +137,7 @@ Helix is designed to be conservative with fulfillment.
 - Metadata is repaired before finalization.
 - Library imports are controlled by your Beets configuration.
 - Only what is requested is added to the Subsonic library.
+- Quality Upgrades currently manage only tracks originally imported by Helix.
 
 ## Quick start
 
@@ -160,6 +166,10 @@ services:
       # Helix fulfillment/import features.
       - /path/to/music:/data/music
 
+      # Optional: shared slskd download staging for Quality Upgrades.
+      # Helix and slskd must be able to see the same physical directory.
+      - /path/to/slskd/downloads:/slskd-downloads
+
       # Beets config used by Helix fulfillment/import.
       - ./beets_config:/data/helix/beets
 
@@ -176,6 +186,13 @@ services:
       SUBSONIC_BASE_URL: ""
       SUBSONIC_USERNAME: ""
       SUBSONIC_PASSWORD: ""
+
+      # Optional slskd Quality Upgrades.
+      # These can also be managed from Admin Settings where not locked by env.
+      SLSKD_ENABLED: "false"
+      SLSKD_URL: "http://slskd:5030"
+      SLSKD_API_KEY: ""
+      SLSKD_DOWNLOADS_PATH: "/slskd-downloads"
 
       # Keep yt-dlp current independently of the Helix image.
       # Stable is the default; use "nightly" only if you need fixes not yet
@@ -255,9 +272,83 @@ If Subsonic is configured, Helix can:
 - stream library tracks
 - detect whether a track already exists
 - add fulfilled tracks back into the library
+- add missing tracks from a Helix playlist while skipping tracks already present
 - support library-only station behavior
+- enroll eligible Helix-added tracks for optional Quality Upgrades
 
 If Subsonic is not configured, Helix should disable library-dependent features instead of failing outright.
+
+## Quality Upgrades with slskd
+
+Helix can optionally use [slskd](https://github.com/slskd/slskd) to improve the audio quality of tracks that Helix has already added to your Subsonic library.
+
+slskd is **not** used as a playback source and does not block the normal Add-to-Subsonic flow. Helix first fulfills the requested track through its normal YouTube Music pipeline so the track is available quickly. A background Quality Upgrade job can then search Soulseek through slskd for a verified higher-quality copy.
+
+The upgrade flow is intentionally conservative:
+
+1. Helix identifies the exact track using the metadata and source information from the original Helix import.
+2. Soulseek candidates are checked for track identity before quality is considered.
+3. A suitable candidate is downloaded by slskd into the shared staging directory.
+4. Helix validates the completed file, applies canonical metadata, and verifies that the managed library file has not been unexpectedly modified.
+5. The Helix-owned copy is safely replaced and Subsonic/Navidrome is scanned after the final filesystem state is ready.
+
+Helix prefers a false negative over replacing a track with the wrong recording.
+
+### Current ownership boundary
+
+Automatic Quality Upgrades currently apply only to **tracks originally added by Helix**. Helix does not automatically scan and adopt arbitrary files that were already in your music library.
+
+This is deliberate: Helix has much stronger identity and provenance information for its own imports. The internal provenance model leaves room for a future opt-in workflow for adopting existing library tracks, but that workflow is not enabled today.
+
+### Quality Upgrade controls
+
+The **Quality Upgrades** page shows enrolled tracks and their current state, including pending searches, active transfers, successful upgrades, failures, manually modified files, reverted tracks, and tracks that already satisfy the configured quality policy.
+
+Completed rows use compact actions:
+
+- **Double back arrow** — revert the upgrade to a fresh copy from Helix's normal fulfillment source
+- **Trash** — delete the Quality Upgrade tracking record
+- **Info** — open the job's upgrade/audit details
+
+The details view can show the selected Soulseek candidate, match confidence, transfer information, file changes, and recent Quality Upgrade events.
+
+Administrators can configure slskd under **Admin Settings → Quality Upgrades**, including connection settings, concurrency, match confidence, and quality-policy options. The settings page also includes an slskd connection-status indicator.
+
+### slskd configuration
+
+At minimum, Helix needs:
+
+```env
+SLSKD_ENABLED=true
+SLSKD_URL=http://slskd:5030
+SLSKD_API_KEY=your-slskd-api-key
+SLSKD_DOWNLOADS_PATH=/slskd-downloads
+```
+
+Helix and slskd must share the same physical downloads directory. The path can be different inside each container as long as both mounts point to the same host directory.
+
+For example:
+
+```yaml
+services:
+  helix:
+    volumes:
+      - /srv/slskd/downloads:/slskd-downloads
+    environment:
+      SLSKD_DOWNLOADS_PATH: /slskd-downloads
+
+  slskd:
+    volumes:
+      - /srv/slskd/downloads:/app/downloads
+```
+
+Environment variables are authoritative for values supplied through the environment. When a slskd setting is locked by an environment variable, the Admin Settings page shows that it is configured externally.
+
+### Reverts and external changes
+
+Reverting an upgraded track creates a fresh copy through Helix's normal fulfillment pipeline, validates and retags it, then replaces the managed upgraded copy and requests a library scan.
+
+Helix also tracks ownership/provenance and file fingerprints so it can avoid silently overwriting a Helix-managed file that has been modified outside the Quality Upgrade process.
 
 ## Stations
 
@@ -328,6 +419,8 @@ Compiled APK releases are available from the [Helix for Android Releases](https:
 Before exposing Helix outside your LAN, put it behind HTTPS and review your deployment.
 
 Custom station providers can execute Python code inside the Helix container. Keep them disabled unless you need them.
+
+If slskd is enabled, keep its API key secret and avoid exposing the slskd API directly to the public internet. Helix only needs network access to the slskd API and shared access to the configured download staging directory.
 
 Recommended public defaults:
 
