@@ -1,0 +1,2103 @@
+
+/* Search results clarity pass.
+   Scoped entirely to the search page so queue, playbar, nav, album pages, etc.
+   remain untouched. */
+
+.search-redesign {
+  gap: 1.35rem;
+}
+
+/* Keep the top result visually prominent, but make it flatter and more
+   structured like the approved concept. */
+.search-redesign .search-top-result {
+  margin-top: 0;
+}
+
+.search-redesign .top-result-card {
+  grid-template-columns: 138px minmax(0, 1fr);
+  min-height: 0;
+  padding: 1rem 1.1rem;
+  gap: 1.25rem;
+  border-radius: 20px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--accent-soft) 48%, transparent), transparent 36%),
+    var(--surface);
+  box-shadow: none;
+}
+
+.search-redesign .top-result-card .artwork-lg {
+  width: 138px;
+  height: 138px;
+  border-radius: 12px;
+}
+
+.search-redesign .top-result-copy {
+  align-self: center;
+}
+
+.search-redesign .top-result-copy h2 {
+  margin: 0.15rem 0 0.15rem;
+  font-size: clamp(1.7rem, 2vw, 2.15rem);
+}
+
+.search-redesign .result-kind {
+  margin-bottom: 0.25rem;
+  border-radius: 6px;
+  padding: 0.22rem 0.48rem;
+}
+
+.search-redesign .top-result-library-state {
+  margin: 0.55rem 0 0.65rem;
+}
+
+.search-redesign .top-result-actions {
+  gap: 0.55rem;
+}
+
+.search-redesign .top-result-actions button,
+.search-redesign .top-result-actions .button-link {
+  min-height: 42px;
+  border-radius: 8px;
+}
+
+/* Tabs: flatter, clearer, closer to a results navigation bar. */
+.search-redesign .search-result-nav {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.35rem;
+  padding: 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.search-redesign .search-result-nav button {
+  position: relative;
+  min-width: 0;
+  padding: 0.8rem 1rem 0.75rem;
+  border: 0;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--muted);
+  box-shadow: none;
+}
+
+.search-redesign .search-result-nav button:hover {
+  background: var(--surface-soft);
+  color: var(--text);
+}
+
+.search-redesign .search-result-nav button.active {
+  background: color-mix(in srgb, var(--accent-soft) 40%, transparent);
+  color: var(--accent-bright);
+}
+
+.search-redesign .search-result-nav button.active::after {
+  content: '';
+  position: absolute;
+  left: 0.8rem;
+  right: 0.8rem;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 999px;
+}
+
+.search-redesign .search-result-nav button span {
+  margin-left: 0.35rem;
+  color: var(--faint);
+}
+
+/* The key change: one song per row, not two cards. */
+.search-redesign .search-song-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+/* Fake column labels using the section heading row without changing TSX. */
+.search-redesign .search-songs-section .search-section-heading {
+  margin-bottom: 0;
+  padding: 0 0.9rem 0.55rem;
+}
+
+.search-redesign .search-songs-section .search-section-heading > span {
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.search-redesign .search-song-row {
+  display: grid;
+  grid-template-columns:
+    48px
+    minmax(250px, 2.25fr)
+    minmax(130px, 0.8fr)
+    72px
+    152px;
+  align-items: center;
+  gap: 1rem;
+  min-height: 66px;
+  padding: 0.55rem 0.9rem;
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 0;
+  background: transparent;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.search-redesign .search-song-row:last-child {
+  border-bottom: 0;
+}
+
+.search-redesign .search-song-row:hover {
+  border-color: var(--border-soft);
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--accent) 22%);
+}
+
+.search-redesign .search-song-row .artwork-sm {
+  width: 44px;
+  height: 44px;
+  border-radius: 7px;
+}
+
+.search-redesign .song-title-cell {
+  min-width: 0;
+}
+
+.search-redesign .song-title-cell strong {
+  font-size: 0.98rem;
+  line-height: 1.2;
+}
+
+.search-redesign .song-meta-line {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.35rem;
+  margin-top: 0.18rem;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.search-redesign .song-meta-line > a,
+.search-redesign .song-meta-album {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-redesign .search-song-row > .badge {
+  justify-self: start;
+  border-radius: 999px;
+  padding: 0.26rem 0.58rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.045em;
+}
+
+.search-redesign .song-duration {
+  justify-self: start;
+  min-width: 0;
+  text-align: left;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.search-redesign .search-row-actions {
+  justify-content: flex-end;
+  gap: 0.42rem;
+}
+
+.search-redesign .search-row-icon,
+.search-redesign .search-row-icon-spacer {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border-radius: 8px;
+}
+
+.search-redesign .search-row-icon {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: var(--control-bg);
+  border: 1px solid var(--border-soft);
+  color: var(--text);
+}
+
+.search-redesign .search-row-icon:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.search-redesign .search-library-icon {
+  font-size: 0.85rem;
+  font-weight: 850;
+}
+
+/* Album and artist tabs keep their current components; only remove some of the
+   oversized-card feel so the whole search page shares the same visual density. */
+.search-redesign .search-album-strip {
+  grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+  gap: 0.75rem;
+}
+
+.search-redesign .search-album-card {
+  border-radius: 12px;
+  padding: 0.65rem;
+  box-shadow: none;
+}
+
+.search-redesign .search-album-card .artwork-lg {
+  border-radius: 9px;
+}
+
+.search-redesign .artist-result-card {
+  border-radius: 12px;
+}
+
+/* Wide screens get the clean table feel. */
+/* Respond to the width actually available to the search results, not the
+   browser viewport. This matters when Helix's queue panel is open. */
+@container (min-width: 900px) {
+  .search-redesign .search-songs-section .search-section-heading {
+    display: grid;
+    grid-template-columns:
+      calc(48px + 1rem)
+      minmax(0, 1fr)
+      minmax(90px, 0.42fr)
+      64px
+      132px;
+    gap: 1rem;
+    align-items: center;
+  }
+
+  .search-redesign .search-songs-section .search-section-heading > span {
+    grid-column: 2;
+  }
+
+  .search-redesign .search-songs-section .search-section-heading::after {
+    content: 'SOURCE    TIME    ACTIONS';
+    grid-column: 3 / 6;
+    justify-self: stretch;
+    color: var(--muted);
+    font-size: 0.76rem;
+    letter-spacing: 0.055em;
+    word-spacing: 2rem;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .search-redesign .search-songs-section .search-section-heading small {
+    display: none;
+  }
+
+  .search-redesign .search-song-row {
+    grid-template-columns:
+      48px
+      minmax(0, 1fr)
+      minmax(90px, 0.42fr)
+      64px
+      132px;
+  }
+}
+
+@container (max-width: 899px) {
+  .search-redesign .search-songs-section .search-section-heading::after {
+    display: none;
+  }
+
+  .search-redesign .search-song-row {
+    grid-template-columns: 48px minmax(0, 1fr) auto auto auto;
+  }
+}
+
+@container (max-width: 650px) {
+}
+
+@media (max-width: 760px) {
+  .search-redesign .top-result-card {
+    grid-template-columns: 88px minmax(0, 1fr);
+  }
+
+  .search-redesign .top-result-card .artwork-lg {
+    width: 88px;
+    height: 88px;
+  }
+
+  .search-redesign .top-result-actions {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+  }
+
+  .search-redesign .search-song-row {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: 0.7rem;
+    padding-inline: 0.45rem;
+  }
+
+  .search-redesign .search-song-row > .badge,
+  .search-redesign .song-duration {
+    display: none;
+  }
+
+  .search-redesign .search-row-actions {
+    grid-column: 2 / -1;
+    justify-content: flex-end;
+  }
+}
+
+.search-redesign .search-song-grid,
+.search-redesign .search-song-row,
+.search-redesign .song-title-cell,
+.search-redesign .song-meta-line {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.search-redesign .search-song-row {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+
+/* Albums: use the same one-result-per-row visual language as songs. */
+.search-redesign #search-albums .search-album-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.search-redesign #search-albums .search-album-card {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) auto 104px;
+  align-items: center;
+  gap: 1rem;
+  min-height: 76px;
+  padding: 0.55rem 0.9rem;
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 0;
+  background: transparent;
+}
+
+.search-redesign #search-albums .search-album-card:last-child {
+  border-bottom: 0;
+}
+
+.search-redesign #search-albums .search-album-card:hover {
+  border-color: var(--border-soft);
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--accent) 22%);
+}
+
+.search-redesign #search-albums .search-album-card .artwork-lg {
+  width: 54px;
+  height: 54px;
+  border-radius: 7px;
+}
+
+.search-redesign #search-albums .album-card-body {
+  min-width: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0.15rem;
+}
+
+.search-redesign #search-albums .album-card-body strong {
+  font-size: 0.98rem;
+  line-height: 1.2;
+}
+
+.search-redesign #search-albums .album-card-body > span {
+  display: block;
+  min-height: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.88rem;
+}
+
+.search-redesign #search-albums .album-card-body .badge {
+  width: fit-content;
+  margin-top: 0.15rem;
+  border-radius: 999px;
+  padding: 0.24rem 0.55rem;
+  font-size: 0.71rem;
+}
+
+.search-redesign #search-albums .album-card-actions {
+  margin: 0;
+  justify-self: end;
+  gap: 0.42rem;
+}
+
+.search-redesign #search-albums .album-card-actions--compact .primary,
+.search-redesign #search-albums .album-more-button {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  border-radius: 8px;
+}
+
+/* Artists: same flat rows, with circular art and a clean metadata column. */
+.search-redesign #search-artists .artist-result-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.search-redesign #search-artists .artist-result-card {
+  display: grid;
+  grid-template-columns: 58px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 1rem;
+  min-height: 76px;
+  padding: 0.55rem 0.9rem;
+  border: 0;
+  border-bottom: 1px solid var(--border-soft);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text);
+}
+
+.search-redesign #search-artists .artist-result-card:last-child {
+  border-bottom: 0;
+}
+
+.search-redesign #search-artists .artist-result-card:hover {
+  background: color-mix(in srgb, var(--surface-raised) 78%, var(--accent) 22%);
+}
+
+.search-redesign #search-artists .artist-result-card::after {
+  content: '›';
+  justify-self: end;
+  color: var(--faint);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.search-redesign #search-artists .artist-result-card .artwork-md {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+}
+
+.search-redesign #search-artists .artist-result-card > div {
+  min-width: 0;
+}
+
+.search-redesign #search-artists .artist-result-card strong {
+  display: block;
+  font-size: 0.98rem;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-redesign #search-artists .artist-result-card span {
+  display: block;
+  margin-top: 0.18rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Match the song section heading density for all result tabs. */
+.search-redesign #search-albums .search-section-heading,
+.search-redesign #search-artists .search-section-heading {
+  margin-bottom: 0;
+  padding: 0 0.9rem 0.55rem;
+}
+
+.search-redesign #search-albums .search-section-heading > span,
+.search-redesign #search-artists .search-section-heading > span {
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Keep everything shrinkable when the queue panel reduces content width. */
+.search-redesign #search-albums .search-album-strip,
+.search-redesign #search-albums .search-album-card,
+.search-redesign #search-artists .artist-result-grid,
+.search-redesign #search-artists .artist-result-card {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 680px) {
+  .search-redesign #search-albums .search-album-card {
+    grid-template-columns: 50px minmax(0, 1fr) auto;
+    gap: 0.7rem;
+    padding-inline: 0.45rem;
+  }
+
+  .search-redesign #search-albums .search-album-card .artwork-lg {
+    width: 46px;
+    height: 46px;
+  }
+
+  .search-redesign #search-albums .album-card-actions {
+    grid-column: 2 / -1;
+  }
+
+  .search-redesign #search-artists .artist-result-card {
+    grid-template-columns: 50px minmax(0, 1fr) 24px;
+    gap: 0.7rem;
+    padding-inline: 0.45rem;
+  }
+
+  .search-redesign #search-artists .artist-result-card .artwork-md {
+    width: 46px;
+    height: 46px;
+  }
+}
+
+
+/* Search row actions — mirror History's lightweight action treatment. */
+.search-redesign .search-row-actions {
+  display: grid;
+  grid-template-columns: 54px 104px minmax(112px, 1fr);
+  align-items: center;
+  justify-content: stretch;
+  column-gap: 0.7rem;
+  min-width: 0;
+}
+
+.search-redesign .search-row-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.28rem;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0.2rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 0;
+  font-weight: 550;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.search-redesign .search-row-icon::before,
+.search-redesign .search-row-icon::after {
+  display: inline;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.search-redesign .search-row-icon::before {
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  font-size: 1rem;
+}
+
+.search-redesign .search-row-icon::after {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 550;
+}
+
+.search-redesign .search-row-icon[data-tooltip="Play"]::before {
+  content: '▷';
+}
+
+.search-redesign .search-row-icon[data-tooltip="Play"]::after {
+  content: 'Play';
+}
+
+.search-redesign .search-row-icon[data-tooltip="Add to queue"]::before {
+  content: '+';
+  font-weight: 700;
+}
+
+.search-redesign .search-row-icon[data-tooltip="Add to queue"]::after {
+  content: 'Add to queue';
+}
+
+.search-redesign .search-row-icon[data-tooltip="Add to Subsonic"] {
+  color: color-mix(in srgb, var(--accent) 28%, var(--text));
+}
+
+.search-redesign .search-row-icon[data-tooltip="Add to Subsonic"]::before {
+  content: '↧';
+  color: var(--accent);
+}
+
+.search-redesign .search-row-icon[data-tooltip="Add to Subsonic"]::after {
+  content: 'Add to Subsonic';
+  color: color-mix(in srgb, var(--accent) 28%, var(--text));
+}
+
+.search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::before {
+  content: '✓';
+  color: var(--accent);
+}
+
+.search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::after {
+  content: 'Queued';
+}
+
+.search-redesign .search-row-icon:not(:disabled):hover,
+.search-redesign .search-row-icon:not(:disabled):focus-visible {
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.search-redesign .search-row-icon:not(:disabled):hover::before,
+.search-redesign .search-row-icon:not(:disabled):hover::after,
+.search-redesign .search-row-icon:not(:disabled):focus-visible::before,
+.search-redesign .search-row-icon:not(:disabled):focus-visible::after {
+  color: var(--text);
+}
+
+.search-redesign .search-row-icon:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.search-redesign .search-row-icon-spacer {
+  display: none;
+}
+
+/* Give the History-style action group the space it actually needs. */
+@container (min-width: 980px) {
+  .search-redesign .search-songs-section .search-section-heading {
+    grid-template-columns:
+      calc(48px + 1rem)
+      minmax(0, 1fr)
+      minmax(90px, 0.42fr)
+      64px
+      294px;
+  }
+
+  .search-redesign .search-song-row {
+    grid-template-columns:
+      48px
+      minmax(0, 1fr)
+      minmax(90px, 0.42fr)
+      64px
+      294px;
+  }
+}
+
+/* Like History, collapse to icons before allowing labels to wrap. */
+@container (max-width: 979px) {
+  .search-redesign .search-song-row {
+    grid-template-columns: 48px minmax(0, 1fr) auto 142px;
+  }
+
+  .search-redesign .search-row-actions {
+    grid-template-columns: repeat(3, 34px);
+    column-gap: 0.55rem;
+    justify-content: end;
+  }
+
+  .search-redesign .search-row-icon::after {
+    display: none;
+  }
+
+  .search-redesign .search-row-icon::before {
+    font-size: 1.08rem;
+  }
+}
+
+@container (max-width: 650px) {
+  .search-redesign .search-song-row {
+    grid-template-columns: 44px minmax(0, 1fr) auto;
+    gap: 0.7rem;
+    padding-inline: 0.45rem;
+  }
+
+  .search-redesign .search-song-row > .badge,
+  .search-redesign .song-duration {
+    display: none;
+  }
+
+  .search-redesign .search-row-actions {
+    grid-column: 2 / -1;
+    justify-content: start;
+    grid-template-columns: 54px 104px minmax(112px, 1fr);
+  }
+
+  .search-redesign .search-row-icon::after {
+    display: inline;
+  }
+}
+
+
+/* Search results page width fix: reserve breathing room on wide layouts so the
+   result rows do not run underneath Helix's right-side queue panel. This only
+   changes the results page itself, not the navbar, queue, or playbar. */
+@media (min-width: 1400px) {
+  .search-redesign {
+    max-width: calc(100% - 320px);
+    margin-right: auto;
+  }
+}
+
+/* Collapse the History-style action labels earlier so they fit before the queue
+   starts overlapping the results area. */
+@container (min-width: 1160px) {
+  .search-redesign .search-songs-section .search-section-heading {
+    grid-template-columns:
+      calc(48px + 1rem)
+      minmax(0, 1fr)
+      minmax(84px, 0.38fr)
+      60px
+      276px;
+  }
+
+  .search-redesign .search-song-row {
+    grid-template-columns:
+      48px
+      minmax(0, 1fr)
+      minmax(84px, 0.38fr)
+      60px
+      276px;
+  }
+}
+
+@container (max-width: 1159px) {
+  .search-redesign .search-songs-section .search-section-heading::after {
+    word-spacing: 1rem;
+  }
+
+  .search-redesign .search-song-row {
+    grid-template-columns: 48px minmax(0, 1fr) auto 132px;
+  }
+
+  .search-redesign .search-row-actions {
+    grid-template-columns: repeat(3, 30px);
+    column-gap: 0.5rem;
+    justify-content: end;
+  }
+
+  .search-redesign .search-row-icon::after {
+    display: none;
+  }
+
+  .search-redesign .search-row-icon::before {
+    font-size: 1.05rem;
+  }
+}
+
+
+/* Corrective pass: keep the overall search page full-width. Only the result
+   sections should reserve room so rows don't run under the queue panel. */
+@media (min-width: 1400px) {
+  .search-redesign {
+    max-width: none;
+    margin-right: 0;
+  }
+
+  .search-redesign .search-songs-section,
+  .search-redesign #search-albums,
+  .search-redesign #search-artists {
+    max-width: calc(100% - 320px);
+  }
+}
+
+/* Hide any built-in inner icon/text content so the History-style pseudo content
+   is the only thing shown consistently. */
+.search-redesign .search-row-icon > * {
+  display: none !important;
+}
+
+/* Slightly tighter action sizing so rows fit the reserved results box better. */
+@container (min-width: 1160px) {
+  .search-redesign .search-songs-section .search-section-heading {
+    grid-template-columns:
+      calc(48px + 1rem)
+      minmax(0, 1fr)
+      minmax(82px, 0.36fr)
+      56px
+      248px;
+  }
+
+  .search-redesign .search-song-row {
+    grid-template-columns:
+      48px
+      minmax(0, 1fr)
+      minmax(82px, 0.36fr)
+      56px
+      248px;
+  }
+
+  .search-redesign .search-row-actions {
+    grid-template-columns: 46px 96px minmax(96px, 1fr);
+    column-gap: 0.6rem;
+  }
+}
+
+/* Use a cleaner, clearer library-add icon. */
+.search-redesign .search-row-icon[data-tooltip="Add to Subsonic"]::before {
+  content: '↓';
+  color: var(--accent);
+  font-family: inherit;
+}
+
+.search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::before {
+  content: '↓';
+  color: var(--accent);
+  font-family: inherit;
+}
+
+.search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::after {
+  content: 'Queued';
+  color: color-mix(in srgb, var(--accent) 25%, var(--text));
+}
+
+
+/* FINAL WIDTH CORRECTION --------------------------------------------------
+   Helix's main grid already reserves space for the queue. Search results must
+   simply stay inside their own grid cell instead of subtracting a fake queue
+   width from the page. */
+@media (min-width: 1400px) {
+  .search-redesign,
+  .search-redesign .search-songs-section,
+  .search-redesign #search-albums,
+  .search-redesign #search-artists {
+    width: 100%;
+    max-width: 100%;
+    margin-right: 0;
+  }
+}
+
+.search-redesign,
+.search-redesign .search-section,
+.search-redesign .search-song-grid,
+.search-redesign .search-song-row {
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.search-redesign .search-songs-section {
+  container-type: inline-size;
+  overflow: hidden;
+}
+
+/* Desktop: labels fit, but every non-action column is allowed to shrink. */
+@container (min-width: 1080px) {
+  .search-redesign .search-songs-section .search-section-heading {
+    grid-template-columns:
+      60px
+      minmax(180px, 1fr)
+      minmax(78px, 110px)
+      54px
+      minmax(220px, 248px);
+    column-gap: 0.75rem;
+  }
+
+  .search-redesign .search-song-row {
+    grid-template-columns:
+      48px
+      minmax(180px, 1fr)
+      minmax(78px, 110px)
+      54px
+      minmax(220px, 248px);
+    column-gap: 0.75rem;
+  }
+
+  .search-redesign .search-row-actions {
+    grid-template-columns: 44px 90px minmax(94px, 1fr);
+    column-gap: 0.55rem;
+    width: 100%;
+    overflow: hidden;
+  }
+}
+
+/* As soon as there isn't room for all three labels, use History's compact
+   icon-only behavior rather than allowing the action cell to overflow. */
+@container (max-width: 1079px) {
+  .search-redesign .search-songs-section .search-section-heading::after {
+    display: none;
+  }
+
+  .search-redesign .search-song-row {
+    grid-template-columns: 48px minmax(0, 1fr) auto 104px;
+    column-gap: 0.65rem;
+  }
+
+  .search-redesign .search-row-actions {
+    display: grid;
+    grid-template-columns: repeat(3, 28px);
+    column-gap: 0.45rem;
+    justify-content: end;
+    width: 104px;
+    overflow: hidden;
+  }
+
+  .search-redesign .search-row-icon::after {
+    display: none;
+  }
+
+  .search-redesign .search-row-icon::before {
+    font-size: 1.02rem;
+  }
+}
+
+/* Use Helix's familiar S+ mark for Add to Subsonic instead of a download arrow. */
+.search-redesign .search-row-icon[data-tooltip="Add to Subsonic"]::before {
+  content: 'S+';
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::before {
+  content: '✓';
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 800;
+}
+
+@container (max-width: 650px) {
+  .search-redesign .search-song-row {
+    grid-template-columns: 44px minmax(0, 1fr);
+  }
+
+  .search-redesign .search-row-actions {
+    grid-column: 2;
+    width: auto;
+    justify-content: start;
+    grid-template-columns: repeat(3, 30px);
+  }
+}
+
+
+/* -----------------------------------------------------------------------
+   Results table final spacing pass
+   Compare with History: the track column should give up spare horizontal
+   space before the actions column is ever clipped.
+   ----------------------------------------------------------------------- */
+
+@container (min-width: 1080px) {
+  .search-redesign .search-songs-section .search-section-heading {
+    grid-template-columns:
+      60px
+      minmax(180px, 1fr)
+      92px
+      56px
+      320px;
+    column-gap: 0.7rem;
+  }
+
+  .search-redesign .search-song-row {
+    grid-template-columns:
+      48px
+      minmax(180px, 1fr)
+      92px
+      56px
+      320px;
+    column-gap: 0.7rem;
+  }
+
+  .search-redesign .search-row-actions {
+    grid-template-columns: 48px 102px 146px;
+    column-gap: 0.55rem;
+    width: 320px;
+    overflow: visible;
+    justify-content: end;
+  }
+}
+
+/* Intermediate widths still have plenty of room for the History labels.
+   Give actions priority and let the title/album text truncate first. */
+@container (min-width: 850px) and (max-width: 1079px) {
+  .search-redesign .search-song-row {
+    grid-template-columns:
+      48px
+      minmax(150px, 1fr)
+      86px
+      54px
+      286px;
+    column-gap: 0.6rem;
+  }
+
+  .search-redesign .search-row-actions {
+    grid-template-columns: 44px 94px 130px;
+    column-gap: 0.45rem;
+    width: 286px;
+    overflow: visible;
+    justify-content: end;
+  }
+
+  .search-redesign .search-row-icon::after {
+    display: inline;
+  }
+}
+
+/* Exact same import symbol used by HistoryPage's ImportIcon. */
+.search-redesign .search-row-icon[data-tooltip="Add to Subsonic"]::before {
+  content: '⇩';
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 550;
+  letter-spacing: normal;
+}
+
+.search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::before {
+  content: '⇩';
+  color: var(--accent);
+  font-family: inherit;
+  font-size: 1rem;
+  font-weight: 550;
+}
+
+.search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::after {
+  content: 'Queued';
+}
+
+/* Track metadata is the flexible part of the table. Never let long album text
+   steal width from source/time/actions. */
+.search-redesign .song-title-cell,
+.search-redesign .song-meta-line,
+.search-redesign .song-meta-album {
+  min-width: 0;
+  overflow: hidden;
+}
+
+.search-redesign .song-title-cell strong,
+.search-redesign .song-meta-line {
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+/* -----------------------------------------------------------------------
+   Album results: match the song table's width priorities and action style.
+   ----------------------------------------------------------------------- */
+
+.search-redesign #search-albums .search-album-card {
+  grid-template-columns: 48px minmax(0, 1fr) 92px 190px;
+  column-gap: 0.75rem;
+  min-height: 66px;
+  padding: 0.55rem 0.9rem;
+}
+
+.search-redesign #search-albums .search-album-card .artwork-lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 7px;
+}
+
+/* Let title/artist consume the spare middle space, but reserve a real source
+   column so actions never get pushed to the far edge. */
+.search-redesign #search-albums .album-card-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 0.15rem 0.75rem;
+  min-width: 0;
+}
+
+.search-redesign #search-albums .album-card-body > strong {
+  grid-column: 1;
+  grid-row: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-redesign #search-albums .album-card-body > span {
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-redesign #search-albums .album-card-body > .badge {
+  grid-column: 2;
+  grid-row: 1 / 3;
+  align-self: center;
+  justify-self: start;
+  margin: 0;
+}
+
+/* Pull the action group inward instead of leaving a huge dead zone. */
+.search-redesign #search-albums .album-card-actions {
+  justify-self: stretch;
+  display: grid;
+  grid-template-columns: 72px 82px;
+  align-items: center;
+  justify-content: end;
+  column-gap: 0.7rem;
+  width: 190px;
+  margin: 0;
+}
+
+/* History-style inline Play action. */
+.search-redesign #search-albums .album-card-actions--compact .primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.3rem;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0.2rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 0;
+  white-space: nowrap;
+}
+
+.search-redesign #search-albums .album-card-actions--compact .primary::before {
+  content: '▷';
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  font-size: 1rem;
+}
+
+.search-redesign #search-albums .album-card-actions--compact .primary::after {
+  content: 'Play';
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 550;
+}
+
+.search-redesign #search-albums .album-card-actions--compact .primary:hover {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.search-redesign #search-albums .album-card-actions--compact .primary:hover::before,
+.search-redesign #search-albums .album-card-actions--compact .primary:hover::after {
+  color: var(--text);
+}
+
+/* Make the existing overflow menu visually lighter too. */
+.search-redesign #search-albums .album-card-menu {
+  justify-self: end;
+}
+
+.search-redesign #search-albums .album-more-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0.3rem;
+  width: auto;
+  height: auto;
+  min-width: 0;
+  min-height: 30px;
+  padding: 0.2rem 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--muted);
+  font-size: 0;
+  white-space: nowrap;
+}
+
+.search-redesign #search-albums .album-more-button::before {
+  content: '⋯';
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  font-size: 1rem;
+  letter-spacing: 0.08em;
+}
+
+.search-redesign #search-albums .album-more-button::after {
+  content: 'More';
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 550;
+}
+
+.search-redesign #search-albums .album-more-button:hover::before,
+.search-redesign #search-albums .album-more-button:hover::after {
+  color: var(--text);
+}
+
+/* At reduced widths, sacrifice action labels before album text gets crushed. */
+@container (max-width: 900px) {
+  .search-redesign #search-albums .search-album-card {
+    grid-template-columns: 48px minmax(0, 1fr) 84px 92px;
+  }
+
+  .search-redesign #search-albums .album-card-body {
+    grid-template-columns: minmax(0, 1fr) 84px;
+  }
+
+  .search-redesign #search-albums .album-card-actions {
+    grid-template-columns: repeat(2, 34px);
+    width: 92px;
+    column-gap: 0.55rem;
+  }
+
+  .search-redesign #search-albums .album-card-actions--compact .primary::after,
+  .search-redesign #search-albums .album-more-button::after {
+    display: none;
+  }
+}
+
+
+/* -----------------------------------------------------------------------
+   Album row polish pass
+   ----------------------------------------------------------------------- */
+
+/* Pull Source + Actions closer to the album info so the row feels intentional
+   rather than stretched across the entire content area. */
+.search-redesign #search-albums .search-album-card {
+  grid-template-columns: 48px minmax(0, 1fr) 90px 154px;
+  column-gap: 0.65rem;
+}
+
+.search-redesign #search-albums .album-card-body {
+  grid-template-columns: minmax(0, 1fr) 90px;
+  column-gap: 0.65rem;
+}
+
+.search-redesign #search-albums .album-card-actions {
+  grid-template-columns: 58px 72px;
+  width: 154px;
+  column-gap: 0.65rem;
+}
+
+/* Beat the global .primary button styling explicitly. */
+.search-redesign #search-albums .album-card-actions--compact > button.primary,
+.search-redesign #search-albums .album-card-actions--compact > button.primary:hover:not(:disabled),
+.search-redesign #search-albums .album-card-actions--compact > button.primary:focus-visible {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 0.3rem !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 30px !important;
+  padding: 0.2rem 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--muted) !important;
+  transform: none !important;
+  font-size: 0 !important;
+}
+
+/* Hide the actual ▶ character; use the same open triangle used by History. */
+.search-redesign #search-albums .album-card-actions--compact > button.primary {
+  color: transparent !important;
+}
+
+.search-redesign #search-albums .album-card-actions--compact > button.primary::before {
+  content: '▷';
+  color: color-mix(in srgb, var(--text) 82%, var(--muted));
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.search-redesign #search-albums .album-card-actions--compact > button.primary::after {
+  content: 'Play';
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 550;
+  line-height: 1;
+}
+
+.search-redesign #search-albums .album-card-actions--compact > button.primary:hover:not(:disabled)::before,
+.search-redesign #search-albums .album-card-actions--compact > button.primary:hover:not(:disabled)::after {
+  color: var(--text);
+}
+
+/* More should read like a subtle text action, not a separate UI widget. */
+.search-redesign #search-albums .album-more-button,
+.search-redesign #search-albums .album-more-button:hover,
+.search-redesign #search-albums .album-more-button:focus-visible {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  gap: 0.32rem !important;
+  width: auto !important;
+  height: auto !important;
+  min-width: 0 !important;
+  min-height: 30px !important;
+  padding: 0.2rem 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--muted) !important;
+}
+
+.search-redesign #search-albums .album-more-button::before {
+  content: '•••';
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--text) 75%, var(--muted));
+  font-size: 0.72rem;
+}
+
+.search-redesign #search-albums .album-more-button::after {
+  content: 'More';
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 550;
+}
+
+.search-redesign #search-albums .album-more-button:hover::before,
+.search-redesign #search-albums .album-more-button:hover::after {
+  color: var(--text);
+}
+
+/* Slightly smaller source badge to match song rows better. */
+.search-redesign #search-albums .album-card-body > .badge {
+  padding: 0.22rem 0.48rem;
+  font-size: 0.68rem;
+}
+
+/* Compact intermediate layout before dropping labels. */
+@container (max-width: 900px) {
+  .search-redesign #search-albums .search-album-card {
+    grid-template-columns: 48px minmax(0, 1fr) 82px 78px;
+  }
+
+  .search-redesign #search-albums .album-card-body {
+    grid-template-columns: minmax(0, 1fr) 82px;
+  }
+
+  .search-redesign #search-albums .album-card-actions {
+    grid-template-columns: repeat(2, 30px);
+    width: 78px;
+    column-gap: 0.45rem;
+  }
+
+  .search-redesign #search-albums .album-card-actions--compact > button.primary::after,
+  .search-redesign #search-albums .album-more-button::after {
+    display: none;
+  }
+}
+
+
+/* Real inline album action buttons rendered by SearchPage.tsx. */
+.search-redesign #search-albums .search-album-card {
+  grid-template-columns: 48px minmax(0, 1fr) 90px 320px;
+}
+
+.search-redesign #search-albums .album-card-actions.search-row-actions {
+  display: grid;
+  grid-template-columns: 48px 102px 146px;
+  align-items: center;
+  justify-content: end;
+  column-gap: 0.55rem;
+  width: 320px;
+  min-width: 0;
+  overflow: visible;
+}
+
+/* Album actions use the exact same SearchPage classes as song actions now. */
+.search-redesign #search-albums .album-card-actions .search-row-icon {
+  min-height: 30px;
+}
+
+/* Exact History import glyph. */
+.search-redesign #search-albums .album-card-actions .search-row-icon[data-tooltip="Add to Subsonic"]::before,
+.search-redesign #search-albums .album-card-actions .search-row-icon[data-tooltip="Queued for Subsonic"]::before {
+  content: '⇩';
+}
+
+/* Old More-menu rules are irrelevant after the TSX change. */
+.search-redesign #search-albums .album-card-menu,
+.search-redesign #search-albums .album-more-button,
+.search-redesign #search-albums .album-card-menu-popover {
+  display: none !important;
+}
+
+@container (max-width: 980px) {
+  .search-redesign #search-albums .search-album-card {
+    grid-template-columns: 48px minmax(0, 1fr) 84px 136px;
+  }
+
+  .search-redesign #search-albums .album-card-actions.search-row-actions {
+    grid-template-columns: repeat(3, 30px);
+    width: 136px;
+    column-gap: 0.5rem;
+  }
+
+  .search-redesign #search-albums .album-card-actions .search-row-icon::after {
+    display: none;
+  }
+}
+
+
+/* -----------------------------------------------------------------------
+   Songs + Albums use the exact same column geometry.
+   artwork | info | source | time | actions
+   Albums reserve the Time column so switching tabs does not shift anything.
+   ----------------------------------------------------------------------- */
+
+.search-redesign #search-albums .search-album-card {
+  grid-template-columns:
+    48px
+    minmax(180px, 1fr)
+    92px
+    56px
+    320px;
+  column-gap: 0.7rem;
+}
+
+/* Source is now a real sibling column, just like Songs. */
+.search-redesign #search-albums .search-album-card > .badge {
+  justify-self: start;
+  align-self: center;
+  margin: 0;
+  border-radius: 999px;
+  padding: 0.26rem 0.58rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.045em;
+}
+
+/* Album metadata only owns the flexible info column now. */
+.search-redesign #search-albums .album-card-body {
+  display: block;
+  min-width: 0;
+  padding: 0;
+}
+
+.search-redesign #search-albums .album-card-body > strong,
+.search-redesign #search-albums .album-card-body > span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-redesign #search-albums .album-card-body > span {
+  margin-top: 0.18rem;
+  font-size: 0.88rem;
+}
+
+.search-redesign #search-albums .album-duration-spacer {
+  display: block;
+  width: 56px;
+  min-width: 56px;
+}
+
+.search-redesign #search-albums .album-card-actions.search-row-actions {
+  grid-template-columns: 48px 102px 146px;
+  column-gap: 0.55rem;
+  width: 320px;
+  justify-content: end;
+}
+
+/* Keep Songs and Albums aligned through the intermediate breakpoint too. */
+@container (min-width: 850px) and (max-width: 1079px) {
+  .search-redesign #search-albums .search-album-card {
+    grid-template-columns:
+      48px
+      minmax(150px, 1fr)
+      86px
+      54px
+      286px;
+    column-gap: 0.6rem;
+  }
+
+  .search-redesign #search-albums .album-card-actions.search-row-actions {
+    grid-template-columns: 44px 94px 130px;
+    column-gap: 0.45rem;
+    width: 286px;
+  }
+
+  .search-redesign #search-albums .album-duration-spacer {
+    width: 54px;
+    min-width: 54px;
+  }
+}
+
+/* At narrow widths, both result types collapse toward the same compact form. */
+@container (max-width: 849px) {
+  .search-redesign #search-albums .search-album-card {
+    grid-template-columns: 48px minmax(0, 1fr) auto 132px;
+  }
+
+  .search-redesign #search-albums .album-duration-spacer {
+    display: none;
+  }
+
+  .search-redesign #search-albums .album-card-actions.search-row-actions {
+    grid-template-columns: repeat(3, 30px);
+    width: 132px;
+    column-gap: 0.5rem;
+  }
+
+  .search-redesign #search-albums .album-card-actions .search-row-icon::after {
+    display: none;
+  }
+}
+
+
+/* -----------------------------------------------------------------------
+   Shared Songs / Albums table geometry.
+   The section container, header, rows and columns now use the same measurements
+   so switching tabs does not move Source or Actions horizontally.
+   ----------------------------------------------------------------------- */
+
+.search-redesign .search-table-section {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+  container-type: inline-size;
+}
+
+.search-redesign .search-table-section .search-section-heading {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  padding: 0 0.9rem 0.55rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+/* Both result lists occupy the exact same box. */
+.search-redesign .search-table-section .search-song-grid,
+.search-redesign .search-table-section .search-album-strip {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* One canonical desktop row template for both result types. */
+@container (min-width: 1080px) {
+  .search-redesign .search-table-section .search-song-row,
+  .search-redesign .search-table-section .search-album-card {
+    grid-template-columns:
+      48px
+      minmax(180px, 1fr)
+      92px
+      56px
+      320px;
+    column-gap: 0.7rem;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.55rem 0.9rem;
+    margin: 0;
+  }
+
+  /* Same heading geometry. Albums omit the Time label visually, but still
+     reserve that column so Source/Actions remain stationary. */
+  .search-redesign .search-table-section .search-section-heading {
+    display: grid;
+    grid-template-columns:
+      48px
+      minmax(180px, 1fr)
+      92px
+      56px
+      320px;
+    column-gap: 0.7rem;
+    align-items: center;
+  }
+
+  .search-redesign .search-table-section .search-section-heading > span {
+    grid-column: 2;
+  }
+
+  .search-redesign .search-songs-section .search-section-heading::after {
+    content: 'SOURCE   TIME   ACTIONS';
+    grid-column: 3 / 6;
+    justify-self: stretch;
+    color: var(--muted);
+    font-size: 0.76rem;
+    letter-spacing: 0.055em;
+    word-spacing: 1.9rem;
+    white-space: nowrap;
+  }
+
+  .search-redesign .search-albums-section .search-section-heading::after {
+    content: 'SOURCE           ACTIONS';
+    grid-column: 3 / 6;
+    justify-self: stretch;
+    color: var(--muted);
+    font-size: 0.76rem;
+    letter-spacing: 0.055em;
+    word-spacing: 3.6rem;
+    white-space: nowrap;
+  }
+
+  .search-redesign .search-table-section .search-section-heading small {
+    display: none;
+  }
+
+  .search-redesign #search-albums .album-card-actions.search-row-actions,
+  .search-redesign #search-songs .search-row-actions {
+    grid-template-columns: 48px 102px 146px;
+    column-gap: 0.55rem;
+    width: 320px;
+    justify-content: end;
+  }
+}
+
+/* Same intermediate template as well. */
+@container (min-width: 850px) and (max-width: 1079px) {
+  .search-redesign .search-table-section .search-song-row,
+  .search-redesign .search-table-section .search-album-card {
+    grid-template-columns:
+      48px
+      minmax(150px, 1fr)
+      86px
+      54px
+      286px;
+    column-gap: 0.6rem;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0.55rem 0.9rem;
+    margin: 0;
+  }
+
+  .search-redesign #search-albums .album-card-actions.search-row-actions,
+  .search-redesign #search-songs .search-row-actions {
+    grid-template-columns: 44px 94px 130px;
+    column-gap: 0.45rem;
+    width: 286px;
+  }
+}
+
+/* Artwork and title start are explicitly identical. */
+.search-redesign .search-table-section .search-song-row .artwork-sm,
+.search-redesign .search-table-section .search-album-card .artwork-lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 7px;
+}
+
+.search-redesign .search-table-section .song-title-cell,
+.search-redesign .search-table-section .album-card-body {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+}
+
+/* Source badges share exact dimensions/alignment. */
+.search-redesign .search-table-section .search-song-row > .badge,
+.search-redesign .search-table-section .search-album-card > .badge {
+  justify-self: start;
+  align-self: center;
+  margin: 0;
+  padding: 0.26rem 0.58rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  letter-spacing: 0.045em;
+}
+
+/* Keep the album's empty Time slot exactly the same width as Song time. */
+.search-redesign .search-table-section .album-duration-spacer {
+  display: block;
+  width: 56px;
+  min-width: 56px;
+}
+
+
+/* -----------------------------------------------------------------------
+   Real column headers.
+   Stop approximating header alignment with generated text/word spacing:
+   each label now sits in the exact same grid column as its row content.
+   ----------------------------------------------------------------------- */
+
+.search-redesign .search-table-section .search-column-heading::after {
+  content: none !important;
+  display: none !important;
+}
+
+@container (min-width: 1080px) {
+  .search-redesign .search-table-section .search-column-heading {
+    display: grid;
+    grid-template-columns:
+      48px
+      minmax(180px, 1fr)
+      92px
+      56px
+      320px;
+    column-gap: 0.7rem;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 0.9rem 0.55rem;
+  }
+
+  .search-redesign .search-table-section .search-heading-title {
+    grid-column: 2;
+  }
+
+  .search-redesign .search-table-section .search-heading-source {
+    grid-column: 3;
+  }
+
+  .search-redesign .search-table-section .search-heading-time {
+    grid-column: 4;
+  }
+
+  .search-redesign .search-table-section .search-heading-actions {
+    grid-column: 5;
+  }
+}
+
+@container (min-width: 850px) and (max-width: 1079px) {
+  .search-redesign .search-table-section .search-column-heading {
+    display: grid;
+    grid-template-columns:
+      48px
+      minmax(150px, 1fr)
+      86px
+      54px
+      286px;
+    column-gap: 0.6rem;
+    align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 0 0.9rem 0.55rem;
+  }
+
+  .search-redesign .search-table-section .search-heading-title {
+    grid-column: 2;
+  }
+
+  .search-redesign .search-table-section .search-heading-source {
+    grid-column: 3;
+  }
+
+  .search-redesign .search-table-section .search-heading-time {
+    grid-column: 4;
+  }
+
+  .search-redesign .search-table-section .search-heading-actions {
+    grid-column: 5;
+  }
+}
+
+.search-redesign .search-table-section .search-column-heading > span {
+  margin: 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 650;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.search-redesign .search-table-section .search-heading-source,
+.search-redesign .search-table-section .search-heading-time,
+.search-redesign .search-table-section .search-heading-actions {
+  justify-self: start;
+}
+
+/* At compact widths the table no longer has stable desktop columns, so keep
+   only the section name rather than showing misleading column labels. */
+@container (max-width: 849px) {
+  .search-redesign .search-table-section .search-column-heading {
+    display: block;
+    padding: 0 0.9rem 0.55rem;
+  }
+
+  .search-redesign .search-table-section .search-heading-source,
+  .search-redesign .search-table-section .search-heading-time,
+  .search-redesign .search-table-section .search-heading-actions {
+    display: none;
+  }
+}
+
+
+/* -----------------------------------------------------------------------
+   Column header fix.
+   Do not rely on container queries for the header itself. Give the header the
+   same grid explicitly as the result rows, then use a normal viewport fallback.
+   ----------------------------------------------------------------------- */
+
+.search-redesign .search-table-section .search-column-heading {
+  display: grid !important;
+  grid-template-columns:
+    48px
+    minmax(180px, 1fr)
+    92px
+    56px
+    320px !important;
+  column-gap: 0.7rem !important;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 0 0.9rem 0.55rem !important;
+}
+
+.search-redesign .search-table-section .search-column-heading > span {
+  display: block;
+  width: auto;
+  margin: 0;
+  padding: 0;
+}
+
+.search-redesign .search-table-section .search-column-heading .search-heading-title {
+  grid-column: 2 !important;
+}
+
+.search-redesign .search-table-section .search-column-heading .search-heading-source {
+  grid-column: 3 !important;
+}
+
+.search-redesign .search-table-section .search-column-heading .search-heading-time {
+  grid-column: 4 !important;
+}
+
+.search-redesign .search-table-section .search-column-heading .search-heading-actions {
+  grid-column: 5 !important;
+}
+
+.search-redesign .search-table-section .search-column-heading::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* Match the intermediate row geometry at narrower desktop widths. */
+@media (max-width: 1200px) and (min-width: 851px) {
+  .search-redesign .search-table-section .search-column-heading {
+    grid-template-columns:
+      48px
+      minmax(150px, 1fr)
+      86px
+      54px
+      286px !important;
+    column-gap: 0.6rem !important;
+  }
+}
+
+/* At genuinely compact widths, only show the section name. */
+@media (max-width: 850px) {
+  .search-redesign .search-table-section .search-column-heading {
+    display: block !important;
+    padding: 0 0.9rem 0.55rem !important;
+  }
+
+  .search-redesign .search-table-section .search-heading-source,
+  .search-redesign .search-table-section .search-heading-time,
+  .search-redesign .search-table-section .search-heading-actions {
+    display: none !important;
+  }
+}
+
+
+/* -----------------------------------------------------------------------
+   Final Songs / Albums size normalization.
+   Both tabs should look like the same table with different content.
+   ----------------------------------------------------------------------- */
+
+/* Identical row box sizing. */
+.search-redesign .search-table-section .search-song-row,
+.search-redesign .search-table-section .search-album-card {
+  min-height: 66px !important;
+  height: 66px !important;
+  padding: 0.55rem 0.9rem !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  align-items: center !important;
+}
+
+/* Identical artwork dimensions. */
+.search-redesign .search-table-section .search-song-row .artwork-sm,
+.search-redesign .search-table-section .search-album-card .artwork-lg {
+  width: 44px !important;
+  height: 44px !important;
+  min-width: 44px !important;
+  min-height: 44px !important;
+  max-width: 44px !important;
+  max-height: 44px !important;
+  border-radius: 7px !important;
+}
+
+/* Identical title typography. */
+.search-redesign .search-table-section .song-title-cell > strong,
+.search-redesign .search-table-section .album-card-body > strong {
+  display: block !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  font-size: 0.98rem !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+  min-height: 0 !important;
+}
+
+/* Identical secondary metadata typography and spacing. */
+.search-redesign .search-table-section .song-meta-line,
+.search-redesign .search-table-section .album-card-body > span {
+  display: flex !important;
+  align-items: center !important;
+  gap: 0.35rem !important;
+  margin: 0.18rem 0 0 !important;
+  padding: 0 !important;
+  font-size: 0.88rem !important;
+  font-weight: 400 !important;
+  line-height: 1.2 !important;
+  color: var(--muted) !important;
+  min-height: 0 !important;
+}
+
+/* Album body should occupy exactly the same vertical footprint as song info. */
+.search-redesign .search-table-section .album-card-body,
+.search-redesign .search-table-section .song-title-cell {
+  display: block !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  align-self: center !important;
+}
+
+/* Identical source badge dimensions. */
+.search-redesign .search-table-section .search-song-row > .badge,
+.search-redesign .search-table-section .search-album-card > .badge {
+  min-height: 24px !important;
+  height: 24px !important;
+  box-sizing: border-box !important;
+  padding: 0.26rem 0.58rem !important;
+  margin: 0 !important;
+  border-radius: 999px !important;
+  font-size: 0.72rem !important;
+  line-height: 1 !important;
+  letter-spacing: 0.045em !important;
+  align-self: center !important;
+}
+
+/* Same action control footprint in both tabs. */
+.search-redesign .search-table-section .search-row-actions,
+.search-redesign #search-albums .album-card-actions.search-row-actions {
+  min-height: 30px !important;
+  height: 30px !important;
+  align-items: center !important;
+}
+
+.search-redesign .search-table-section .search-row-icon {
+  min-height: 30px !important;
+  height: 30px !important;
+  line-height: 1 !important;
+}
+
+/* Same header size/padding between Songs and Albums. */
+.search-redesign .search-table-section .search-column-heading {
+  min-height: 42px !important;
+  height: 42px !important;
+  padding: 0 0.9rem 0.55rem !important;
+  box-sizing: border-box !important;
+  align-items: center !important;
+}
+
+.search-redesign .search-table-section .search-column-heading > span {
+  font-size: 0.76rem !important;
+  font-weight: 650 !important;
+  line-height: 1 !important;
+  letter-spacing: 0.055em !important;
+}
+
+/* The album's empty Time cell takes space only; it contributes no visual size. */
+.search-redesign .search-table-section .album-duration-spacer {
+  height: 1px !important;
+  min-height: 1px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  visibility: hidden !important;
+}
+
+
+/* -----------------------------------------------------------------------
+   Search mode selector — Helix control styling.
+   Replace the generic pill/segmented-control look with the flatter,
+   squared-off control language used elsewhere in Helix.
+   ----------------------------------------------------------------------- */
+
+.search-redesign .search-mode-row .search-tabs {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 0.4rem;
+  width: fit-content;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.search-redesign .search-mode-row .tab-button {
+  position: relative;
+  min-height: 38px;
+  padding: 0.5rem 0.9rem !important;
+  border: 1px solid var(--border-soft) !important;
+  border-radius: 7px !important;
+  background: color-mix(in srgb, var(--control-bg) 88%, transparent) !important;
+  color: var(--muted) !important;
+  box-shadow: none !important;
+  font-weight: 700;
+  line-height: 1;
+  transform: none !important;
+}
+
+.search-redesign .search-mode-row .tab-button:hover:not(.active) {
+  border-color: var(--border) !important;
+  background: var(--surface-raised) !important;
+  color: var(--text) !important;
+  transform: none !important;
+}
+
+.search-redesign .search-mode-row .tab-button.active {
+  border-color: var(--accent-border) !important;
+  background: var(--accent-soft) !important;
+  color: var(--accent-bright) !important;
+  box-shadow:
+    inset 0 -2px 0 var(--accent),
+    0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent) !important;
+}
+
+.search-redesign .search-mode-row .tab-button.active:hover {
+  background: var(--accent-soft) !important;
+  color: var(--accent-bright) !important;
+  transform: none !important;
+}
+
+/* Keep the three controls compact rather than stretching like a mobile
+   segmented pill. */
+@media (max-width: 720px) {
+  .search-redesign .search-mode-row .search-tabs {
+    width: fit-content !important;
+    max-width: 100%;
+  }
+
+  .search-redesign .search-mode-row .tab-button {
+    flex: 0 0 auto !important;
+  }
+}

@@ -124,6 +124,7 @@ function TopResultCard({ result, player, onStatus, searchReturn, canImportToSubs
     </section>
   )
 }
+
 function SongRow({ song, player, onStatus, canImportToSubsonic }: { song: SearchSong; player: PlayerContext; onStatus: (message: string) => void; canImportToSubsonic: boolean }) {
   const duration = durationLabel(song)
   const canAdd = song.source === 'ytmusic' || Boolean(song.yt_video_id || song.video_id || song.videoId)
@@ -161,6 +162,7 @@ function SongRow({ song, player, onStatus, canImportToSubsonic }: { song: Search
     </article>
   )
 }
+
 function AlbumCard({ album, player, onStatus, searchReturn, canImportToSubsonic }: { album: SearchAlbum; player: PlayerContext; onStatus: (message: string) => void; searchReturn: SearchReturnState; canImportToSubsonic: boolean }) {
   const navigate = useNavigate()
   const browseId = albumBrowseId(album)
@@ -205,17 +207,24 @@ function AlbumCard({ album, player, onStatus, searchReturn, canImportToSubsonic 
       <div className="album-card-body">
         <strong><AlbumLink album={album.title} artist={album.artist} albumId={albumBrowseId(album)} source={album.source} /></strong>
         <span><ArtistLink artist={album.artist ?? 'Unknown artist'} />{album.year ? ` • ${album.year}` : ''}</span>
-        <SourceBadge source={album.source} />
       </div>
-      <div className="album-card-actions album-card-actions--compact" onClick={(event) => event.stopPropagation()}>
-        <button className="primary" onClick={() => player.run(() => api.playAlbum(album), 'play')}>▶</button>
-        <details className="album-card-menu">
-          <summary className="icon-button compact-action album-more-button" aria-label={`More options for ${album.title}`} title="More options">⋯</summary>
-          <div className="album-card-menu-popover">
-            <button type="button" onClick={() => player.run(() => api.queueAlbum(album))}>Queue</button>
-            {canAdd && canImportToSubsonic && album.source !== 'subsonic' ? <button type="button" className="compact-action library-add-action library-add-icon-action" disabled={subsonicQueued} aria-label={subsonicQueued ? `${album.title} queued for Subsonic import` : `Add ${album.title} to Subsonic`} data-tooltip={subsonicQueued ? 'Queued for Subsonic' : 'Add to Subsonic'} title={subsonicQueued ? 'Queued for Subsonic' : 'Add to Subsonic'} onClick={() => void addToSubsonic()}><span className="splus-mark" aria-hidden="true"><span className="splus-s">S</span><span className="splus-plus">+</span></span></button> : null}
-          </div>
-        </details>
+      <SourceBadge source={album.source} />
+      <span className="song-duration album-duration-spacer" aria-hidden="true" />
+      <div className="search-row-actions album-card-actions" onClick={(event) => event.stopPropagation()}>
+        <button className="search-row-icon" aria-label={`Play ${album.title}`} data-tooltip="Play" title="Play" onClick={() => player.run(() => api.playAlbum(album), 'play')}>▶</button>
+        <button className="search-row-icon search-queue-icon" aria-label={`Add ${album.title} to queue`} data-tooltip="Add to queue" title="Add to queue" onClick={() => player.run(() => api.queueAlbum(album))}>＋</button>
+        {canAdd && canImportToSubsonic && album.source !== 'subsonic' ? (
+          <button
+            className="search-row-icon search-library-icon"
+            disabled={subsonicQueued}
+            aria-label={subsonicQueued ? `${album.title} queued for Subsonic import` : `Add ${album.title} to Subsonic`}
+            data-tooltip={subsonicQueued ? 'Queued for Subsonic' : 'Add to Subsonic'}
+            title={subsonicQueued ? 'Queued for Subsonic' : 'Add to Subsonic'}
+            onClick={() => void addToSubsonic()}
+          >
+            S+
+          </button>
+        ) : <span className="search-row-icon-spacer" aria-hidden="true" />}
       </div>
     </article>
   )
@@ -344,9 +353,22 @@ export function SearchPage() {
       ) : null}
 
       {activeResultSection === 'songs' ? (
-        <section className="search-section search-songs-section" id="search-songs" role="tabpanel">
-          <div className="search-section-heading"><span>Songs</span>{results.songs.length ? <small>{results.songs.length} results</small> : null}</div>
-          {results.songs.length ? <div className="search-song-grid">{results.songs.map((song, index) => <SongRow key={`${song.source}-${song.title}-${song.artist}-${index}`} song={song} player={player} onStatus={setStatus} canImportToSubsonic={Boolean(capabilities?.features.subsonic_import)} />)}</div> : <p className="muted search-empty">{loading ? 'Searching songs…' : query ? 'No song results.' : 'Search to see songs here.'}</p>}
+        <section className="search-section search-songs-section search-table-section" id="search-songs" role="tabpanel">
+          {results.songs.length ? (
+            <>
+              <div className="search-section-heading search-column-heading">
+                <span className="search-heading-title">Songs</span>
+                <span className="search-heading-source">Source</span>
+                <span className="search-heading-time">Time</span>
+                <span className="search-heading-actions">Actions</span>
+              </div>
+              <div className="search-song-grid">
+                {results.songs.map((song, index) => <SongRow key={`${song.source}-${song.title}-${song.artist}-${index}`} song={song} player={player} onStatus={setStatus} canImportToSubsonic={Boolean(capabilities?.features.subsonic_import)} />)}
+              </div>
+            </>
+          ) : (
+            <p className="muted search-empty">{loading ? 'Searching songs…' : query ? 'No song results.' : 'Search to see songs here.'}</p>
+          )}
         </section>
       ) : null}
 
@@ -358,8 +380,17 @@ export function SearchPage() {
       ) : null}
 
       {activeResultSection === 'albums' ? (
-        <section className="search-section" id="search-albums" role="tabpanel">
-          <div className="search-section-heading"><span>Albums</span>{results.albums.length ? <small>{results.albums.length} results</small> : null}</div>
+        <section className="search-section search-albums-section search-table-section" id="search-albums" role="tabpanel">
+          {results.albums.length ? (
+            <div className="search-section-heading search-column-heading">
+              <span className="search-heading-title">Albums</span>
+              <span className="search-heading-source">Source</span>
+              <span className="search-heading-time" aria-hidden="true" />
+              <span className="search-heading-actions">Actions</span>
+            </div>
+          ) : (
+            <div className="search-section-heading"><span>Albums</span></div>
+          )}
           {results.albums.length ? <div className="search-album-strip">{results.albums.map((album, index) => <AlbumCard key={`${album.source}-${album.title}-${album.artist}-${index}`} album={album} player={player} onStatus={setStatus} searchReturn={currentSearchReturn} canImportToSubsonic={Boolean(capabilities?.features.subsonic_import)} />)}</div> : <p className="muted search-empty">{loading ? 'Searching albums…' : query ? 'No album results.' : 'Search to see albums here.'}</p>}
         </section>
       ) : null}

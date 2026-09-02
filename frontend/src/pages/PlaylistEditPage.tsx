@@ -14,6 +14,7 @@ const SEARCH_MODES: Array<{ id: SearchMode; label: string }> = [
   { id: 'ytmusic', label: 'YTMusic' },
 ]
 
+
 function formatDuration(ms?: number) {
   const totalSeconds = Math.max(0, Math.floor((ms ?? 0) / 1000))
   if (!totalSeconds) return ''
@@ -239,6 +240,7 @@ export function PlaylistEditPage() {
       setError(err instanceof Error ? err.message : 'Could not add track to Subsonic')
     }
   }
+
 
   return (
     <div className="page-stack playlist-editor-page">
