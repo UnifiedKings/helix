@@ -22,10 +22,82 @@ from .settings_store import get_settings
 
 LOG = logging.getLogger(__name__)
 
+# Soulseek searches may run concurrently, but their *start requests* are
+# staggered so multiple jobs do not POST /searches at the same instant.
+_QUALITY_SEARCH_START_LOCK: asyncio.Lock | None = None
+_QUALITY_LAST_SEARCH_START: float = 0.0
+_QUALITY_SEARCH_START_INTERVAL_S = 2.0
+
+
+def _quality_search_start_lock() -> asyncio.Lock:
+    global _QUALITY_SEARCH_START_LOCK
+    if _QUALITY_SEARCH_START_LOCK is None:
+        _QUALITY_SEARCH_START_LOCK = asyncio.Lock()
+    return _QUALITY_SEARCH_START_LOCK
+
+
+async def _wait_for_search_start_slot() -> None:
+    global _QUALITY_LAST_SEARCH_START
+    async with _quality_search_start_lock():
+        loop = asyncio.get_running_loop()
+        now = loop.time()
+        wait_s = max(
+            0.0,
+            (_QUALITY_LAST_SEARCH_START + _QUALITY_SEARCH_START_INTERVAL_S) - now,
+        )
+        if wait_s > 0:
+            await asyncio.sleep(wait_s)
+        _QUALITY_LAST_SEARCH_START = loop.time()
+
 
 def _commit_quality_change(db: Session) -> None:
     db.commit()
     schedule_quality_upgrades_changed()
+
+
+def _set_search_job_status(job_id: str, status: str, *, mark_started: bool = False) -> None:
+    """Persist search queue/searching state with a short-lived DB session."""
+    status_db = SessionLocal()
+    try:
+        current = status_db.get(QualityUpgradeJob, job_id)
+        if current is None:
+            return
+        if current.status in {"upgraded", "reverted", "satisfied", "externally_modified"}:
+            return
+        changed = current.status != status
+        if changed:
+            current.status = status
+        if mark_started:
+            current.last_search_at = datetime.utcnow()
+            changed = True
+        if not changed:
+            return
+        current.updated_at = datetime.utcnow()
+        _commit_quality_change(status_db)
+    finally:
+        status_db.close()
+
+
+def _set_transfer_job_status(job_id: str, status: str) -> None:
+    """Persist a transfer-only status with a very short DB transaction.
+
+    Network/peer waits must never retain the worker's long-lived ORM session or
+    an underlying SQLAlchemy connection.
+    """
+    status_db = SessionLocal()
+    try:
+        current = status_db.get(QualityUpgradeJob, job_id)
+        if current is None:
+            return
+        if current.status in {"upgraded", "reverted", "satisfied", "externally_modified"}:
+            return
+        if current.status == status:
+            return
+        current.status = status
+        current.updated_at = datetime.utcnow()
+        _commit_quality_change(status_db)
+    finally:
+        status_db.close()
 
 _RETRY_DELAYS = (
     timedelta(days=1),
@@ -200,6 +272,7 @@ def _direct_library_file_match(
     *,
     title: str,
     artist: str,
+    album: str,
     duration_ms: int,
     title_variants: list[str],
 ) -> Path | None:
@@ -217,6 +290,7 @@ def _direct_library_file_match(
 
     wanted_titles = {_norm(value) for value in title_variants if value}
     wanted_artist = _norm(artist)
+    wanted_album = _norm(album)
     if not wanted_titles or not wanted_artist:
         return None
 
@@ -253,9 +327,11 @@ def _direct_library_file_match(
             tags = audio.tags or {}
             tag_title_raw = ""
             tag_artist_raw = ""
+            tag_album_raw = ""
 
             title_value = tags.get("title")
             artist_value = tags.get("artist")
+            album_value = tags.get("album")
             if isinstance(title_value, (list, tuple)):
                 tag_title_raw = str(title_value[0] if title_value else "")
             else:
@@ -264,9 +340,14 @@ def _direct_library_file_match(
                 tag_artist_raw = str(artist_value[0] if artist_value else "")
             else:
                 tag_artist_raw = str(artist_value or "")
+            if isinstance(album_value, (list, tuple)):
+                tag_album_raw = str(album_value[0] if album_value else "")
+            else:
+                tag_album_raw = str(album_value or "")
 
             tag_title = _norm(tag_title_raw)
             tag_artist = _norm(tag_artist_raw)
+            tag_album = _norm(tag_album_raw)
             if tag_title not in wanted_titles:
                 continue
 
@@ -285,6 +366,9 @@ def _direct_library_file_match(
                 artist_score = 25.0 * overlap
 
             score = 60.0 + artist_score
+            exact_album = bool(wanted_album and tag_album and tag_album == wanted_album)
+            if exact_album:
+                score += 25.0
 
             actual_duration_ms = int(round(float(getattr(audio.info, "length", 0.0) or 0.0) * 1000))
             if duration_ms and actual_duration_ms:
@@ -293,6 +377,11 @@ def _direct_library_file_match(
                     score += 20.0
                 elif diff <= 8000:
                     score += 10.0
+                elif exact_album:
+                    # Exact title + artist + album is strong enough to resolve
+                    # the library copy even when YTMusic and the imported release
+                    # disagree on duration metadata.
+                    score += 2.0
                 else:
                     continue
 
@@ -528,19 +617,12 @@ def _download_match_snapshot(download_root: Path, candidate: SlskdCandidate) -> 
     return out
 
 
-async def _wait_for_download_file(
+def _find_download_file_once(
     download_root: Path,
     candidate: SlskdCandidate,
-    timeout_s: int = 900,
     before: dict[str, tuple[int, int]] | None = None,
 ) -> Path | None:
-    """Wait for slskd to materialize the requested file in its shared tree.
-
-    Do not assume a ``<downloads>/<username>/`` layout. slskd commonly preserves
-    part of the remote source directory instead. Search the entire configured
-    downloads root and prefer a newly-created/changed file whose size matches
-    the Soulseek result.
-    """
+    """Return a completed matching staging file if one is currently present."""
     basename = Path(candidate.filename.replace("\\", "/")).name
     if not basename:
         return None
@@ -548,60 +630,68 @@ async def _wait_for_download_file(
     before = before or {}
     expected_size = int(candidate.size or 0)
 
+    matches: list[Path] = []
+    try:
+        matches = [p for p in download_root.rglob(basename) if p.is_file()]
+    except OSError:
+        matches = []
+
+    ready: list[tuple[int, int, int, Path]] = []
+    for path in matches:
+        try:
+            st = path.stat()
+        except OSError:
+            continue
+
+        size = int(st.st_size)
+        mtime_ns = int(st.st_mtime_ns)
+        prior = before.get(str(path))
+        changed = prior is None or prior != (size, mtime_ns)
+        exact_size = expected_size > 0 and size == expected_size
+        size_ok = expected_size <= 0 or exact_size
+        reusable_existing = prior is not None and exact_size
+
+        if size_ok and (changed or reusable_existing):
+            ready.append(
+                (
+                    2 if exact_size else 1,
+                    1 if changed else 0,
+                    mtime_ns,
+                    path,
+                )
+            )
+
+    if not ready:
+        return None
+
+    ready.sort(key=lambda row: (row[0], row[1], row[2]), reverse=True)
+    return ready[0][3]
+
+
+async def _wait_for_download_file(
+    download_root: Path,
+    candidate: SlskdCandidate,
+    timeout_s: int = 900,
+    before: dict[str, tuple[int, int]] | None = None,
+) -> Path | None:
+    """Compatibility filesystem watcher used by restart recovery."""
+    basename = Path(candidate.filename.replace("\\", "/")).name
+    if not basename:
+        return None
+
+    before = before or {}
     LOG.info(
         "[quality-upgrade] watching slskd downloads root=%r exists=%s basename=%r expected_size=%s preexisting_matches=%s",
         str(download_root),
         download_root.exists(),
         basename,
-        expected_size,
+        int(candidate.size or 0),
         len(before),
     )
-
     deadline = asyncio.get_running_loop().time() + max(1, int(timeout_s))
-
     while asyncio.get_running_loop().time() < deadline:
-        matches: list[Path] = []
-        try:
-            matches = [p for p in download_root.rglob(basename) if p.is_file()]
-        except OSError:
-            matches = []
-
-        ready: list[tuple[int, int, Path]] = []
-        for path in matches:
-            try:
-                st = path.stat()
-            except OSError:
-                continue
-
-            size = int(st.st_size)
-            mtime_ns = int(st.st_mtime_ns)
-            prior = before.get(str(path))
-            changed = prior is None or prior != (size, mtime_ns)
-            exact_size = expected_size > 0 and size == expected_size
-            size_ok = expected_size <= 0 or exact_size
-
-            # A completed file may already exist from a previous Helix attempt.
-            # If its basename and exact Soulseek-reported byte size match the
-            # selected candidate, it is safe to reuse even if this retry did not
-            # rewrite it. Without this, Retry snapshots the completed file and
-            # then waits forever for a change that slskd never makes.
-            reusable_existing = prior is not None and exact_size
-
-            if size_ok and (changed or reusable_existing):
-                # Prefer exact-size candidates, then newly changed files, then
-                # the newest matching completed copy.
-                ready.append(
-                    (
-                        2 if exact_size else 1,
-                        1 if changed else 0,
-                        mtime_ns,
-                        path,
-                    )
-                )
-
-        if ready:
-            ready.sort(key=lambda row: (row[0], row[1], row[2]), reverse=True)
-            found = ready[0][3]
+        found = _find_download_file_once(download_root, candidate, before)
+        if found is not None:
             LOG.info(
                 "[quality-upgrade] slskd download materialized user=%r file=%r local_path=%r",
                 candidate.username,
@@ -609,31 +699,221 @@ async def _wait_for_download_file(
                 str(found),
             )
             return found
-
         await asyncio.sleep(3)
-
     return None
 
 
-def _write_canonical_tags(path: Path, job: QualityUpgradeJob) -> None:
+_TERMINAL_TRANSFER_FAILURE_WORDS = (
+    "rejected",
+    "timedout",
+    "timed out",
+    "errored",
+    "error",
+    "failed",
+    "cancelled",
+    "canceled",
+)
+_TRANSFER_SUCCESS_WORDS = ("completed, succeeded", "completed succeeded", "succeeded")
+_REMOTE_QUEUE_WORDS = ("queued, remotely", "queued remotely", "remotely queued")
+_LOCAL_QUEUE_WORDS = ("queued, locally", "queued locally", "locally queued")
+_ACTIVE_TRANSFER_WORDS = (
+    "inprogress",
+    "in progress",
+    "requested",
+    "initializing",
+)
+
+
+def _transfer_state(transfer: dict | None) -> str:
+    if not transfer:
+        return ""
+    return str(transfer.get("state") or transfer.get("status") or "").strip().lower()
+
+
+async def _monitor_download_transfer(
+    *,
+    slskd: SlskdClient,
+    download_root: Path,
+    candidate: SlskdCandidate,
+    before: dict[str, tuple[int, int]] | None,
+    total_timeout_s: int,
+    queued_timeout_s: int = 90,
+    job_id: str | None = None,
+) -> tuple[Path | None, str, dict | None]:
+    """Monitor both slskd state and the shared staging directory.
+
+    A queued peer is not treated as an active download. If it never begins
+    within ``queued_timeout_s``, the caller can cancel it and try another strong
+    candidate instead of burning the full download timeout.
+    """
+    loop = asyncio.get_running_loop()
+    started = loop.time()
+    deadline = started + max(30, int(total_timeout_s))
+    queued_since: float | None = None
+    missing_since: float | None = None
+    succeeded_since: float | None = None
+    last_state = ""
+    last_transfer: dict | None = None
+
+    while loop.time() < deadline:
+        found = _find_download_file_once(download_root, candidate, before)
+        if found is not None:
+            LOG.info(
+                "[quality-upgrade] slskd download materialized user=%r file=%r local_path=%r",
+                candidate.username,
+                candidate.filename,
+                str(found),
+            )
+            return found, "completed", last_transfer
+
+        transfer = await slskd.find_download_transfer(candidate)
+        now = loop.time()
+        if transfer is None:
+            if missing_since is None:
+                missing_since = now
+            elif now - missing_since >= 15:
+                return None, "transfer disappeared from slskd", last_transfer
+            await asyncio.sleep(2)
+            continue
+
+        last_transfer = transfer
+        missing_since = None
+        state = _transfer_state(transfer)
+        if state != last_state:
+            LOG.info(
+                "[quality-upgrade] slskd transfer state user=%r file=%r state=%r",
+                candidate.username,
+                candidate.filename,
+                state,
+            )
+            last_state = state
+
+        if any(word in state for word in _TERMINAL_TRANSFER_FAILURE_WORDS):
+            return None, f"transfer ended in {state or 'a failed state'}", transfer
+
+        if any(word in state for word in _TRANSFER_SUCCESS_WORDS):
+            if succeeded_since is None:
+                succeeded_since = now
+            # slskd may mark success just before the final rename/move becomes
+            # visible through the shared mount. Give the filesystem a short grace
+            # period, but do not wait the full transfer timeout.
+            if now - succeeded_since >= 20:
+                return None, "slskd reported success but the completed file never appeared", transfer
+            await asyncio.sleep(1)
+            continue
+
+        is_queued = (
+            any(word in state for word in _REMOTE_QUEUE_WORDS)
+            or any(word in state for word in _LOCAL_QUEUE_WORDS)
+            or state == "queued"
+        )
+        if is_queued:
+            if job_id:
+                _set_transfer_job_status(job_id, "waiting_peer")
+            if queued_since is None:
+                queued_since = now
+            elif now - queued_since >= max(15, int(queued_timeout_s)):
+                return None, f"peer remained queued for {int(now - queued_since)} seconds", transfer
+        else:
+            # Once the transfer actually begins, stop applying the short queue
+            # deadline. It can use the normal overall download timeout.
+            if job_id and any(word in state for word in _ACTIVE_TRANSFER_WORDS):
+                _set_transfer_job_status(job_id, "downloading")
+            queued_since = None
+
+        await asyncio.sleep(2)
+
+    return None, f"download exceeded {int(total_timeout_s)} second timeout", last_transfer
+
+
+
+def _copy_original_tags(original: Path, target: Path, job: QualityUpgradeJob) -> None:
+    """Preserve the current library copy's complete metadata on the upgrade.
+
+    Navidrome can mark a file missing or split an album when a file is renamed
+    and its identifying tags change at the same time. The existing Helix-owned
+    library file is therefore the canonical metadata source.
+    """
     from mutagen import File
-    audio = File(str(path), easy=True)
-    if audio is None:
+
+    source_raw = File(str(original), easy=False)
+    target_raw = File(str(target), easy=False)
+    if target_raw is None:
         raise RuntimeError("Downloaded Soulseek file is not a supported audio file")
-    if audio.tags is None:
+
+    copied_raw = False
+    if source_raw is not None and source_raw.tags is not None:
+        if target_raw.tags is None:
+            try:
+                target_raw.add_tags()
+            except Exception:
+                pass
+
+        if target_raw.tags is not None:
+            try:
+                target_raw.tags.clear()
+                for key in source_raw.tags.keys():
+                    value = source_raw.tags[key]
+                    try:
+                        target_raw.tags[key] = list(value) if isinstance(value, (list, tuple)) else value
+                    except Exception:
+                        continue
+                target_raw.save()
+                copied_raw = True
+            except Exception:
+                LOG.exception(
+                    "[quality-upgrade] raw tag copy failed original=%r target=%r; falling back to easy tags",
+                    str(original),
+                    str(target),
+                )
+
+    source_easy = File(str(original), easy=True)
+    target_easy = File(str(target), easy=True)
+    if target_easy is None:
+        raise RuntimeError("Downloaded Soulseek file is not a supported audio file")
+    if target_easy.tags is None:
         try:
-            audio.add_tags()
+            target_easy.add_tags()
         except Exception:
             pass
-    audio["title"] = [job.title]
-    audio["artist"] = [job.artist]
-    if job.album:
-        audio["album"] = [job.album]
-    if job.album_artist:
-        audio["albumartist"] = [job.album_artist]
+
+    if source_easy is not None and source_easy.tags is not None and target_easy.tags is not None:
+        if not copied_raw:
+            try:
+                target_easy.tags.clear()
+            except Exception:
+                pass
+        for key, values in source_easy.tags.items():
+            try:
+                target_easy[key] = list(values) if isinstance(values, (list, tuple)) else [str(values)]
+            except Exception:
+                continue
+
+    def ensure(key: str, value: str) -> None:
+        if not value or target_easy.tags is None:
+            return
+        try:
+            current = target_easy.get(key)
+        except Exception:
+            current = None
+        if current:
+            return
+        try:
+            target_easy[key] = [value]
+        except Exception:
+            pass
+
+    # Only fill missing essentials. Existing album identity is preserved exactly,
+    # including date/year, discnumber, MusicBrainz IDs, compilation flags,
+    # albumartist, sort tags, genres, and beets metadata.
+    ensure("title", job.title)
+    ensure("artist", job.artist)
+    ensure("album", job.album)
+    ensure("albumartist", job.album_artist or job.artist)
     if job.track_no:
-        audio["tracknumber"] = [str(job.track_no)]
-    audio.save()
+        ensure("tracknumber", str(job.track_no))
+
+    target_easy.save()
 
 
 
@@ -654,12 +934,14 @@ async def _finish_downloaded_upgrade(
     job.updated_at = datetime.utcnow()
     _commit_quality_change(db)
 
-    _write_canonical_tags(downloaded, job)
+    original = Path(job.original_path)
+    if original.exists():
+        _copy_original_tags(original, downloaded, job)
+
     new_info = _audio_info(downloaded)
     if str(new_info["codec"]).lower() not in {"flac", "alac", "wav", "aiff", "aif"}:
         raise RuntimeError("Selected Soulseek result is not actually lossless")
 
-    original = Path(job.original_path)
     # Re-check ownership immediately before destructive replacement.
     if not original.exists():
         # A restart may have happened after os.replace but before the DB status
@@ -760,6 +1042,13 @@ async def _finish_downloaded_upgrade(
     # the consumed staging file after the library replacement is durable.
     _cleanup_slskd_staging(downloaded, download_root)
     await sub.start_scan()
+    try:
+        await sub.wait_for_scan_complete(timeout_s=120, poll_s=1.0)
+    except Exception:
+        LOG.exception(
+            "[quality-upgrade] Navidrome scan wait failed after replacement job=%s",
+            job.id,
+        )
 
 
 def _candidate_from_persisted_job(job: QualityUpgradeJob) -> SlskdCandidate | None:
@@ -946,6 +1235,11 @@ async def _process_job(job_id: str) -> None:
 
                     score = 60.0 + artist_score
 
+                    cand_album = _norm(str(candidate_song.get("album") or ""))
+                    exact_album = bool(job.album and cand_album and cand_album == _norm(job.album))
+                    if exact_album:
+                        score += 25.0
+
                     cand_duration = int(candidate_song.get("duration") or 0) * 1000
                     if want_duration and cand_duration:
                         diff = abs(want_duration - cand_duration)
@@ -953,12 +1247,12 @@ async def _process_job(job_id: str) -> None:
                             score += 20.0
                         elif diff <= 8000:
                             score += 10.0
+                        elif exact_album:
+                            # Exact title/artist/album is enough to identify the
+                            # imported track even if duration metadata differs.
+                            score += 2.0
                         else:
                             continue
-
-                    cand_album = _norm(str(candidate_song.get("album") or ""))
-                    if job.album and cand_album and cand_album == _norm(job.album):
-                        score += 10.0
 
                     if score > best_score:
                         best_score = score
@@ -983,6 +1277,7 @@ async def _process_job(job_id: str) -> None:
             direct_library_path = _direct_library_file_match(
                 title=str(job.title or ""),
                 artist=str(job.artist or ""),
+                album=str(job.album or ""),
                 duration_ms=int(job.duration_ms or 0),
                 title_variants=title_variants,
             )
@@ -1022,6 +1317,21 @@ async def _process_job(job_id: str) -> None:
             _commit_quality_change(db)
 
         current_path = direct_library_path if direct_library_path is not None else _library_file(song)
+        if current_path is None or not current_path.exists():
+            # A valid Navidrome row can still carry a path that doesn't map
+            # cleanly into Helix's mount. Before treating that as unresolved,
+            # identify the same recording directly from tags in the mounted
+            # library.
+            direct_library_path = _direct_library_file_match(
+                title=str(job.title or ""),
+                artist=str(job.artist or ""),
+                album=str(job.album or ""),
+                duration_ms=int(job.duration_ms or 0),
+                title_variants=title_variants,
+            )
+            if direct_library_path is not None:
+                current_path = direct_library_path
+
         if current_path is None or not current_path.exists():
             # Navidrome can expose the DB row slightly before the file mapping is
             # usable from Helix. This used to retry forever without changing the
@@ -1118,7 +1428,7 @@ async def _process_job(job_id: str) -> None:
         # Soulseek peer, remote filename, expected size, and current stage were
         # committed before the original await, so a Helix restart does not lose
         # the identity of the in-flight/completed transfer.
-        transient_resume_states = {"downloading", "validating", "tagging", "replacing"}
+        transient_resume_states = {"waiting_peer", "downloading", "validating", "tagging", "replacing"}
         if job.status in transient_resume_states:
             persisted_candidate = _candidate_from_persisted_job(job)
             if persisted_candidate is None:
@@ -1184,12 +1494,39 @@ async def _process_job(job_id: str) -> None:
                     job.status = "downloading"
                     job.updated_at = datetime.utcnow()
                     _commit_quality_change(db)
-                    downloaded = await _wait_for_download_file(
-                        download_root,
-                        persisted_candidate,
-                        timeout_s=int(settings.get("slskd_download_timeout_s") or 900),
+                    db.close()
+                    db = None
+                    downloaded, resume_reason, resume_transfer = await _monitor_download_transfer(
+                        slskd=slskd,
+                        download_root=download_root,
+                        candidate=persisted_candidate,
                         before={},
+                        total_timeout_s=int(settings.get("slskd_download_timeout_s") or 900),
+                        queued_timeout_s=90,
+                        job_id=job_id,
                     )
+                    db = SessionLocal()
+                    job = db.get(QualityUpgradeJob, job_id)
+                    if job is None:
+                        return
+                    if downloaded is None:
+                        await slskd.cancel_download_transfer(
+                            persisted_candidate,
+                            resume_transfer,
+                        )
+                        LOG.warning(
+                            "[quality-upgrade] persisted peer stalled job=%s user=%r file=%r reason=%s; returning to search",
+                            job.id,
+                            persisted_candidate.username,
+                            persisted_candidate.filename,
+                            resume_reason,
+                        )
+                        job.status = "pending"
+                        job.next_search_at = None
+                        job.last_error = f"Previous Soulseek peer stalled: {resume_reason}. Searching for another source."
+                        job.updated_at = datetime.utcnow()
+                        _commit_quality_change(db)
+                        return
                 else:
                     # The transfer disappeared (for example slskd was also
                     # restarted) but we still know exactly what Helix selected.
@@ -1204,6 +1541,8 @@ async def _process_job(job_id: str) -> None:
                     job.status = "downloading"
                     job.updated_at = datetime.utcnow()
                     _commit_quality_change(db)
+                    db.close()
+                    db = None
                     await slskd.enqueue_download(persisted_candidate)
                     transfer = await slskd.wait_for_download_transfer(
                         persisted_candidate,
@@ -1213,12 +1552,30 @@ async def _process_job(job_id: str) -> None:
                         raise RuntimeError(
                             "Could not restore persisted slskd transfer after restart"
                         )
-                    downloaded = await _wait_for_download_file(
-                        download_root,
-                        persisted_candidate,
-                        timeout_s=int(settings.get("slskd_download_timeout_s") or 900),
+                    downloaded, resume_reason, resume_transfer = await _monitor_download_transfer(
+                        slskd=slskd,
+                        download_root=download_root,
+                        candidate=persisted_candidate,
                         before={},
+                        total_timeout_s=int(settings.get("slskd_download_timeout_s") or 900),
+                        queued_timeout_s=90,
+                        job_id=job_id,
                     )
+                    db = SessionLocal()
+                    job = db.get(QualityUpgradeJob, job_id)
+                    if job is None:
+                        return
+                    if downloaded is None:
+                        await slskd.cancel_download_transfer(
+                            persisted_candidate,
+                            resume_transfer,
+                        )
+                        job.status = "pending"
+                        job.next_search_at = None
+                        job.last_error = f"Previous Soulseek peer stalled: {resume_reason}. Searching for another source."
+                        job.updated_at = datetime.utcnow()
+                        _commit_quality_change(db)
+                        return
 
             if downloaded is None:
                 raise RuntimeError(
@@ -1251,25 +1608,20 @@ async def _process_job(job_id: str) -> None:
         title_clean = _clean_search_text(search_title)
         album_clean = _clean_search_text(search_album)
 
+        # Keep network searches deliberately small. Soulseek searches can each
+        # take tens of seconds, so Helix does a few high-value discovery queries
+        # and relies on its own strict local candidate scoring for precision.
+        #
+        # 1. Artist + title: strongest direct recording lookup.
+        # 2. Artist + album: finds album-folder shares when track search misses.
+        # 3. Title only: catches oddly tagged / compilation copies.
+        # 4. Artist only: broad final fallback; inspect a large result set locally.
         raw_queries = [
-            " ".join(x for x in [search_artist, search_title, search_album] if x),
             " ".join(x for x in [search_artist, search_title] if x),
-            " ".join(x for x in [search_title, search_artist] if x),
-            " ".join(x for x in [artist_clean, title_clean, album_clean] if x),
-            " ".join(x for x in [artist_clean, title_clean] if x),
-            " ".join(x for x in [title_clean, artist_clean] if x),
-            " ".join(x for x in [search_title, search_album] if x),
-            " ".join(x for x in [title_clean, album_clean] if x),
+            " ".join(x for x in [search_artist, search_album] if x),
             search_title,
-            title_clean,
+            search_artist,
         ]
-
-        # Long titles often show up on Soulseek under shortened folder/file
-        # metadata. Try the meaningful title words with and without the artist.
-        title_words = [word for word in title_clean.split() if len(word) >= 4]
-        if len(title_words) >= 2:
-            raw_queries.append(" ".join([artist_clean, *title_words]))
-            raw_queries.append(" ".join(title_words))
 
         search_queries: list[str] = []
         seen_queries: set[str] = set()
@@ -1291,15 +1643,17 @@ async def _process_job(job_id: str) -> None:
             duration_ms=search_duration_ms,
         )
 
-        if job.status == "searching":
+        if job.status in {"searching", "waiting_search"}:
             LOG.info(
-                "[quality-upgrade] restarting interrupted Soulseek search job=%s",
+                "[quality-upgrade] restarting/interleaving Soulseek search job=%s status=%s",
                 job.id,
+                job.status,
             )
-        job.status = "searching"
-        job.last_search_at = datetime.utcnow()
+        job.status = "waiting_search"
         job.updated_at = datetime.utcnow()
         _commit_quality_change(db)
+        db.close()
+        db = None
 
         slskd = SlskdClient(
             slskd_url,
@@ -1317,11 +1671,39 @@ async def _process_job(job_id: str) -> None:
         )
 
         candidates_by_key: dict[tuple[str, str, int], SlskdCandidate] = {}
+        artist_only_keys = {
+            value.casefold()
+            for value in (search_artist.strip(), artist_clean.strip())
+            if value.strip()
+        }
         for query in search_queries:
+            # Artist-only is intentionally the broadest and final fallback. Give
+            # it a larger inspection window because a popular artist may expose
+            # many album folders/tracks before the requested recording appears.
+            query_max_results = max_results
+            if query.casefold() in artist_only_keys:
+                query_max_results = max(max_results, 1000)
+
+            _set_search_job_status(job_id, "waiting_search")
+            LOG.info(
+                "[quality-upgrade] job=%s waiting for staggered Soulseek search start query=%r",
+                job_id,
+                query,
+            )
+            await _wait_for_search_start_slot()
+            _set_search_job_status(job_id, "searching", mark_started=True)
+            LOG.info(
+                "[quality-upgrade] job=%s starting Soulseek search query=%r",
+                job_id,
+                query,
+            )
+            # The start gate is already released here, so another quality job
+            # can begin its own search after the short interval while this one
+            # continues waiting for Soulseek responses.
             batch = await slskd.search(
                 query,
                 timeout_s=search_timeout,
-                max_results=max_results,
+                max_results=query_max_results,
             )
             for candidate in batch:
                 key = (
@@ -1341,12 +1723,13 @@ async def _process_job(job_id: str) -> None:
                 if score >= min_score and _is_lossless(candidate)
             ]
             LOG.info(
-                "[quality-upgrade] job=%s Soulseek query=%r batch=%s unique=%s strong_lossless=%s",
+                "[quality-upgrade] job=%s Soulseek query=%r batch=%s unique=%s strong_lossless=%s max_results=%s",
                 job_id,
                 query,
                 len(batch),
                 len(candidates_by_key),
                 len(strong_lossless),
+                query_max_results,
             )
 
             # Easy tracks stop after enough redundant high-confidence choices.
@@ -1356,6 +1739,11 @@ async def _process_job(job_id: str) -> None:
 
         candidates = list(candidates_by_key.values())
         scored = [(float(_score_candidate(score_track, c)), c) for c in candidates]
+
+        db = SessionLocal()
+        job = db.get(QualityUpgradeJob, job_id)
+        if job is None:
+            return
         if scored:
             job.best_match_score = max(s for s, _ in scored)
 
@@ -1385,59 +1773,129 @@ async def _process_job(job_id: str) -> None:
             _commit_quality_change(db)
             return
 
-        valid.sort(key=lambda item: (item[0], _candidate_rank(item[1])), reverse=True)
-        score, candidate = valid[0]
+        # Prefer peers with free upload slots when identity confidence is equal,
+        # then quality. A slightly lower-ranked peer is still retained as a
+        # fallback if the first one never starts transferring.
+        valid.sort(
+            key=lambda item: (
+                item[0],
+                1 if item[1].free_upload_slots else 0,
+                -int(item[1].queue_length or 0),
+                _candidate_rank(item[1]),
+            ),
+            reverse=True,
+        )
 
-        job.status = "downloading"
-        job.best_match_score = score
-        job.slskd_username = candidate.username
-        job.slskd_filename = candidate.filename
-        job.slskd_size = candidate.size
-        job.updated_at = datetime.utcnow()
-        _commit_quality_change(db)
+        candidates_to_try = valid[:5]
+        download_timeout_s = int(settings.get("slskd_download_timeout_s") or 900)
+        failure_reasons: list[str] = []
+        downloaded: Path | None = None
+        chosen_candidate: SlskdCandidate | None = None
 
-        # Snapshot same-named files before queueing so the watcher can identify
-        # the newly-created/updated download even if an older copy already exists.
-        download_snapshot = _download_match_snapshot(download_root, candidate)
-        await slskd.enqueue_download(candidate)
+        for candidate_index, (score, candidate) in enumerate(candidates_to_try, start=1):
+            job.status = "downloading"
+            job.best_match_score = score
+            job.slskd_username = candidate.username
+            job.slskd_filename = candidate.filename
+            job.slskd_size = candidate.size
+            job.last_error = ""
+            job.updated_at = datetime.utcnow()
+            _commit_quality_change(db)
+            db.close()
+            db = None
 
-        # A 201 response only means slskd accepted the queue request. Confirm
-        # that a real transfer appears before Helix waits many minutes for a
-        # filesystem file that may never be created.
-        transfer = await slskd.wait_for_download_transfer(candidate, timeout_s=8.0)
-        if transfer is None:
-            raise RuntimeError(
-                f"slskd accepted the download request but no transfer appeared for "
-                f"{candidate.username}: {candidate.filename}"
+            LOG.info(
+                "[quality-upgrade] job=%s trying download candidate %s/%s score=%.1f free_slot=%s queue=%s user=%r file=%r",
+                job_id,
+                candidate_index,
+                len(candidates_to_try),
+                score,
+                candidate.free_upload_slots,
+                candidate.queue_length,
+                candidate.username,
+                candidate.filename,
             )
 
-        transfer_state = str(
-            transfer.get("state") or transfer.get("status") or ""
-        ).lower()
-        terminal_failure_words = (
-            "rejected",
-            "timedout",
-            "timed out",
-            "errored",
-            "error",
-            "failed",
-            "cancelled",
-            "canceled",
-        )
-        if any(word in transfer_state for word in terminal_failure_words):
-            raise RuntimeError(
-                f"slskd transfer failed immediately ({transfer_state}) for "
-                f"{candidate.username}: {candidate.filename}"
-            )
+            download_snapshot = _download_match_snapshot(download_root, candidate)
 
-        downloaded = await _wait_for_download_file(
-            download_root,
-            candidate,
-            timeout_s=int(settings.get("slskd_download_timeout_s") or 900),
-            before=download_snapshot,
-        )
-        if downloaded is None:
-            raise RuntimeError("Soulseek download did not complete before timeout")
+            try:
+                await slskd.enqueue_download(candidate)
+                transfer = await slskd.wait_for_download_transfer(candidate, timeout_s=8.0)
+                if transfer is None:
+                    reason = "slskd accepted the request but no transfer appeared"
+                    failure_reasons.append(f"{candidate.username}: {reason}")
+                    LOG.warning(
+                        "[quality-upgrade] job=%s candidate %s/%s unusable: %s user=%r file=%r",
+                        job_id,
+                        candidate_index,
+                        len(candidates_to_try),
+                        reason,
+                        candidate.username,
+                        candidate.filename,
+                    )
+                    continue
+
+                transfer_state = _transfer_state(transfer)
+                if any(word in transfer_state for word in _TERMINAL_TRANSFER_FAILURE_WORDS):
+                    reason = f"transfer immediately entered {transfer_state or 'a failed state'}"
+                    failure_reasons.append(f"{candidate.username}: {reason}")
+                    LOG.warning(
+                        "[quality-upgrade] job=%s candidate %s/%s unusable: %s",
+                        job_id,
+                        candidate_index,
+                        len(candidates_to_try),
+                        reason,
+                    )
+                    continue
+
+                downloaded, reason, last_transfer = await _monitor_download_transfer(
+                    slskd=slskd,
+                    download_root=download_root,
+                    candidate=candidate,
+                    before=download_snapshot,
+                    total_timeout_s=download_timeout_s,
+                    queued_timeout_s=90,
+                    job_id=job_id,
+                )
+                if downloaded is not None:
+                    chosen_candidate = candidate
+                    break
+
+                failure_reasons.append(f"{candidate.username}: {reason}")
+                LOG.warning(
+                    "[quality-upgrade] job=%s candidate %s/%s stalled/failed: %s; trying next acceptable peer",
+                    job_id,
+                    candidate_index,
+                    len(candidates_to_try),
+                    reason,
+                )
+                await slskd.cancel_download_transfer(candidate, last_transfer)
+            except Exception as candidate_exc:
+                reason = str(candidate_exc)[:500]
+                failure_reasons.append(f"{candidate.username}: {reason}")
+                LOG.exception(
+                    "[quality-upgrade] job=%s candidate %s/%s raised during transfer; trying next acceptable peer",
+                    job_id,
+                    candidate_index,
+                    len(candidates_to_try),
+                )
+                try:
+                    await slskd.cancel_download_transfer(candidate)
+                except Exception:
+                    pass
+            finally:
+                if db is None:
+                    db = SessionLocal()
+                    job = db.get(QualityUpgradeJob, job_id)
+                    if job is None:
+                        return
+
+        if downloaded is None or chosen_candidate is None:
+            detail = "; ".join(failure_reasons[-3:])
+            raise RuntimeError(
+                f"All {len(candidates_to_try)} acceptable Soulseek peers failed or stalled"
+                + (f": {detail}" if detail else "")
+            )
 
         await _finish_downloaded_upgrade(
             db=db,
@@ -1446,8 +1904,11 @@ async def _process_job(job_id: str) -> None:
             downloaded=downloaded,
             download_root=download_root,
         )
+
     except Exception as exc:
         LOG.exception("Quality upgrade failed job_id=%s", job_id)
+        if db is None:
+            db = SessionLocal()
         job = db.get(QualityUpgradeJob, job_id)
         if job:
             job.status = "failed"
@@ -1461,7 +1922,8 @@ async def _process_job(job_id: str) -> None:
             await slskd.close()
         if sub is not None:
             await sub.close()
-        db.close()
+        if db is not None:
+            db.close()
 
 
 async def quality_upgrade_worker_loop() -> None:
@@ -1478,7 +1940,7 @@ async def quality_upgrade_worker_loop() -> None:
                     select(QualityUpgradeJob)
                     .where(QualityUpgradeJob.status.in_([
                         "pending", "no_match", "failed",
-                        "searching", "downloading", "validating", "tagging", "replacing",
+                        "searching", "waiting_search", "waiting_peer", "downloading", "validating", "tagging", "replacing",
                     ]))
                     .where((QualityUpgradeJob.next_search_at.is_(None)) | (QualityUpgradeJob.next_search_at <= now))
                     .order_by(QualityUpgradeJob.created_at.asc())

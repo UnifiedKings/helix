@@ -11,6 +11,20 @@ import httpx
 
 LOG = logging.getLogger(__name__)
 
+# slskd can reject bursts of POST /searches with HTTP 429. All Helix quality
+# workers share this gate so concurrent jobs can still run while search creation
+# itself is paced globally.
+_SEARCH_START_LOCK: asyncio.Lock | None = None
+_LAST_SEARCH_STARTED_AT = 0.0
+_SEARCH_MIN_INTERVAL_S = 2.5
+
+
+def _search_start_lock() -> asyncio.Lock:
+    global _SEARCH_START_LOCK
+    if _SEARCH_START_LOCK is None:
+        _SEARCH_START_LOCK = asyncio.Lock()
+    return _SEARCH_START_LOCK
+
 
 @dataclass
 class SlskdCandidate:
@@ -196,8 +210,37 @@ class SlskdClient:
             "responseLimit": max(100, int(max_results) * 2),
         }
 
-        r = await self._http.post("/api/v0/searches", json=create_payload)
-        r.raise_for_status()
+        global _LAST_SEARCH_STARTED_AT
+        async with _search_start_lock():
+            loop = asyncio.get_running_loop()
+            since_last = loop.time() - _LAST_SEARCH_STARTED_AT
+            if since_last < _SEARCH_MIN_INTERVAL_S:
+                await asyncio.sleep(_SEARCH_MIN_INTERVAL_S - since_last)
+
+            # A 429 is infrastructure backpressure, not a failed track match.
+            # Honor Retry-After when present and otherwise back off briefly.
+            r = None
+            for retry_index in range(4):
+                r = await self._http.post("/api/v0/searches", json=create_payload)
+                if r.status_code != 429:
+                    break
+                retry_after_raw = str(r.headers.get("Retry-After") or "").strip()
+                try:
+                    retry_after = float(retry_after_raw)
+                except ValueError:
+                    retry_after = float(2 ** (retry_index + 1))
+                retry_after = max(1.0, min(30.0, retry_after))
+                LOG.warning(
+                    "[slskd] search creation rate-limited query=%r retry_in=%.1fs attempt=%s/4",
+                    query,
+                    retry_after,
+                    retry_index + 1,
+                )
+                await asyncio.sleep(retry_after)
+
+            assert r is not None
+            r.raise_for_status()
+            _LAST_SEARCH_STARTED_AT = loop.time()
 
         LOG.info(
             "[slskd] search started id=%s query=%r timeout_ms=%s",
@@ -472,6 +515,60 @@ class SlskdClient:
                 return transfer
             await asyncio.sleep(0.75)
         return None
+
+
+    async def cancel_download_transfer(
+        self,
+        candidate: SlskdCandidate,
+        transfer: dict | None = None,
+    ) -> bool:
+        """Cancel one exact download without removing it from slskd history.
+
+        slskd's DELETE endpoint supports ``remove=false``. Helix uses that so a
+        stalled/rejected peer can be abandoned while the transfer record remains
+        visible in slskd for debugging/history.
+        """
+        transfer = transfer or await self.find_download_transfer(candidate)
+        if transfer is None:
+            return False
+
+        transfer_id = str(
+            transfer.get("id")
+            or transfer.get("transferId")
+            or transfer.get("transfer_id")
+            or ""
+        ).strip()
+        if not transfer_id:
+            LOG.warning(
+                "[slskd] cannot cancel transfer without id user=%r file=%r",
+                candidate.username,
+                candidate.filename,
+            )
+            return False
+
+        try:
+            r = await self._http.delete(
+                f"/api/v0/transfers/downloads/{candidate.username}/{transfer_id}",
+                params={"remove": "false"},
+            )
+            if r.status_code == 404:
+                return False
+            r.raise_for_status()
+            LOG.info(
+                "[slskd] cancelled stalled download user=%r file=%r transfer_id=%s",
+                candidate.username,
+                candidate.filename,
+                transfer_id,
+            )
+            return True
+        except Exception:
+            LOG.exception(
+                "[slskd] could not cancel download user=%r file=%r transfer_id=%s",
+                candidate.username,
+                candidate.filename,
+                transfer_id,
+            )
+            return False
 
 
     async def downloads(self) -> Any:

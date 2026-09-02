@@ -7,10 +7,11 @@ from typing import Any, Dict, List, Optional, Set
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from sqlalchemy import select
 
 from ..auth import get_current_user
 from ..db import SessionLocal
-from ..models import User
+from ..models import User, Playlist, PlaylistTrack, LikedTrack
 from ..settings_store import get_settings
 from ..download_manager import DOWNLOAD_MANAGER, DownloadJob
 from ..integrations import ytmusic as ytmusic_integration
@@ -145,6 +146,125 @@ def _subsonic_client_from_settings(settings: Dict[str, Any]) -> Optional[Subsoni
         api_version=settings.get("subsonic_api_version") or "1.16.1",
         timeout_s=int(settings.get("subsonic_timeout_s") or 20),
     )
+
+
+
+def _playlist_rows_for_user(user_id: str, playlist_id: str) -> tuple[Playlist, List[Any]]:
+    """Load one Helix playlist and its tracks using a short-lived DB session."""
+    db = SessionLocal()
+    try:
+        pid = (playlist_id or "").strip()
+        if pid == "liked":
+            playlist = db.execute(
+                select(Playlist).where(
+                    Playlist.user_id == user_id,
+                    Playlist.system_key == "liked",
+                )
+            ).scalar_one_or_none()
+        else:
+            playlist = db.execute(
+                select(Playlist).where(
+                    Playlist.id == pid,
+                    Playlist.user_id == user_id,
+                )
+            ).scalar_one_or_none()
+
+        if playlist is None:
+            raise HTTPException(status_code=404, detail="Playlist not found")
+
+        if (playlist.system_key or "") == "liked":
+            rows = db.execute(
+                select(LikedTrack)
+                .where(LikedTrack.user_id == user_id)
+                .order_by(LikedTrack.created_at.desc())
+            ).scalars().all()
+        else:
+            rows = db.execute(
+                select(PlaylistTrack)
+                .where(
+                    PlaylistTrack.playlist_id == playlist.id,
+                    PlaylistTrack.user_id == user_id,
+                )
+                .order_by(PlaylistTrack.position.asc(), PlaylistTrack.created_at.asc())
+            ).scalars().all()
+
+        # The ORM rows become detached after this function returns, but their
+        # scalar columns remain available because no commit/expire occurs here.
+        return playlist, list(rows)
+    finally:
+        db.close()
+
+
+def _playlist_track_video_id(track: Any) -> str:
+    """Use the stored YTMusic id, or resolve one from playlist metadata."""
+    vid = str(getattr(track, "yt_video_id", "") or "").strip()
+    if vid:
+        return vid
+
+    title = str(getattr(track, "title", "") or "").strip()
+    artist = str(getattr(track, "artist", "") or "").strip()
+    album = str(getattr(track, "album", "") or "").strip()
+    duration_ms = int(getattr(track, "duration_ms", 0) or 0)
+    if not title or not artist:
+        return ""
+
+    try:
+        found = ytmusic_integration.find_track(
+            title=title,
+            artist=artist,
+            album=album,
+            duration_seconds=int(duration_ms / 1000) or None,
+        )
+    except Exception:
+        found = None
+
+    return (
+        str(getattr(found, "video_id", "") or "").strip()
+        if getattr(found, "found", False)
+        else ""
+    )
+
+
+async def _playlist_track_exists_in_subsonic(
+    client: SubsonicClient,
+    track: Any,
+) -> bool:
+    """Do one inexpensive Subsonic lookup for an exact artist/title match.
+
+    Playlist rows that already carry a Subsonic id are handled before this
+    function. For YTMusic-origin rows, use one search3 request and inspect the
+    returned metadata locally instead of invoking the much broader multi-query
+    resolver for every playlist item.
+    """
+    title = str(getattr(track, "title", "") or "").strip()
+    artist = str(getattr(track, "artist", "") or "").strip()
+    if not title or not artist:
+        return False
+
+    wanted_title = _norm_text(title)
+    wanted_artist = _norm_text(artist)
+    if not wanted_title or not wanted_artist:
+        return False
+
+    result = await client.search3(f"{title} {artist}", song_count=75)
+    songs = result.get("song") or []
+    for song in songs:
+        candidate_title = _norm_text(str(song.get("title") or ""))
+        candidate_artist = _norm_text(str(song.get("artist") or ""))
+        if candidate_title == wanted_title and candidate_artist == wanted_artist:
+            return True
+
+    # Some Subsonic implementations rank combined queries poorly. A title-only
+    # lookup is a single fallback request, still far cheaper than the full
+    # search_song_best query ladder.
+    result = await client.search3(title, song_count=75)
+    for song in (result.get("song") or []):
+        candidate_title = _norm_text(str(song.get("title") or ""))
+        candidate_artist = _norm_text(str(song.get("artist") or ""))
+        if candidate_title == wanted_title and candidate_artist == wanted_artist:
+            return True
+
+    return False
 
 
 @router.post("/track", response_model=Dict[str, Any])
@@ -354,4 +474,143 @@ async def add_album(request: Request, user: User = Depends(get_current_user)) ->
         "unresolved": unresolved,
         "unresolved_tracks": unresolved_tracks,
         "skip_existing_enabled": _skip_existing_album_tracks_enabled(),
+    }
+
+
+@router.post("/playlist/{playlist_id}", response_model=Dict[str, Any])
+async def add_playlist(
+    playlist_id: str,
+    request: Request,
+    user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Add every missing track from a Helix playlist to the Subsonic library.
+
+    Tracks already linked to Subsonic are skipped immediately. YTMusic-origin
+    tracks are checked against Subsonic by normalized artist/title before being
+    enqueued, so re-importing a playlist does not intentionally create duplicate
+    library copies.
+    """
+    _require_import_permission(user)
+
+    ip = getattr(getattr(request, "client", None), "host", "") or ""
+    if not RATE_LIMITER.allow(
+        make_key(scope="subsonic_add_playlist", user_id=str(user.id), ip=ip),
+        limit=4,
+        window_s=60,
+    ):
+        raise HTTPException(status_code=429, detail="Too many playlist import requests")
+
+    playlist, tracks = _playlist_rows_for_user(str(user.id), playlist_id)
+
+    settings = _load_settings_short()
+    client = _subsonic_client_from_settings(settings)
+    if client is None:
+        raise HTTPException(
+            status_code=409,
+            detail="Subsonic is not configured. Add-to-library is disabled.",
+        )
+
+    total = len(tracks)
+    skipped_existing = 0
+    enqueued = 0
+    unresolved = 0
+    lookup_failed = 0
+    unresolved_tracks: List[str] = []
+    lookup_failed_tracks: List[str] = []
+
+    # Navidrome/Subsonic is local in the common Helix setup, so a few concurrent
+    # presence checks keep large playlists responsive without flooding search3.
+    semaphore = asyncio.Semaphore(4)
+
+    async def classify(track: Any) -> tuple[Any, str]:
+        # Playlist entries originating from Subsonic already prove presence.
+        if str(getattr(track, "subsonic_song_id", "") or "").strip():
+            return track, "existing"
+
+        async with semaphore:
+            try:
+                exists = await _playlist_track_exists_in_subsonic(client, track)
+            except Exception:
+                return track, "lookup_failed"
+        return track, "existing" if exists else "missing"
+
+    try:
+        classifications = await asyncio.gather(*(classify(track) for track in tracks))
+
+        for track, state in classifications:
+            title = str(getattr(track, "title", "") or "").strip()
+            artist = str(getattr(track, "artist", "") or "").strip()
+            album = str(getattr(track, "album", "") or "").strip()
+            duration_ms = int(getattr(track, "duration_ms", 0) or 0)
+            art_url = str(getattr(track, "art_url", "") or "").strip()
+            browse_id = str(getattr(track, "yt_browse_id", "") or "").strip()
+
+            if state == "existing":
+                skipped_existing += 1
+                continue
+
+            if state == "lookup_failed":
+                # Do not risk creating a duplicate when Subsonic could not be
+                # checked. The caller gets the exact tracks that need retrying.
+                lookup_failed += 1
+                lookup_failed_tracks.append(title or f"{artist} — unknown track")
+                continue
+
+            if not title or not artist:
+                unresolved += 1
+                unresolved_tracks.append(title or f"{artist} — unknown track")
+                continue
+
+            vid = await asyncio.to_thread(_playlist_track_video_id, track)
+            if not vid:
+                unresolved += 1
+                unresolved_tracks.append(f"{artist} — {title}")
+                continue
+
+            job = DownloadJob(
+                video_id=vid,
+                url=f"https://music.youtube.com/watch?v={vid}",
+                title=title,
+                artist=artist,
+                album=album,
+                album_artist=artist,
+                browse_id=browse_id,
+                art_url=art_url,
+                track_no=0,
+                duration_ms=duration_ms,
+                persist_to_subsonic=True,
+                user_id=str(user.id),
+                priority=40,
+            )
+            await DOWNLOAD_MANAGER.enqueue_normal(job)
+
+            if settings.get("slskd_enabled"):
+                create_upgrade_job(
+                    user_id=str(user.id),
+                    yt_video_id=vid,
+                    yt_browse_id=browse_id,
+                    title=title,
+                    artist=artist,
+                    album=album,
+                    album_artist=artist,
+                    duration_ms=duration_ms,
+                    art_url=art_url,
+                )
+
+            invalidate_song_cache(f"song:{vid}")
+            enqueued += 1
+    finally:
+        await client.close()
+
+    return {
+        "ok": True,
+        "playlist_id": str(playlist.id),
+        "playlist_name": str(playlist.name or ""),
+        "total": total,
+        "enqueued": enqueued,
+        "skipped_existing": skipped_existing,
+        "unresolved": unresolved,
+        "unresolved_tracks": unresolved_tracks,
+        "lookup_failed": lookup_failed,
+        "lookup_failed_tracks": lookup_failed_tracks,
     }

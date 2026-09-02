@@ -94,45 +94,6 @@ def _song_resolve_cache_put(key: str, value: Optional[Dict[str, Any]]) -> None:
         _SONG_RESOLVE_CACHE.popitem(last=False)
 
 
-def _song_resolve_cache_invalidate(
-    *,
-    base_url: str,
-    title: str | None = None,
-    artist: str | None = None,
-    negative_only: bool = False,
-) -> int:
-    """Invalidate resolver cache entries after the library changes.
-
-    A Navidrome scan can make a track visible immediately after Helix cached a
-    miss. Removing those misses prevents unrelated UI/library checks from
-    continuing to see stale "not found" results until their TTL expires.
-    """
-    base_prefix = (base_url or "").rstrip("/").casefold() + "|"
-    want_title = _norm(title or "")
-    want_artist = _norm(artist or "")
-    removed = 0
-
-    for key, (_, value) in list(_SONG_RESOLVE_CACHE.items()):
-        if not key.startswith(base_prefix):
-            continue
-
-        parts = key.split("|")
-        # key = base_url | title | artist | album | duration
-        if len(parts) >= 3:
-            if want_title and parts[1] != want_title:
-                continue
-            if want_artist and parts[2] != want_artist:
-                continue
-
-        if negative_only and value is not None:
-            continue
-
-        _SONG_RESOLVE_CACHE.pop(key, None)
-        removed += 1
-
-    return removed
-
-
 def _strip_common_edition_suffixes(title: str) -> str:
     """Return a title with common release/edition qualifiers removed.
 
@@ -295,20 +256,6 @@ class SubsonicClient:
             "c": self.client_name,
             "f": "json",
         }
-
-    def invalidate_song_resolve_cache(
-        self,
-        title: str | None = None,
-        artist: str | None = None,
-        *,
-        negative_only: bool = False,
-    ) -> int:
-        return _song_resolve_cache_invalidate(
-            base_url=self.base_url,
-            title=title,
-            artist=artist,
-            negative_only=negative_only,
-        )
 
     async def search_song_best(
         self,
@@ -554,15 +501,48 @@ class SubsonicClient:
         try:
             r = await self._http.get(url, params=params)
             r.raise_for_status()
-            removed = self.invalidate_song_resolve_cache(negative_only=True)
-            if removed:
-                logger.info(
-                    "Cleared %s cached Subsonic song misses after library scan trigger",
-                    removed,
-                )
             return True
         except Exception:
             return False
+
+    async def get_scan_status(self) -> Dict[str, Any]:
+        """Return the current Subsonic/Navidrome media-scan status."""
+        url = f"{self.base_url}/rest/getScanStatus.view"
+        params = {**self._auth_params()}
+        r = await self._http.get(url, params=params)
+        r.raise_for_status()
+        data = (r.json() or {}).get("subsonic-response", {}) or {}
+        status = data.get("scanStatus") or {}
+        return status if isinstance(status, dict) else {}
+
+    async def wait_for_scan_complete(
+        self,
+        timeout_s: float = 120.0,
+        poll_s: float = 1.0,
+    ) -> bool:
+        """Wait for a triggered Navidrome scan to finish."""
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + max(1.0, float(timeout_s))
+        saw_scanning = False
+
+        while loop.time() < deadline:
+            status = await self.get_scan_status()
+            scanning = bool(status.get("scanning"))
+
+            if scanning:
+                saw_scanning = True
+            elif saw_scanning:
+                return True
+            else:
+                # Very small libraries may finish before the first status poll.
+                await asyncio.sleep(min(max(0.2, float(poll_s)), 1.0))
+                status = await self.get_scan_status()
+                if not bool(status.get("scanning")):
+                    return True
+
+            await asyncio.sleep(max(0.2, float(poll_s)))
+
+        return False
 
     async def get_song(self, song_id: str) -> Optional[Dict[str, Any]]:
         """Fetch a song by id (best-effort)."""
