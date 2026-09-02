@@ -1,12 +1,13 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
 import type { AdminUser } from '../api/types'
+import { SlskdAdminSettingsSection } from '../components/settings/SlskdAdminSettingsSection'
 import '../styles/account-management.css'
 
-type AdminSection = 'overview' | 'users' | 'library' | 'playback' | 'downloads' | 'search' | 'advanced'
+type AdminSection = 'overview' | 'users' | 'library' | 'quality' | 'playback' | 'downloads' | 'search' | 'advanced'
 
 const SECTIONS: Array<[AdminSection, string]> = [
-  ['overview', 'Overview'], ['users', 'Users'], ['library', 'Library & Subsonic'],
+  ['overview', 'Overview'], ['users', 'Users'], ['library', 'Library & Subsonic'], ['quality', 'Quality Upgrades'],
   ['playback', 'Playback'], ['downloads', 'Downloads & Prefetch'], ['search', 'Search & Catalog'], ['advanced', 'Advanced'],
 ]
 
@@ -167,6 +168,7 @@ export function AdminSettingsPage() {
         </> : null}
 
         {(['library', 'playback', 'downloads', 'search'] as AdminSection[]).includes(section) ? <><div className="settings-section-heading"><h2>{SECTIONS.find(([key]) => key === section)?.[1]}</h2><p>{section === 'playback' ? 'Global resource limits and playback storage policy.' : section === 'downloads' ? 'Control how aggressively the server prepares media ahead of playback.' : section === 'library' ? 'Connection details for the shared music library.' : 'Server-wide catalog selection behavior.'}</p></div><div className="settings-card">{groupFields(section)}</div></> : null}
+        {section === 'quality' ? <SlskdAdminSettingsSection /> : null}
         {section === 'advanced' ? <><div className="settings-section-heading"><h2>Advanced</h2><p>Low-level settings and legacy configuration. These are intentionally separated from normal administration.</p></div><div className="settings-card">{groupFields('advanced')}</div><div className="settings-obsolete-note"><strong>Review later</strong><p>The following existing settings appear unused or obsolete in the current backend and are intentionally not editable here yet:</p><code>{Array.from(OBSOLETE_CANDIDATES).join(', ')}</code></div></> : null}
       </section>
     </div>

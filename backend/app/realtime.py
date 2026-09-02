@@ -19,6 +19,7 @@ class RealtimeHub:
     def __init__(self) -> None:
         self.player: DefaultDict[str, set[WebSocket]] = defaultdict(set)
         self.lobbies: DefaultDict[str, set[LobbySocket]] = defaultdict(set)
+        self.quality_upgrades: set[WebSocket] = set()
         self.loop: asyncio.AbstractEventLoop | None = None
         self._seq = 0
 
@@ -50,6 +51,12 @@ class RealtimeHub:
             bucket.discard(conn)
             if not bucket:
                 self.lobbies.pop(lobby_id, None)
+
+    async def register_quality_upgrades(self, ws: WebSocket) -> None:
+        self.quality_upgrades.add(ws)
+
+    def unregister_quality_upgrades(self, ws: WebSocket) -> None:
+        self.quality_upgrades.discard(ws)
 
 HUB = RealtimeHub()
 
@@ -102,6 +109,17 @@ async def broadcast_lobby_state(lobby_id: str) -> None:
         except Exception:
             HUB.unregister_lobby(lobby_id, conn)
 
+async def broadcast_quality_upgrades_changed() -> None:
+    sockets = list(HUB.quality_upgrades)
+    if not sockets:
+        return
+    msg = {"type": "quality-upgrades.changed", "seq": HUB.next_seq()}
+    for ws in sockets:
+        try:
+            await ws.send_json(msg)
+        except Exception:
+            HUB.unregister_quality_upgrades(ws)
+
 def _schedule(coro) -> None:
     loop = HUB.loop
     if loop is None or loop.is_closed():
@@ -120,3 +138,6 @@ def schedule_player_state_broadcast(user_id: str) -> None:
 
 def schedule_lobby_state_broadcast(lobby_id: str) -> None:
     _schedule(broadcast_lobby_state(lobby_id))
+
+def schedule_quality_upgrades_changed() -> None:
+    _schedule(broadcast_quality_upgrades_changed())

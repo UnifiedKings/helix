@@ -7,6 +7,7 @@ import os
 import random
 import string
 from typing import Any, Dict, Optional, Tuple, List
+from collections import OrderedDict
 
 import httpx
 import re
@@ -42,6 +43,94 @@ def _norm(s: str) -> str:
     s = s.replace("'", "")  # lion's -> lions
     s = re.sub(r"[^0-9a-z\s]+", " ", s)
     return " ".join(s.split())
+
+
+# Short-lived process-wide resolver cache. Several Helix surfaces can ask
+# "is this exact track in Subsonic?" at the same time; without deduplication,
+# each request expands into multiple search3 queries.
+_SONG_RESOLVE_CACHE: "OrderedDict[str, tuple[float, Optional[Dict[str, Any]]]]" = OrderedDict()
+_SONG_RESOLVE_INFLIGHT: dict[str, asyncio.Future] = {}
+_SONG_RESOLVE_CACHE_MAX = int(os.getenv("HELIX_SUBSONIC_RESOLVE_CACHE_MAX", "1000"))
+_SONG_RESOLVE_POSITIVE_TTL_S = float(os.getenv("HELIX_SUBSONIC_RESOLVE_POSITIVE_TTL_S", "60"))
+_SONG_RESOLVE_NEGATIVE_TTL_S = float(os.getenv("HELIX_SUBSONIC_RESOLVE_NEGATIVE_TTL_S", "10"))
+
+
+def _song_resolve_cache_key(
+    base_url: str,
+    title: str,
+    artist: str,
+    album: str,
+    duration_ms: Optional[int],
+) -> str:
+    # Duration is intentionally bucketed to the nearest second so tiny metadata
+    # differences do not defeat deduplication.
+    duration_s = int((int(duration_ms or 0) + 500) / 1000) if duration_ms else 0
+    return "|".join([
+        (base_url or "").rstrip("/").casefold(),
+        _norm(title),
+        _norm(artist),
+        _norm(album),
+        str(duration_s),
+    ])
+
+
+def _song_resolve_cache_get(key: str) -> tuple[bool, Optional[Dict[str, Any]]]:
+    row = _SONG_RESOLVE_CACHE.get(key)
+    if not row:
+        return False, None
+    expires_at, value = row
+    if time.monotonic() >= expires_at:
+        _SONG_RESOLVE_CACHE.pop(key, None)
+        return False, None
+    _SONG_RESOLVE_CACHE.move_to_end(key)
+    return True, value
+
+
+def _song_resolve_cache_put(key: str, value: Optional[Dict[str, Any]]) -> None:
+    ttl = _SONG_RESOLVE_POSITIVE_TTL_S if value else _SONG_RESOLVE_NEGATIVE_TTL_S
+    _SONG_RESOLVE_CACHE[key] = (time.monotonic() + max(0.0, ttl), value)
+    _SONG_RESOLVE_CACHE.move_to_end(key)
+    while len(_SONG_RESOLVE_CACHE) > max(50, _SONG_RESOLVE_CACHE_MAX):
+        _SONG_RESOLVE_CACHE.popitem(last=False)
+
+
+def _song_resolve_cache_invalidate(
+    *,
+    base_url: str,
+    title: str | None = None,
+    artist: str | None = None,
+    negative_only: bool = False,
+) -> int:
+    """Invalidate resolver cache entries after the library changes.
+
+    A Navidrome scan can make a track visible immediately after Helix cached a
+    miss. Removing those misses prevents unrelated UI/library checks from
+    continuing to see stale "not found" results until their TTL expires.
+    """
+    base_prefix = (base_url or "").rstrip("/").casefold() + "|"
+    want_title = _norm(title or "")
+    want_artist = _norm(artist or "")
+    removed = 0
+
+    for key, (_, value) in list(_SONG_RESOLVE_CACHE.items()):
+        if not key.startswith(base_prefix):
+            continue
+
+        parts = key.split("|")
+        # key = base_url | title | artist | album | duration
+        if len(parts) >= 3:
+            if want_title and parts[1] != want_title:
+                continue
+            if want_artist and parts[2] != want_artist:
+                continue
+
+        if negative_only and value is not None:
+            continue
+
+        _SONG_RESOLVE_CACHE.pop(key, None)
+        removed += 1
+
+    return removed
 
 
 def _strip_common_edition_suffixes(title: str) -> str:
@@ -99,6 +188,7 @@ def _title_match_quality(want_title: str, candidate_title: str) -> float:
         if shorter >= 4 and (shorter / max(1, longer)) >= 0.72:
             return 0.65
     return 0.0
+
 
 def _contains_bad_variant(title: str) -> bool:
     t = _norm(title)
@@ -163,7 +253,15 @@ def _album_candidate_score(album: str, artist: str, candidate: Dict[str, Any]) -
 
 
 class SubsonicClient:
-    def __init__(self, base_url: str, username: str, password: str, client_name: str = "Helix", api_version: str = "1.16.1", timeout_s: int = 20):
+    def __init__(
+        self,
+        base_url: str,
+        username: str,
+        password: str,
+        client_name: str = "Helix",
+        api_version: str = "1.16.1",
+        timeout_s: int = 20,
+    ):
         self.base_url = (base_url or "").rstrip("/")
         self.username = username
         self.password = password
@@ -198,7 +296,28 @@ class SubsonicClient:
             "f": "json",
         }
 
-    async def search_song_best(self, title: str, artist: str, duration_ms: Optional[int] = None, album: str = "") -> Optional[Dict[str, Any]]:
+    def invalidate_song_resolve_cache(
+        self,
+        title: str | None = None,
+        artist: str | None = None,
+        *,
+        negative_only: bool = False,
+    ) -> int:
+        return _song_resolve_cache_invalidate(
+            base_url=self.base_url,
+            title=title,
+            artist=artist,
+            negative_only=negative_only,
+        )
+
+    async def search_song_best(
+        self,
+        title: str,
+        artist: str,
+        duration_ms: Optional[int] = None,
+        album: str = "",
+        use_cache: bool = True,
+    ) -> Optional[Dict[str, Any]]:
         """Search Subsonic for the same artist + track title.
 
         Library-presence checks should answer a simple question: does Subsonic
@@ -215,6 +334,65 @@ class SubsonicClient:
         if not raw_title or not raw_artist:
             return None
 
+        cache_key = _song_resolve_cache_key(
+            self.base_url,
+            raw_title,
+            raw_artist,
+            album,
+            duration_ms,
+        )
+
+        if use_cache:
+            hit, cached = _song_resolve_cache_get(cache_key)
+            if hit:
+                return cached
+
+            inflight = _SONG_RESOLVE_INFLIGHT.get(cache_key)
+            if inflight is not None:
+                try:
+                    return await asyncio.shield(inflight)
+                except Exception:
+                    pass
+
+            loop = asyncio.get_running_loop()
+            owner_future = loop.create_future()
+            _SONG_RESOLVE_INFLIGHT[cache_key] = owner_future
+        else:
+            owner_future = None
+
+        result: Optional[Dict[str, Any]] = None
+        resolve_error: Exception | None = None
+
+        try:
+            result = await self._search_song_best_uncached(
+                raw_title,
+                raw_artist,
+                duration_ms=duration_ms,
+                album=album,
+            )
+            if use_cache:
+                _song_resolve_cache_put(cache_key, result)
+            return result
+        except Exception as exc:
+            resolve_error = exc
+            raise
+        finally:
+            if use_cache and owner_future is not None:
+                _SONG_RESOLVE_INFLIGHT.pop(cache_key, None)
+                if not owner_future.done():
+                    if resolve_error is not None:
+                        owner_future.set_exception(resolve_error)
+                    else:
+                        owner_future.set_result(result)
+
+    async def _search_song_best_uncached(
+        self,
+        raw_title: str,
+        raw_artist: str,
+        duration_ms: Optional[int] = None,
+        album: str = "",
+    ) -> Optional[Dict[str, Any]]:
+        """Actual Subsonic search implementation; callers normally use search_song_best()."""
         base_title = _strip_common_edition_suffixes(raw_title)
         want_artist = _norm(raw_artist)
         want_title = _norm(raw_title)
@@ -258,7 +436,11 @@ class SubsonicClient:
         if not songs:
             logger.warning(
                 "Subsonic song resolve miss: no candidates title=%r artist=%r normalized_title=%r normalized_artist=%r queries=%r",
-                raw_title, raw_artist, want_base_title or want_title, want_artist, queries,
+                raw_title,
+                raw_artist,
+                want_base_title or want_title,
+                want_artist,
+                queries,
             )
             return None
 
@@ -302,7 +484,6 @@ class SubsonicClient:
         )
         return None
 
-
     async def search_album_candidates(self, album: str, artist: str, limit: int = 10) -> List[Dict[str, Any]]:
         """Return album candidates sorted by normalized title/artist match strength."""
         q = f"{album} {artist}".strip()
@@ -338,7 +519,6 @@ class SubsonicClient:
         candidates = await self.search_album_candidates(album=album, artist=artist, limit=1)
         return candidates[0] if candidates else None
 
-
     async def get_album(self, album_id: str) -> Optional[Dict[str, Any]]:
         """Fetch a full album via getAlbum.view, including its track list."""
         if not album_id:
@@ -361,7 +541,6 @@ class SubsonicClient:
             return songs
         return []
 
-
     def stream_url(self, song_id: str) -> str:
         url = f"{self.base_url}/rest/stream.view"
         # We intentionally do NOT include password; use token auth.
@@ -375,6 +554,12 @@ class SubsonicClient:
         try:
             r = await self._http.get(url, params=params)
             r.raise_for_status()
+            removed = self.invalidate_song_resolve_cache(negative_only=True)
+            if removed:
+                logger.info(
+                    "Cleared %s cached Subsonic song misses after library scan trigger",
+                    removed,
+                )
             return True
         except Exception:
             return False
@@ -459,7 +644,14 @@ class SubsonicClient:
         end = time.time() + max(1, int(timeout_s))
         # quick initial try
         try:
-            s = await self.search_song_best(title=title, artist=artist, duration_ms=duration_ms)
+            # This path intentionally bypasses the negative resolver cache because
+            # it is used while waiting for a just-imported track to appear.
+            s = await self.search_song_best(
+                title=title,
+                artist=artist,
+                duration_ms=duration_ms,
+                use_cache=False,
+            )
             if s and s.get("id"):
                 return s
         except Exception:
@@ -468,7 +660,12 @@ class SubsonicClient:
         while time.time() < end:
             await asyncio.sleep(max(0.25, float(poll_s)))
             try:
-                s = await self.search_song_best(title=title, artist=artist, duration_ms=duration_ms)
+                s = await self.search_song_best(
+                    title=title,
+                    artist=artist,
+                    duration_ms=duration_ms,
+                    use_cache=False,
+                )
                 if s and s.get("id"):
                     return s
             except Exception:

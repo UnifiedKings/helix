@@ -18,6 +18,7 @@ import { UserSettingsPage } from './pages/UserSettingsPage'
 import { AdminSettingsPage } from './pages/AdminSettingsPage'
 import { SetupPage } from './pages/SetupPage'
 import { StationsPage } from './pages/StationsPage'
+import { QualityUpgradesPage } from './pages/QualityUpgradesPage'
 
 export function App() {
   return (
@@ -40,6 +41,7 @@ export function App() {
             <Route path="albums/:browseId" element={<AlbumDetailPage />} />
             <Route path="history" element={<HistoryPage />} />
             <Route path="lobbies" element={<LobbiesPage />} />
+            <Route path="quality-upgrades" element={<QualityUpgradesPage />} />
             <Route path="settings" element={<UserSettingsPage />} />
             <Route path="admin/settings" element={<RequireAdmin><AdminSettingsPage /></RequireAdmin>} />
           </Route>

@@ -9,6 +9,7 @@ from ..db import SessionLocal
 from ..models import SessionToken, User
 from ..lobby_models import SharedLobby, SharedLobbyMember
 from ..realtime import HUB, broadcast_player_state, broadcast_lobby_state
+from ..subsonic_permissions import can_import_to_subsonic
 
 router = APIRouter(tags=["realtime"])
 
@@ -45,6 +46,34 @@ async def player_socket(ws: WebSocket):
         pass
     finally:
         HUB.unregister_player(user.id, ws)
+
+@router.websocket("/ws/quality-upgrades")
+async def quality_upgrades_socket(ws: WebSocket):
+    user = _websocket_user(ws)
+    if not user:
+        await ws.close(code=4401)
+        return
+
+    db = SessionLocal()
+    try:
+        db_user = db.get(User, user.id)
+        if not db_user or not can_import_to_subsonic(db, db_user):
+            await ws.close(code=4403)
+            return
+    finally:
+        db.close()
+
+    await ws.accept()
+    await HUB.register_quality_upgrades(ws)
+    try:
+        # The initial HTTP load supplies the current list. This socket only
+        # carries invalidation events, so no periodic client traffic is needed.
+        while True:
+            await ws.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        HUB.unregister_quality_upgrades(ws)
 
 @router.websocket("/ws/lobbies/{lobby_id}")
 async def lobby_socket(ws: WebSocket, lobby_id: str):

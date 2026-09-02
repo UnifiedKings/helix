@@ -18,6 +18,7 @@ SECRET_SETTING_KEYS = {
     "listenbrainz_token",
     "ytmusic_cookie",
     "ytmusic_cookies",
+    "slskd_api_key",
 }
 
 PUBLIC_SETTING_KEYS = {
@@ -31,7 +32,6 @@ PUBLIC_SETTING_KEYS = {
     "search_hide_non_official",
     "search_prefer_original_release",
 }
-
 
 ADMIN_SETTING_KEYS = {
     "subsonic_base_url",
@@ -60,23 +60,16 @@ ADMIN_SETTING_KEYS = {
 def _redact_settings(settings: dict[str, Any], *, admin: bool = False) -> dict[str, Any]:
     out: dict[str, Any] = {}
     allowed_keys = ADMIN_SETTING_KEYS if admin else PUBLIC_SETTING_KEYS
-
     for key, value in settings.items():
         if key not in allowed_keys:
             continue
-
         if key in SECRET_SETTING_KEYS or "password" in key.lower() or "token" in key.lower() or "secret" in key.lower():
             if admin:
-                # Send a blank editable secret field, but do not expose or render
-                # derived *_configured values as editable settings.
                 out[key] = ""
             continue
-
         out[key] = value
-
     if not admin:
         out["subsonic_configured"] = _subsonic_configured(settings)
-
     return out
 
 
@@ -90,7 +83,6 @@ def _strip_unchanged_secret_placeholders(payload: dict[str, Any]) -> dict[str, A
             continue
         clean[key] = value
     return clean
-
 
 
 def _subsonic_configured(settings: dict[str, Any]) -> bool:
@@ -109,6 +101,7 @@ def _capabilities_payload(db: Session, settings: dict[str, Any], user: User | No
         "features": {
             "library_search": subsonic_configured,
             "subsonic_import": subsonic_configured and import_allowed,
+            "quality_upgrades": subsonic_configured and import_allowed,
             "library_only_stations": subsonic_configured,
             "subsonic_playback": subsonic_configured,
             "ytmusic_discovery": True,
@@ -117,9 +110,9 @@ def _capabilities_payload(db: Session, settings: dict[str, Any], user: User | No
         },
     }
 
+
 @router.get("/api/settings")
 def get_public_settings(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """Read-only global settings for the authenticated UI."""
     return _redact_settings(get_settings(db), admin=False)
 
 

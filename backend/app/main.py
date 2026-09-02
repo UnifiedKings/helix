@@ -38,6 +38,7 @@ from .routers.system import router as system_router
 from .routers.ytmusic import router as ytmusic_router
 from .routers.user_settings import router as user_settings_router
 from .routers.realtime import router as realtime_router
+from .routers.quality_upgrades import router as quality_upgrades_router
 
 logging.basicConfig(
     level=getattr(logging, os.getenv("HELIX_LOG_LEVEL", "INFO").upper(), logging.INFO),
@@ -109,7 +110,6 @@ FRONTEND_ORIGIN = os.getenv("MR_FRONTEND_ORIGIN", "http://localhost:8080")
 
 app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(OriginGuardMiddleware)
-
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[FRONTEND_ORIGIN],
@@ -121,6 +121,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 def _startup():
+    # quality_models is imported by the quality router above before init_db(),
+    # so its tables are included in Base.metadata.create_all().
     init_db()
 
     from .realtime import HUB
@@ -145,6 +147,12 @@ def _startup():
         asyncio.get_event_loop().create_task(lobby_station_monitor_loop())
     except Exception:
         logging.getLogger(__name__).exception("Failed to start lobby station monitor")
+
+    try:
+        from .quality_upgrade_service import quality_upgrade_worker_loop
+        asyncio.get_event_loop().create_task(quality_upgrade_worker_loop())
+    except Exception:
+        logging.getLogger(__name__).exception("Failed to start quality upgrade worker")
 
     from .download_manager import DOWNLOAD_MANAGER
     from .settings_store import get_settings
@@ -187,6 +195,7 @@ app.include_router(dislikes_router)
 app.include_router(playlists_router)
 app.include_router(subsonic_router)
 app.include_router(subsonic_add_router)
+app.include_router(quality_upgrades_router)
 app.include_router(realtime_router)
 app.include_router(user_settings_router)
 app.include_router(lyrics_router)
@@ -196,8 +205,6 @@ STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 
 
 class SinglePageAppStaticFiles(StaticFiles):
-    """Serve built frontend assets and fall back to index.html for React routes."""
-
     async def get_response(self, path: str, scope):
         try:
             return await super().get_response(path, scope)
