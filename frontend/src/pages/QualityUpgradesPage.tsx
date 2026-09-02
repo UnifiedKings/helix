@@ -71,7 +71,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 function qualityLabel(q: Quality) {
   if (!q?.codec) return 'Waiting for library copy'
-  const parts = [q.codec.toUpperCase()]
+  const parts: string[] = []
   if (q.bit_depth) parts.push(`${q.bit_depth}-bit`)
   if (q.sample_rate) parts.push(`${(q.sample_rate / 1000).toFixed(q.sample_rate % 1000 ? 1 : 0)} kHz`)
   if (q.bitrate && !['flac', 'alac', 'wav', 'aiff', 'aif'].includes(q.codec.toLowerCase())) parts.push(`${Math.round(q.bitrate / 1000)} kbps`)
