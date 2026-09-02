@@ -10,7 +10,7 @@ services:
       # Helix persisted data: database, logs, stream cache, station covers, etc.
       - ./data:/data
 
-      # Inbound download/fulfillment staging
+      # Fulfillment staging
       - ./inbound_yt:/inbound_yt
 
       # Optional: music library root used by Navidrome/Subsonic/beets.
