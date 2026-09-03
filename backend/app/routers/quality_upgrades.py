@@ -97,6 +97,7 @@ def retry_upgrade(
         raise HTTPException(status_code=429, detail="Please wait a few seconds before searching this track again")
 
     job.status = "pending"
+    job.attempts = 0
     job.next_search_at = None
     job.last_error = ""
     job.updated_at = datetime.utcnow()
@@ -116,6 +117,7 @@ def enable_upgrade(
     if not job:
         raise HTTPException(status_code=404, detail="Upgrade job not found")
     job.status = "pending"
+    job.attempts = 0
     job.next_search_at = None
     job.updated_at = datetime.utcnow()
     db.commit()

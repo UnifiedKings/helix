@@ -237,6 +237,34 @@ _RETRY_DELAYS = (
     timedelta(days=7),
     timedelta(days=30),
 )
+
+# Library-copy/path resolution is a local readiness problem, not a Soulseek
+# search miss. Retry it a handful of times with increasing delays, then stop
+# automatically until the user explicitly retries the job.
+_LIBRARY_RESOLUTION_RETRY_DELAYS = (
+    timedelta(seconds=5),
+    timedelta(seconds=30),
+    timedelta(minutes=2),
+    timedelta(minutes=10),
+    timedelta(hours=1),
+    timedelta(hours=6),
+    timedelta(hours=24),
+)
+_LIBRARY_RESOLUTION_MAX_ATTEMPTS = len(_LIBRARY_RESOLUTION_RETRY_DELAYS) + 1
+
+
+def _schedule_library_resolution_retry(job: QualityUpgradeJob, final_error: str) -> None:
+    """Back off unresolved library copies and eventually require manual retry."""
+    job.attempts = int(job.attempts or 0) + 1
+    if job.attempts >= _LIBRARY_RESOLUTION_MAX_ATTEMPTS:
+        job.status = "failed"
+        job.last_error = final_error
+        job.next_search_at = None
+        return
+
+    delay_index = min(job.attempts - 1, len(_LIBRARY_RESOLUTION_RETRY_DELAYS) - 1)
+    job.status = "pending"
+    job.next_search_at = datetime.utcnow() + _LIBRARY_RESOLUTION_RETRY_DELAYS[delay_index]
 _BAD_VERSION_WORDS = {
     "live": 45,
     "remix": 45,
@@ -1521,14 +1549,10 @@ async def _process_job(job_id: str) -> None:
             # Do not leave a permanently-unresolvable job looking like it is
             # simply "waiting" forever. Retry automatically for a while, then
             # surface a normal retryable failure.
-            job.attempts = int(job.attempts or 0) + 1
-            if job.attempts >= 8:
-                job.status = "failed"
-                job.last_error = "Library copy exists but could not be resolved in Subsonic/Navidrome"
-                job.next_search_at = None
-            else:
-                job.status = "pending"
-                job.next_search_at = datetime.utcnow() + timedelta(seconds=20)
+            _schedule_library_resolution_retry(
+                job,
+                "Library copy exists but could not be resolved in Subsonic/Navidrome",
+            )
             job.updated_at = datetime.utcnow()
             _commit_quality_change(db)
             LOG.warning(
@@ -1565,17 +1589,13 @@ async def _process_job(job_id: str) -> None:
             # usable from Helix. This used to retry forever without changing the
             # visible state. Count mapping misses and eventually surface a
             # retryable failure instead.
-            job.attempts = int(job.attempts or 0) + 1
-            if job.attempts >= 8:
-                job.status = "failed"
-                job.last_error = (
+            _schedule_library_resolution_retry(
+                job,
+                (
                     "Navidrome found the track, but Helix could not map its library "
                     "path to a mounted file. Check HELIX_MUSIC_LIBRARY_ROOT."
-                )
-                job.next_search_at = None
-            else:
-                job.status = "pending"
-                job.next_search_at = datetime.utcnow() + timedelta(seconds=20)
+                ),
+            )
             job.updated_at = datetime.utcnow()
             _commit_quality_change(db)
             LOG.warning(
@@ -2437,7 +2457,7 @@ async def quality_upgrade_worker_loop() -> None:
                 jobs = [] if not enabled else db.execute(
                     select(QualityUpgradeJob)
                     .where(QualityUpgradeJob.status.in_([
-                        "pending", "no_match", "failed",
+                        "pending", "no_match",
                         "searching", "waiting_search", "waiting_peer", "downloading", "validating", "tagging", "replacing", "reverting",
                     ]))
                     .where((QualityUpgradeJob.next_search_at.is_(None)) | (QualityUpgradeJob.next_search_at <= now))
