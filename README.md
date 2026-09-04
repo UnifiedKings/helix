@@ -21,6 +21,7 @@ Helix is still early software. It is usable, but expect rough edges, breaking ch
 - Mirror a Helix lobby into Discord voice with the optional [HelixBot](https://github.com/UnifiedKings/helixbot) companion project
 - Use the optional native [Helix for Android](https://github.com/UnifiedKings/helix-android) client for mobile playback and control
 - Repair metadata before finalized library imports
+- Optionally use slskd/Soulseek in the background to replace Helix-added tracks with verified higher-quality copies
 - Use custom station providers through a plugin system
 - Continue working with or without a configured Subsonic server, with unsupported features hidden or disabled
 
@@ -132,10 +133,14 @@ Helix is designed to be conservative with fulfillment.
 - Metadata is repaired before finalization.
 - Library imports are controlled by your Beets configuration.
 - Only what is requested is added to the Subsonic library.
+- slskd quality upgrades run asynchronously after the initial track is available and do not block playback or initial fulfillment.
+- Automatic slskd replacement is currently limited to tracks originally added by Helix.
 
 ## Quick start
 
 The easiest way to run Helix is with Docker Compose.
+
+The example below includes the optional slskd quality-upgrade service. If you do not want Soulseek-based quality upgrades, remove the `slskd` service, the shared `./slskd-downloads` volume, and the `SLSKD_*` variables from the Helix service.
 
 Create a `docker-compose.yml`:
 
@@ -165,6 +170,10 @@ services:
 
       # Optional custom station providers. Disabled by default.
       - ./custom_stations:/data/plugins/stations
+
+      # Optional slskd completed downloads.
+      # This MUST be the same host directory slskd uses for completed downloads.
+      - ./slskd-downloads:/slskd-downloads
 
     environment:
       # Optional ListenBrainz token. Some station/discovery features may work
@@ -198,24 +207,78 @@ services:
       HELIX_ENABLE_CUSTOM_STATION_TYPES: "false"
       HELIX_CUSTOM_STATION_TYPES_DIR: "/data/plugins/stations"
 
+      # Optional slskd quality upgrades.
+      # These values are authoritative when set here and will lock the
+      # corresponding fields in Helix Admin Settings.
+      SLSKD_ENABLED: "true"
+      SLSKD_URL: "http://slskd:5030"
+      SLSKD_API_KEY: "replace-with-a-slskd-api-key"
+      SLSKD_DOWNLOADS_PATH: "/slskd-downloads"
+
       # Optional DB watchdog tuning
       HELIX_DB_WATCHDOG_WARN_S: "2"
       HELIX_DB_WATCHDOG_ERROR_S: "10"
+
+    depends_on:
+      - slskd
+
+  slskd:
+    image: slskd/slskd:latest
+    container_name: slskd
+    restart: unless-stopped
+
+    ports:
+      # slskd web UI / API
+      - "5030:5030"
+
+      # Soulseek incoming connections.
+      # Forward this port through your router if you want inbound connectivity.
+      - "50300:50300"
+
+    volumes:
+      # slskd application data and slskd.yml
+      - ./slskd:/app
+
+      # Completed downloads shared with Helix.
+      - ./slskd-downloads:/downloads
+
+      # Optional: expose your library to slskd if you choose to share it.
+      # Sharing is controlled by slskd and is not required by Helix.
+      # - /path/to/music:/music:ro
+
+    environment:
+      # Soulseek account used by slskd.
+      SLSKD_SLSK_USERNAME: "your-soulseek-username"
+      SLSKD_SLSK_PASSWORD: "your-soulseek-password"
+
+      # Store completed downloads in the directory shared with Helix.
+      SLSKD_DOWNLOADS_DIR: "/downloads"
+
+      # Soulseek listening port exposed above.
+      SLSKD_SLSK_LISTEN_PORT: "50300"
 ```
 
-Start Helix:
+Start the stack:
 
 ```bash
 docker compose up -d
 ```
 
-Then open:
+Then open Helix:
 
 ```text
 http://localhost:10011
 ```
 
 On first launch, Helix will ask you to create an admin account.
+
+If you included slskd, its web interface is available at:
+
+```text
+http://localhost:5030
+```
+
+Complete the slskd setup described in [slskd quality upgrades](#slskd-quality-upgrades) before enabling quality upgrades in Helix.
 
 ## yt-dlp updates
 
@@ -258,6 +321,159 @@ If Subsonic is configured, Helix can:
 - support library-only station behavior
 
 If Subsonic is not configured, Helix should disable library-dependent features instead of failing outright.
+
+## slskd quality upgrades
+
+Helix can optionally use [slskd](https://github.com/slskd/slskd) as a background quality-upgrade source.
+
+slskd is **not** used as Helix's primary playback or initial fulfillment source. Helix still uses its normal YTMusic/yt-dlp path to make a requested track available immediately. When quality upgrades are enabled, Helix can then search Soulseek asynchronously for a better copy and replace the Helix-added library file after the candidate has been downloaded and verified.
+
+This keeps Soulseek availability, queue times, and peer reliability out of the critical playback path.
+
+### What Helix needs from slskd
+
+Helix requires:
+
+1. A reachable slskd HTTP API.
+2. An slskd API key.
+3. Access to the directory where slskd places **completed** downloads.
+4. A working Soulseek account configured in slskd.
+
+The important part for Docker is the completed-download directory. Both containers need access to the **same host directory**.
+
+For example:
+
+```yaml
+services:
+  helix:
+    volumes:
+      - ./slskd-downloads:/slskd-downloads
+    environment:
+      SLSKD_DOWNLOADS_PATH: "/slskd-downloads"
+
+  slskd:
+    volumes:
+      - ./slskd-downloads:/downloads
+    environment:
+      SLSKD_DOWNLOADS_DIR: "/downloads"
+```
+
+The paths inside the two containers do not have to be identical. They only need to point to the same host folder.
+
+### Configure slskd
+
+slskd requires Soulseek credentials. With the Compose example above these are supplied as:
+
+```env
+SLSKD_SLSK_USERNAME=your-soulseek-username
+SLSKD_SLSK_PASSWORD=your-soulseek-password
+```
+
+You can also configure slskd through its `slskd.yml`. A minimal equivalent looks like:
+
+```yaml
+soulseek:
+  username: your-soulseek-username
+  password: your-soulseek-password
+
+directories:
+  downloads: /downloads
+```
+
+The default slskd HTTP port is `5030`.
+
+For better Soulseek connectivity, expose and forward slskd's Soulseek listening port, commonly `50300`, to the machine running slskd.
+
+### Create an API key
+
+Helix authenticates to slskd with an API key.
+
+Create a key in slskd and give it permission to perform the searches and downloads Helix requests. The key is a secret and should not be exposed publicly.
+
+A corresponding `slskd.yml` configuration can look like:
+
+```yaml
+web:
+  authentication:
+    api_keys:
+      helix:
+        key: replace-with-a-long-random-secret
+        role: administrator
+```
+
+Then give the same key to Helix:
+
+```env
+SLSKD_API_KEY=replace-with-a-long-random-secret
+```
+
+If slskd and Helix are in the same Docker Compose project, Helix can reach slskd by service name:
+
+```env
+SLSKD_URL=http://slskd:5030
+```
+
+If slskd runs somewhere else, use the URL reachable **from inside the Helix container**, not necessarily the URL you type into your desktop browser.
+
+### Configure Helix
+
+The complete Helix-side environment configuration is:
+
+```env
+SLSKD_ENABLED=true
+SLSKD_URL=http://slskd:5030
+SLSKD_API_KEY=replace-with-a-slskd-api-key
+SLSKD_DOWNLOADS_PATH=/slskd-downloads
+```
+
+These values can also be configured from **Admin Settings → Quality Upgrades**.
+
+When `SLSKD_URL`, `SLSKD_API_KEY`, or `SLSKD_DOWNLOADS_PATH` are provided as environment variables, Helix treats them as authoritative and locks those corresponding fields in the Admin UI.
+
+The Admin Settings page also provides a **Test connection** button.
+
+### Quality policy
+
+Helix's default upgrade policy is intentionally conservative:
+
+- quality upgrades are disabled until explicitly enabled
+- lossless candidates are required by default
+- minimum sample rate: **44.1 kHz**
+- minimum bit depth: **16-bit**
+- existing lossless files are not replaced by default
+- automatic replacement currently applies only to tracks originally added by Helix
+- Soulseek candidates must meet Helix's identity/match-confidence checks before they are considered eligible
+- downloaded files are validated before replacing the existing library copy
+
+The Admin Settings page exposes controls for:
+
+- enabling/disabling quality upgrades
+- concurrent Soulseek searches
+- minimum match confidence
+- lossless-only upgrades
+- minimum sample rate
+- minimum bit depth
+- whether an existing lossless Helix-added track may be replaced by a strictly better lossless candidate
+
+Because this work is asynchronous, a failed or unavailable Soulseek search does not prevent the original track from playing.
+
+### slskd troubleshooting
+
+If **Test connection** fails:
+
+- Make sure `SLSKD_URL` is reachable from the Helix container. `localhost` inside the Helix container refers to Helix itself, not the slskd container.
+- Verify the API key is the same key configured in slskd.
+- If both containers are in the same Compose project, prefer `http://slskd:5030`.
+- Confirm the slskd container is running and logged into Soulseek.
+
+If Helix finds and starts a download but cannot locate the completed file:
+
+- Confirm slskd's completed downloads directory is mounted into Helix.
+- Confirm `SLSKD_DOWNLOADS_PATH` is the **Helix-container path**, not the host path or the path as seen inside slskd.
+- Confirm both volume mappings point to the same host directory.
+- Make sure the download has actually completed; Helix does not treat slskd's incomplete directory as a finished upgrade.
+
+If searches return few or no results, check slskd itself first. Soulseek search availability depends on the network and connected peers, and an unreachable listening port may reduce connectivity.
 
 ## Stations
 
@@ -328,6 +544,8 @@ Compiled APK releases are available from the [Helix for Android Releases](https:
 Before exposing Helix outside your LAN, put it behind HTTPS and review your deployment.
 
 Custom station providers can execute Python code inside the Helix container. Keep them disabled unless you need them.
+
+The slskd API key grants Helix access to the slskd API and should be treated as a secret. Unless you intentionally expose slskd, it is generally best to keep its web/API port accessible only on your trusted network.
 
 Recommended public defaults:
 

@@ -11,6 +11,9 @@ type Props = {
   onError?: (message: string) => void
 }
 
+const PLAYBACK_START_TIMEOUT_MS = 12_000
+const PLAYBACK_PROGRESS_THRESHOLD_SECONDS = 0.25
+
 function streamUrl(queueItemId: string) {
   return `/api/stream/${encodeURIComponent(queueItemId)}`
 }
@@ -49,6 +52,7 @@ export function AudioPlayer({ player, audioIntent, onStateChange, repeatTrack = 
   const lastIntentIdRef = useRef(0)
   const continueAfterEndedRef = useRef(false)
   const playAttemptRef = useRef(0)
+  const playbackWatchdogRef = useRef<number | null>(null)
   const [audioError, setAudioError] = useState('')
   const [currentTime, setCurrentTime] = useState(0)
   const [duration, setDuration] = useState(0)
@@ -58,6 +62,87 @@ export function AudioPlayer({ player, audioIntent, onStateChange, repeatTrack = 
     return Number.isFinite(parsed) ? Math.min(1, Math.max(0, parsed)) : 0.85
   })
 
+  function clearPlaybackWatchdog() {
+    if (playbackWatchdogRef.current === null) return
+    window.clearTimeout(playbackWatchdogRef.current)
+    playbackWatchdogRef.current = null
+  }
+
+  function armPlaybackWatchdog(attemptId: number, itemId: string, startTime: number) {
+    clearPlaybackWatchdog()
+    playbackWatchdogRef.current = window.setTimeout(() => {
+      playbackWatchdogRef.current = null
+      const audio = audioRef.current
+      if (!audio) return
+      if (attemptId !== playAttemptRef.current || currentItemIdRef.current !== itemId) return
+
+      const madeProgress = !audio.paused && audio.currentTime >= startTime + PLAYBACK_PROGRESS_THRESHOLD_SECONDS
+      if (madeProgress) return
+
+      void recoverFromPlaybackFailure(attemptId, itemId)
+    }, PLAYBACK_START_TIMEOUT_MS)
+  }
+
+  async function recoverFromPlaybackFailure(attemptId: number, itemId: string) {
+    const audio = audioRef.current
+    if (!audio) return
+    if (attemptId !== playAttemptRef.current || currentItemIdRef.current !== itemId) return
+
+    // Invalidate callbacks and timers associated with the failed track before
+    // advancing so a stale play() completion cannot affect the replacement.
+    playAttemptRef.current += 1
+    clearPlaybackWatchdog()
+    audio.pause()
+    continueAfterEndedRef.current = false
+    onLocalPlayingChange?.(false)
+
+    try {
+      const next = await api.next()
+      onStateChange(next)
+
+      if (!next.is_playing || !next.now_playing || next.now_playing.id === itemId) {
+        return
+      }
+
+      const nextItemId = next.now_playing.id
+      currentItemIdRef.current = nextItemId
+      pendingRestoreRef.current = 0
+      audio.src = streamUrl(nextItemId)
+      audio.load()
+      setCurrentTime(0)
+      setDuration(0)
+      setAudioError('')
+
+      const nextAttemptId = ++playAttemptRef.current
+      armPlaybackWatchdog(nextAttemptId, nextItemId, 0)
+      void audio.play().then(() => {
+        if (nextAttemptId !== playAttemptRef.current || currentItemIdRef.current !== nextItemId) return
+        continueAfterEndedRef.current = true
+        onLocalPlayingChange?.(true)
+      }).catch((err) => {
+        if (nextAttemptId !== playAttemptRef.current || currentItemIdRef.current !== nextItemId) return
+        const name = err instanceof DOMException ? err.name : ''
+        if (name === 'NotAllowedError') {
+          clearPlaybackWatchdog()
+          onLocalPlayingChange?.(false)
+          return
+        }
+        if (name === 'AbortError') {
+          onLocalPlayingChange?.(false)
+          return
+        }
+        const message = err instanceof Error ? err.message : 'Browser blocked audio playback'
+        setAudioError(message)
+        onError?.(message)
+        onLocalPlayingChange?.(false)
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Could not advance after playback failed to start'
+      setAudioError(message)
+      onError?.(message)
+    }
+  }
+
   useEffect(() => {
     if (window.localStorage.getItem('helix.volume') !== null) return
     let cancelled = false
@@ -65,6 +150,10 @@ export function AudioPlayer({ player, audioIntent, onStateChange, repeatTrack = 
       if (!cancelled) setVolume(Math.max(0, Math.min(1, prefs.settings.playback_default_volume)))
     }).catch(() => undefined)
     return () => { cancelled = true }
+  }, [])
+
+  useEffect(() => () => {
+    clearPlaybackWatchdog()
   }, [])
 
   const now = player?.now_playing ?? null
@@ -77,6 +166,7 @@ export function AudioPlayer({ player, audioIntent, onStateChange, repeatTrack = 
     if (!nowId) {
       currentItemIdRef.current = ''
       playAttemptRef.current += 1
+      clearPlaybackWatchdog()
       audio.pause()
       continueAfterEndedRef.current = false
       audio.removeAttribute('src')
@@ -90,6 +180,7 @@ export function AudioPlayer({ player, audioIntent, onStateChange, repeatTrack = 
     if (currentItemIdRef.current !== nowId) {
       currentItemIdRef.current = nowId
       playAttemptRef.current += 1
+      clearPlaybackWatchdog()
       audio.pause()
       audio.src = streamUrl(nowId)
       pendingRestoreRef.current = audioIntent.id !== lastIntentIdRef.current ? 0 : readSavedPosition(nowId)
@@ -108,6 +199,7 @@ export function AudioPlayer({ player, audioIntent, onStateChange, repeatTrack = 
     lastIntentIdRef.current = audioIntent.id
 
     if (audioIntent.action === 'pause') {
+      clearPlaybackWatchdog()
       audio.pause()
       continueAfterEndedRef.current = false
       onLocalPlayingChange?.(false)
@@ -123,7 +215,9 @@ export function AudioPlayer({ player, audioIntent, onStateChange, repeatTrack = 
       }
 
       const attemptId = ++playAttemptRef.current
+      const watchdogStartTime = audio.currentTime || 0
       setAudioError('')
+      armPlaybackWatchdog(attemptId, nowId, watchdogStartTime)
       audio.play().then(() => {
         if (attemptId !== playAttemptRef.current || currentItemIdRef.current !== nowId) return
         onLocalPlayingChange?.(true)
@@ -132,7 +226,14 @@ export function AudioPlayer({ player, audioIntent, onStateChange, repeatTrack = 
         const name = err instanceof DOMException ? err.name : ''
         // Rapid next/previous clicks intentionally interrupt pending play() calls
         // by changing src/load(). Those should not leave the playbar stuck.
-        if (name === 'AbortError' || name === 'NotAllowedError') {
+        if (name === 'AbortError') {
+          onLocalPlayingChange?.(false)
+          return
+        }
+        // Skipping tracks cannot fix browser autoplay policy, so do not let the
+        // watchdog churn through the queue when playback needs a user gesture.
+        if (name === 'NotAllowedError') {
+          clearPlaybackWatchdog()
           onLocalPlayingChange?.(false)
           return
         }
@@ -154,6 +255,7 @@ export function AudioPlayer({ player, audioIntent, onStateChange, repeatTrack = 
   async function handleEnded() {
     const endedItemId = currentItemIdRef.current
     const shouldContinue = continueAfterEndedRef.current
+    clearPlaybackWatchdog()
     clearPosition(endedItemId)
     onLocalPlayingChange?.(false)
 
@@ -177,12 +279,16 @@ export function AudioPlayer({ player, audioIntent, onStateChange, repeatTrack = 
           audio.src = streamUrl(next.now_playing.id)
           audio.load()
           const attemptId = ++playAttemptRef.current
+          const nextItemId = next.now_playing.id
+          armPlaybackWatchdog(attemptId, nextItemId, 0)
           void audio.play().then(() => {
             if (attemptId !== playAttemptRef.current || currentItemIdRef.current !== next.now_playing?.id) return
             continueAfterEndedRef.current = true
             onLocalPlayingChange?.(true)
-          }).catch(() => {
+          }).catch((err) => {
             if (attemptId !== playAttemptRef.current) return
+            const name = err instanceof DOMException ? err.name : ''
+            if (name === 'NotAllowedError') clearPlaybackWatchdog()
             continueAfterEndedRef.current = false
             onLocalPlayingChange?.(false)
           })
