@@ -35,11 +35,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-<<<<<<< HEAD
           images: ghcr.io/avedor/helix
-=======
-          images: ghcr.io/unifiedkings/helix
->>>>>>> bcaa93c (Build container)
           flavor: latest=false
           tags: |
             type=sha,prefix=sha-,format=long
@@ -60,8 +56,5 @@ jobs:
 
       - name: Smoke test backend import
         if: github.event_name == 'pull_request'
-<<<<<<< HEAD
         run: docker run --rm --entrypoint python ghcr.io/avedor/helix:sha-${{ github.sha }} -c "import app.main"
-=======
-        run: docker run --rm --entrypoint python ghcr.io/unifiedkings/helix:sha-${{ github.sha }} -c "import app.main"
->>>>>>> bcaa93c (Build container)
+
