@@ -488,6 +488,137 @@ class SubsonicClient:
             return songs
         return []
 
+    async def _browse_response_data(self, endpoint: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        """Fetch a Subsonic browse-style endpoint and return the response payload."""
+        url = f"{self.base_url}/rest/{endpoint}"
+        merged = {**params, **self._auth_params()}
+        r = await self._http.get(url, params=merged)
+        r.raise_for_status()
+        data = (r.json() or {}).get("subsonic-response", {}) or {}
+        return data if isinstance(data, dict) else {}
+
+    async def get_artists(self) -> List[Dict[str, Any]]:
+        """Return the ID3 artist index (getArtists2, with getArtists fallback).
+
+        Returns a flat, sorted artist list. Each entry is a Subsonic artist
+        dict (``id``, ``name``, ``albumCount``) suitable for A-Z browsing.
+        """
+        for endpoint in ("getArtists2.view", "getArtists.view"):
+            try:
+                data = await self._browse_response_data(endpoint, {})
+            except Exception:
+                continue
+            artists_root = data.get("artists") or {}
+            if not isinstance(artists_root, dict):
+                continue
+            indexes = artists_root.get("index") or []
+            flat: List[Dict[str, Any]] = []
+            seen = set()
+            for index in indexes:
+                for artist in (index.get("artist") or []):
+                    if not isinstance(artist, dict):
+                        continue
+                    aid = str(artist.get("id") or "").strip()
+                    if not aid or aid in seen:
+                        continue
+                    seen.add(aid)
+                    flat.append(artist)
+            if flat:
+                flat.sort(key=lambda a: str(a.get("name") or "").casefold())
+                return flat
+        return []
+
+    async def get_albums2(self, kind: str = "newest", offset: int = 0, size: int = 24) -> List[Dict[str, Any]]:
+        """Return a list-albums page via getAlbumList2.
+
+        ``kind`` maps to Subsonic's ``type`` parameter (newest, recent,
+        frequent, random, starred, alphabeticalByName, alphabeticalByArtist).
+        """
+        data = await self._browse_response_data(
+            "getAlbumList2.view",
+            {
+                "type": str(kind or "newest"),
+                "offset": max(0, int(offset)),
+                "size": max(1, min(500, int(size))),
+            },
+        )
+        rows = (data.get("albumList2") or {}).get("album") or []
+        return [row for row in rows if isinstance(row, dict)]
+
+    async def get_artist_detail(self, artist_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch an ID3 artist via getArtist.view, including its ``album`` list."""
+        if not artist_id:
+            return None
+        data = await self._browse_response_data("getArtist.view", {"id": artist_id})
+        artist = data.get("artist") or {}
+        return artist if isinstance(artist, dict) and artist else None
+
+    async def get_artist_songs(
+        self,
+        artist_id: str,
+        max_albums: int = 60,
+    ) -> List[Dict[str, Any]]:
+        """Collect a Subsonic artist's discography as song dicts.
+
+        Albums are fetched in parallel batches (bounded) and tracks preserve
+        album then track ordering.
+        """
+        artist = await self.get_artist_detail(artist_id)
+        if not artist:
+            return []
+        album_ids: List[str] = []
+        for album in (artist.get("album") or []):
+            if not isinstance(album, dict):
+                continue
+            aid = str(album.get("id") or "").strip()
+            if aid and aid not in album_ids:
+                album_ids.append(aid)
+        album_ids = album_ids[: max(1, int(max_albums))]
+
+        async def _fetch(album_id: str) -> List[Dict[str, Any]]:
+            try:
+                album = await self.get_album(album_id)
+            except Exception:
+                return []
+            if not isinstance(album, dict):
+                return []
+            songs = album.get("song") or []
+            return [song for song in songs if isinstance(song, dict)]
+
+        songs: List[Dict[str, Any]] = []
+        for start in range(0, len(album_ids), 8):
+            batch = album_ids[start : start + 8]
+            fetched = await asyncio.gather(*(_fetch(aid) for aid in batch))
+            for rows in fetched:
+                songs.extend(rows)
+        return songs
+
+    async def get_artist_info(self, artist_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch artist info (biography, similar artists) via getArtistInfo.view.
+
+        Best-effort: not all Subsonic-compatible servers implement it.
+        """
+        if not artist_id:
+            return None
+        try:
+            data = await self._browse_response_data("getArtistInfo.view", {"id": artist_id, "count": 5})
+        except Exception:
+            return None
+        info = data.get("artistInfo") or {}
+        return info if isinstance(info, dict) and info else None
+
+    async def get_starred2(self) -> Dict[str, Any]:
+        """Return starred songs/albums/artists via getStarred2."""
+        data = await self._browse_response_data("getStarred2.view", {})
+        starred = data.get("starred2") or {}
+        return starred if isinstance(starred, dict) else {}
+
+    async def get_random_songs(self, size: int = 100) -> List[Dict[str, Any]]:
+        """Return random songs via getRandomSongs."""
+        data = await self._browse_response_data("getRandomSongs.view", {"size": max(1, min(500, int(size)))})
+        tracks = (data.get("randomSongs") or {}).get("song") or []
+        return [track for track in tracks if isinstance(track, dict)]
+
     def stream_url(self, song_id: str) -> str:
         url = f"{self.base_url}/rest/stream.view"
         # We intentionally do NOT include password; use token auth.

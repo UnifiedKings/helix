@@ -11,3 +11,4 @@ inbound_yt/
 custom_stations/
 beets_config/download.log
 *.bak
+node_modules

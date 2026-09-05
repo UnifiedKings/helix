@@ -1,4 +1,4 @@
-import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, ArtistSimilarResponse, DislikeState, HomeSummary, LikeState, PlaybackHistoryFilters, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, StationProviderInfo, AdminUser, Capabilities, User, UserSettingsPayload, UserSettings, LobbyJoinResponse, LobbyListResponse, LobbyPermissions, LobbyState, PlaylistImportPreview, PlaylistImportSource, PlaylistImportCandidate } from './types'
+import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, ArtistSimilarResponse, DislikeState, HomeSummary, LikeState, PlaybackHistoryFilters, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, StationProviderInfo, AdminUser, Capabilities, User, UserSettingsPayload, UserSettings, LobbyJoinResponse, LobbyListResponse, LobbyPermissions, LobbyState, PlaylistImportPreview, PlaylistImportSource, PlaylistImportCandidate, SubsonicArtistResponse, SubsonicLibraryAlbumsResponse, SubsonicLibraryArtistsResponse, SubsonicLibrarySongsResponse } from './types'
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const { headers, ...rest } = options
@@ -148,6 +148,7 @@ function songToPayload(song: SearchSong) {
 function albumToPayload(album: SearchAlbum) {
   return {
     browse_id: album.yt_browse_id || album.browse_id || album.browseId || '',
+    subsonic_album_id: album.subsonic_album_id || '',
     title: album.title,
     artist: album.artist ?? '',
     art_url: bestArtworkUrl(album),
@@ -332,6 +333,30 @@ export const api = {
     }
   },
   album: async (albumId: string, source?: string) => normalizeAlbumDetail(await request<AlbumDetail>(`/api/album/${encodeURIComponent(albumId)}${source ? `?source=${encodeURIComponent(source)}` : ''}`)),
+
+  subsonicLibraryAlbums: async (type: string, offset = 0, size = 24) => {
+    const payload = await request<SubsonicLibraryAlbumsResponse>(`/api/subsonic/library/albums?type=${encodeURIComponent(type)}&offset=${offset}&size=${size}`)
+    return { ...payload, albums: (payload.albums ?? []).map(normalizeAlbum) }
+  },
+  subsonicLibraryArtists: async () => {
+    const payload = await request<SubsonicLibraryArtistsResponse>('/api/subsonic/library/artists')
+    return { ...payload, artists: (payload.artists ?? []).map(normalizeArtist) }
+  },
+  subsonicArtist: async (artistId: string) => {
+    const payload = await request<SubsonicArtistResponse>(`/api/subsonic/library/artists/${encodeURIComponent(artistId)}`)
+    return {
+      ...payload,
+      artist: normalizeArtist(payload.artist) as ArtistDetail,
+      albums: (payload.albums ?? []).map(normalizeAlbum),
+      singles: (payload.singles ?? []).map(normalizeAlbum),
+      songs: (payload.songs ?? []).map(normalizeSong),
+      similar_artists: (payload.similar_artists ?? []).map(normalizeArtist),
+    }
+  },
+  subsonicLibrarySongs: async (type: string, size = 100) => {
+    const payload = await request<SubsonicLibrarySongsResponse>(`/api/subsonic/library/songs?type=${encodeURIComponent(type)}&size=${size}`)
+    return { ...payload, songs: (payload.songs ?? []).map(normalizeSong) }
+  },
 
   history: (filters: PlaybackHistoryFilters = {}) => {
     const params = new URLSearchParams()
