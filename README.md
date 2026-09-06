@@ -110,13 +110,13 @@ The current import sources are:
 
 ### Spotify OAuth setup
 
-To import directly from Spotify instead of uploading an Exportify CSV, an administrator needs to register a Spotify app once:
+To import directly from Spotify instead of uploading an Exportify CSV, either an administrator registers a Spotify app once, or each user brings their own:
 
 1. Create an app at [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
 2. Add a **Redirect URI** equal to your Helix origin plus `/spotify/auth/callback` (for example `https://music.example.com/spotify/auth/callback`).
-3. Set `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, and optionally `SPOTIFY_REDIRECT_URI` on the Helix container.
+3. Either set `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, and optionally `SPOTIFY_REDIRECT_URI` on the Helix container for every user to share, or have each user paste their own Client ID/Secret under **Settings → Spotify → Your own Spotify app**.
 
-Users can then choose **Import playlist → Spotify → Connect Spotify**, approve access in the pop-up, and pick a playlist or Liked Songs directly. Helix only requests read access to playlists and never writes to Spotify. Each user's connection is stored in the Helix database and can be revoked with **Disconnect** in the import dialog, or from the user's Spotify account settings.
+Users can then choose **Import playlist → Spotify → Connect Spotify**, approve access in the pop-up, and pick a playlist or Liked Songs directly. Helix only requests read access to playlists and never writes to Spotify. Each user's connection is stored in the Helix database and can be revoked with **Disconnect** in the import dialog or under Settings, or from the user's Spotify account settings.
 
 ### Matching and cleanup
 

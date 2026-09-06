@@ -10,7 +10,7 @@ import httpx
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from ..models import SpotifyConnection, SpotifyOAuthState
+from ..models import SpotifyConnection, SpotifyOAuthState, SpotifyUserCredentials
 from ..playlist_imports import ImportedTrack
 
 logger = logging.getLogger(__name__)
@@ -62,6 +62,70 @@ def spotify_configured() -> bool:
     )
 
 
+# --- Per-user Spotify app credentials ---
+
+
+def get_user_credentials(db: Session, user_id: str) -> Optional[SpotifyUserCredentials]:
+    return db.execute(
+        select(SpotifyUserCredentials).where(SpotifyUserCredentials.user_id == user_id)
+    ).scalar_one_or_none()
+
+
+def save_user_credentials(db: Session, user_id: str, *, client_id: str, client_secret: str) -> SpotifyUserCredentials:
+    row = get_user_credentials(db, user_id)
+    if row is None:
+        row = SpotifyUserCredentials(
+            user_id=user_id,
+            client_id=client_id,
+            client_secret=client_secret,
+        )
+    else:
+        row.client_id = client_id
+        row.client_secret = client_secret
+        row.updated_at = datetime.utcnow()
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+def clear_user_credentials(db: Session, user_id: str) -> bool:
+    row = get_user_credentials(db, user_id)
+    if row is None:
+        return False
+    db.delete(row)
+    db.commit()
+    return True
+
+
+def user_spotify_configured(db: Session, user_id: str) -> bool:
+    """True when this user can start an OAuth flow: either the server-wide env
+    app is configured, or the user supplied their own client id/secret."""
+    if spotify_configured():
+        return True
+    row = get_user_credentials(db, user_id)
+    return bool(row and row.client_id and row.client_secret)
+
+
+def any_user_spotify_configured(db: Session) -> bool:
+    """True when at least one user has configured their own Spotify app."""
+    return db.execute(
+        select(SpotifyUserCredentials.user_id).where(
+            SpotifyUserCredentials.client_id != "",
+            SpotifyUserCredentials.client_secret != "",
+        ).limit(1)
+    ).first() is not None
+
+
+def user_spotify_credentials(db: Session, user_id: str) -> tuple[str, str]:
+    """Resolve the Spotify app credentials for a user: their own first, then
+    the server-wide env app."""
+    row = get_user_credentials(db, user_id)
+    if row and row.client_id and row.client_secret:
+        return row.client_id, row.client_secret
+    return spotify_client_id(), spotify_client_secret()
+
+
 def spotify_redirect_uri(request) -> str:
     """Return the OAuth redirect URI for this request.
 
@@ -76,9 +140,9 @@ def spotify_redirect_uri(request) -> str:
     return f"{request.url.scheme}://{request.headers.get('host', 'localhost')}/spotify/auth/callback"
 
 
-def build_authorize_url(state: str, redirect_uri: str) -> str:
+def build_authorize_url(state: str, redirect_uri: str, *, client_id: str, client_secret: Optional[str] = None) -> str:
     params = urlencode({
-        "client_id": spotify_client_id(),
+        "client_id": client_id,
         "response_type": "code",
         "redirect_uri": redirect_uri,
         "scope": SPOTIFY_SCOPES,
@@ -131,29 +195,29 @@ def _exchange_tokens(payload: Dict[str, str]) -> Dict[str, Any]:
     }
 
 
-def exchange_code(code: str, redirect_uri: str) -> Dict[str, Any]:
+def exchange_code(code: str, redirect_uri: str, *, client_id: str, client_secret: str) -> Dict[str, Any]:
     return _exchange_tokens({
         "grant_type": "authorization_code",
         "code": code,
         "redirect_uri": redirect_uri,
-        "client_id": spotify_client_id(),
-        "client_secret": spotify_client_secret(),
+        "client_id": client_id,
+        "client_secret": client_secret,
     })
 
 
-def refresh_tokens(refresh_token: str) -> Dict[str, Any]:
+def refresh_tokens(refresh_token: str, *, client_id: str, client_secret: str) -> Dict[str, Any]:
     return _exchange_tokens({
         "grant_type": "refresh_token",
         "refresh_token": refresh_token,
-        "client_id": spotify_client_id(),
-        "client_secret": spotify_client_secret(),
+        "client_id": client_id,
+        "client_secret": client_secret,
     })
 
 
 # --- Pending OAuth state (login CSRF protection) ---
 
 
-def create_oauth_state(db: Session, user_id: str, redirect_uri: str) -> str:
+def create_oauth_state(db: Session, user_id: str, redirect_uri: str, *, client_id: str, client_secret: str) -> str:
     import secrets
 
     # Prune stale states for this user so they cannot accumulate.
@@ -164,7 +228,13 @@ def create_oauth_state(db: Session, user_id: str, redirect_uri: str) -> str:
     ))
 
     state = secrets.token_urlsafe(32)
-    row = SpotifyOAuthState(state=state, user_id=user_id, redirect_uri=redirect_uri)
+    row = SpotifyOAuthState(
+        state=state,
+        user_id=user_id,
+        redirect_uri=redirect_uri,
+        client_id=client_id,
+        client_secret=client_secret,
+    )
     db.add(row)
     db.commit()
     return state
@@ -184,6 +254,8 @@ def consume_oauth_state(db: Session, state: str) -> Optional[Dict[str, Any]]:
     captured = {
         "user_id": row.user_id,
         "redirect_uri": row.redirect_uri,
+        "client_id": row.client_id,
+        "client_secret": row.client_secret,
         "created_at": row.created_at,
     }
     db.delete(row)
@@ -210,6 +282,8 @@ def save_connection(
     refresh_token: str,
     expires_at: datetime,
     display_name: str = "",
+    client_id: str = "",
+    client_secret: str = "",
 ) -> SpotifyConnection:
     row = get_connection(db, user_id)
     now = datetime.utcnow()
@@ -220,6 +294,8 @@ def save_connection(
             refresh_token=refresh_token,
             expires_at=expires_at,
             display_name=display_name,
+            client_id=client_id,
+            client_secret=client_secret,
             connected_at=now,
             updated_at=now,
         )
@@ -228,6 +304,10 @@ def save_connection(
         row.refresh_token = refresh_token
         row.expires_at = expires_at
         row.display_name = display_name
+        if client_id:
+            row.client_id = client_id
+        if client_secret:
+            row.client_secret = client_secret
         row.updated_at = now
     db.add(row)
     db.commit()
@@ -244,16 +324,34 @@ def clear_connection(db: Session, user_id: str) -> bool:
     return True
 
 
+def connection_own_credentials(db: Session, user_id: str) -> bool:
+    row = get_user_credentials(db, user_id)
+    return bool(row and row.client_id and row.client_secret)
+
+
 def connection_status(db: Session, user_id: str) -> Dict[str, Any]:
     row = get_connection(db, user_id)
+    base = {
+        "configured": user_spotify_configured(db, user_id),
+        "own_credentials": connection_own_credentials(db, user_id),
+    }
     if row is None:
-        return {"connected": False, "display_name": "", "connected_at": None}
+        return {**base, "connected": False, "display_name": "", "connected_at": None}
     return {
+        **base,
         "connected": True,
         "display_name": row.display_name or "Spotify",
         "connected_at": row.connected_at,
-        "configured": spotify_configured(),
     }
+
+
+def _connection_credentials_for_refresh(row: SpotifyConnection) -> tuple[str, str]:
+    """The client credentials to use when refreshing a token must match the app
+    that issued it. Connections created before per-user apps existed have no
+    snapshot; fall back to the server-wide env app."""
+    if row.client_id and row.client_secret:
+        return row.client_id, row.client_secret
+    return spotify_client_id(), spotify_client_secret()
 
 
 def _valid_access_token(db: Session, user_id: str) -> str:
@@ -263,8 +361,9 @@ def _valid_access_token(db: Session, user_id: str) -> str:
         raise SpotifyAuthRequired("Spotify is not connected")
 
     if row.refresh_token and row.expires_at <= datetime.utcnow() + timedelta(seconds=EXPIRY_BUFFER_SECONDS):
+        client_id, client_secret = _connection_credentials_for_refresh(row)
         try:
-            renewed = refresh_tokens(row.refresh_token)
+            renewed = refresh_tokens(row.refresh_token, client_id=client_id, client_secret=client_secret)
         except RuntimeError:
             # A revoked/expired refresh token is the common reason Spotify rejects
             # a refresh; drop the connection so the user can reconnect cleanly.

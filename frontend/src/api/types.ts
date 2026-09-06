@@ -509,6 +509,7 @@ export type PlaylistImportSource = 'helix' | 'ytmusic' | 'spotify' | 'pandora'
 export type SpotifyConnectionStatus = {
   connected: boolean
   configured: boolean
+  own_credentials?: boolean
   display_name?: string
   connected_at?: string | null
 }

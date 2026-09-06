@@ -66,6 +66,10 @@ class SpotifyConnection(Base):
     the other credentials Helix keeps (for example the Subsonic password), these
     are stored in the local database and should be protected by keeping the DB
     file private.
+
+    The client id/secret columns snapshot the Spotify app the connection was
+    authorized against (the server-wide app from env, or the user's own app).
+    Refreshes must always use the same app that issued the tokens.
     """
 
     __tablename__ = "spotify_connections"
@@ -75,7 +79,27 @@ class SpotifyConnection(Base):
     refresh_token: Mapped[str] = mapped_column(Text, nullable=False, default="")
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
     display_name: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    client_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    client_secret: Mapped[str] = mapped_column(Text, nullable=False, default="")
     connected_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    user: Mapped["User"] = relationship("User")
+
+
+class SpotifyUserCredentials(Base):
+    """Optional per-user Spotify Developer app credentials.
+
+    When set, these are used instead of the server-wide SPOTIFY_CLIENT_ID /
+    SPOTIFY_CLIENT_SECRET for this user's OAuth flow. Only the user who set them
+    can authorize against their own app; the secret never leaves the server.
+    """
+
+    __tablename__ = "spotify_user_credentials"
+
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    client_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    client_secret: Mapped[str] = mapped_column(Text, nullable=False, default="")
     updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
     user: Mapped["User"] = relationship("User")
@@ -89,6 +113,8 @@ class SpotifyOAuthState(Base):
     state: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     redirect_uri: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    client_id: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    client_secret: Mapped[str] = mapped_column(Text, nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
 
 

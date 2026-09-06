@@ -411,6 +411,7 @@ export const api = {
 
   spotifyStatus: () => request<SpotifyConnectionStatus>('/api/spotify/status'),
   spotifyAuthStart: () => request<{ oauth_url: string }>('/api/spotify/auth/start', { method: 'POST', body: JSON.stringify({}) }),
+  spotifyUpdateCredentials: (clientId: string, clientSecret: string) => request<{ own_credentials: boolean; configured: boolean; cleared: boolean; connection_cleared: boolean }>('/api/spotify/credentials', { method: 'PUT', body: JSON.stringify({ client_id: clientId, client_secret: clientSecret }) }),
   spotifyDisconnect: () => request<{ connected: boolean; cleared: boolean }>('/api/spotify/auth', { method: 'DELETE' }),
   spotifyPlaylists: () => request<SpotifyPlaylistList>('/api/spotify/playlists'),
 

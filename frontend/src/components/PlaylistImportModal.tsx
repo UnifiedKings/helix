@@ -344,7 +344,7 @@ export function PlaylistImportModal({ open, playlistId, playlistName: _playlistN
         {spotify.loading || spotifyListLoading ? (
           <p className="muted playlist-import-spotify-note">Checking your Spotify connection…</p>
         ) : spotify.status && spotify.status.configured === false ? (
-          <p className="muted playlist-import-spotify-note">Spotify login is not configured on this Helix server. Ask an administrator to set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET, or upload an Exportify CSV below.</p>
+          <p className="muted playlist-import-spotify-note">Spotify login is not configured yet. Add your own Spotify app credentials in Settings → Spotify, or ask an administrator to set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET. You can also upload an Exportify CSV below.</p>
         ) : !spotify.status?.connected ? (
           <div className="playlist-import-spotify-connect">
             <button type="button" className="primary spotify-connect" onClick={() => void connectSpotify()} disabled={busy || spotify.connecting}>
