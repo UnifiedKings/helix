@@ -130,14 +130,21 @@ def spotify_redirect_uri(request) -> str:
     """Return the OAuth redirect URI for this request.
 
     Spotify requires the registered redirect URI to match exactly. Admins can
-    pin it with SPOTIFY_REDIRECT_URI; otherwise it is derived from the current
-    request's scheme and host, which keeps self-hosted setups working behind a
-    reverse proxy without extra configuration.
+    pin it with SPOTIFY_REDIRECT_URI; otherwise it is derived from the request's
+    scheme and host. Forwarded headers are honored so the URI keeps the public
+    https scheme when a TLS-terminating reverse proxy speaks plain HTTP to Helix.
     """
     pinned = (os.getenv("SPOTIFY_REDIRECT_URI") or "").strip()
     if pinned:
         return pinned
-    return f"{request.url.scheme}://{request.headers.get('host', 'localhost')}/spotify/auth/callback"
+
+    forwarded_proto = request.headers.get("x-forwarded-proto", "")
+    scheme = forwarded_proto.split(",", 1)[0].strip() or request.url.scheme
+
+    forwarded_host = request.headers.get("x-forwarded-host", "")
+    host = forwarded_host.split(",", 1)[0].strip() or request.headers.get("host", "localhost")
+
+    return f"{scheme}://{host}/spotify/auth/callback"
 
 
 def build_authorize_url(state: str, redirect_uri: str, *, client_id: str, client_secret: Optional[str] = None) -> str:
