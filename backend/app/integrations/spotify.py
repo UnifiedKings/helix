@@ -477,7 +477,9 @@ def list_user_playlists(db: Session, user_id: str) -> Dict[str, Any]:
 
 
 def _track_from_spotify_item(item: Dict[str, Any]) -> Optional[ImportedTrack]:
-    track = item.get("track")
+    # Playlist items from /playlists/{id}/items use "item"; liked songs from
+    # /me/tracks use "track".
+    track = item.get("track") or item.get("item")
     if not isinstance(track, dict):
         return None
     # Local/unavailable tracks come back without an id and cannot be matched.
@@ -547,7 +549,7 @@ def fetch_playlist_tracks(db: Session, user_id: str, playlist_id: str) -> Dict[s
             name = str(detail.get("name") or name)
         except RuntimeError:
             pass
-        items = _list_items(access_token, f"/playlists/{playlist_id}/tracks", limit=100)
+        items = _list_items(access_token, f"/playlists/{playlist_id}/items", limit=100)
 
     tracks: List[ImportedTrack] = []
     seen: set[str] = set()
