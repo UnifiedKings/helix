@@ -59,6 +59,39 @@ class UserSetting(Base):
     user: Mapped["User"] = relationship("User")
 
 
+class SpotifyConnection(Base):
+    """Per-user Spotify OAuth connection used for playlist importing.
+
+    Tokens are stored so Helix can fetch playlists on the user's behalf. Like
+    the other credentials Helix keeps (for example the Subsonic password), these
+    are stored in the local database and should be protected by keeping the DB
+    file private.
+    """
+
+    __tablename__ = "spotify_connections"
+
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    access_token: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    refresh_token: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    display_name: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    connected_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+    user: Mapped["User"] = relationship("User")
+
+
+class SpotifyOAuthState(Base):
+    """Short-lived OAuth state binding a pending Spotify authorization to a user."""
+
+    __tablename__ = "spotify_oauth_states"
+
+    state: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    redirect_uri: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 # --- Playback / Queue (backend-owned) ---
 
 class PlaybackSession(Base):

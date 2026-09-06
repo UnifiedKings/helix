@@ -63,6 +63,7 @@ class PlaylistImportPreviewRequest(BaseModel):
     url: str = ""
     filename: str = ""
     content: str = ""
+    spotify_playlist_id: str = ""
 
 
 class PlaylistImportApplyTrack(BaseModel):

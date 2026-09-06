@@ -105,8 +105,18 @@ The current import sources are:
 
 - **Helix** — export a playlist from another Helix instance as JSON and upload the file.
 - **YouTube Music** — paste a normal playlist Share link. For **Liked Music**, save the Liked Music page from your browser as an HTML file and upload it.
-- **Spotify** — export a playlist or Liked Songs with [Exportify](https://exportify.net/) and upload the resulting CSV.
+- **Spotify** — connect your Spotify account with OAuth and pick a playlist or **Liked Songs** directly, or export them with [Exportify](https://exportify.net/) and upload the resulting CSV.
 - **Pandora** — open a playlist or **My Thumbs Up**, choose Share, and paste the public Pandora playlist link. Public Pandora playlists are imported using Pandora's anonymous web session flow; a Pandora login is not required.
+
+### Spotify OAuth setup
+
+To import directly from Spotify instead of uploading an Exportify CSV, an administrator needs to register a Spotify app once:
+
+1. Create an app at [Spotify Developer Dashboard](https://developer.spotify.com/dashboard).
+2. Add a **Redirect URI** equal to your Helix origin plus `/spotify/auth/callback` (for example `https://music.example.com/spotify/auth/callback`).
+3. Set `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`, and optionally `SPOTIFY_REDIRECT_URI` on the Helix container.
+
+Users can then choose **Import playlist → Spotify → Connect Spotify**, approve access in the pop-up, and pick a playlist or Liked Songs directly. Helix only requests read access to playlists and never writes to Spotify. Each user's connection is stored in the Helix database and can be revoked with **Disconnect** in the import dialog, or from the user's Spotify account settings.
 
 ### Matching and cleanup
 
@@ -179,6 +189,13 @@ services:
       # Optional ListenBrainz token. Some station/discovery features may work
       # better with this configured.
       LISTENBRAINZ_TOKEN: ""
+
+      # Optional Spotify OAuth for direct playlist importing.
+      # Register an app at https://developer.spotify.com/dashboard and add
+      # <your-helix-origin>/spotify/auth/callback as a Redirect URI.
+      # SPOTIFY_REDIRECT_URI defaults to the request host when unset.
+      # SPOTIFY_CLIENT_ID: ""
+      # SPOTIFY_CLIENT_SECRET: ""
 
       # Optional Subsonic/Navidrome connection.
       # You can also configure these inside the Helix settings UI if supported.

@@ -953,6 +953,51 @@
   min-height: 44px;
 }
 
+.playlist-import-field select {
+  width: 100%;
+  min-height: 44px;
+}
+
+.playlist-import-spotify {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid var(--border-soft);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--text) 2.5%, transparent);
+}
+
+.playlist-import-spotify-note {
+  margin: 0;
+  line-height: 1.45;
+}
+
+.playlist-import-spotify-connect {
+  display: grid;
+  justify-items: start;
+  gap: 0.55rem;
+}
+
+.spotify-connect {
+  min-height: 42px;
+  padding: 0 1.25rem;
+}
+
+.playlist-import-spotify-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  color: var(--success, var(--muted));
+  font-size: 0.88rem;
+  font-weight: 650;
+}
+
+.playlist-import-spotify-head button {
+  min-height: 30px;
+  color: var(--muted);
+}
+
 .playlist-import-file-field {
   padding: 1rem;
   border: 1px dashed color-mix(in srgb, var(--accent) 40%, var(--border-soft));

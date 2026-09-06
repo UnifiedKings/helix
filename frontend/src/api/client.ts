@@ -1,4 +1,4 @@
-import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, ArtistSimilarResponse, DislikeState, HomeSummary, LikeState, PlaybackHistoryFilters, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, StationProviderInfo, AdminUser, Capabilities, User, UserSettingsPayload, UserSettings, LobbyJoinResponse, LobbyListResponse, LobbyPermissions, LobbyState, PlaylistImportPreview, PlaylistImportSource, PlaylistImportCandidate, SubsonicArtistResponse, SubsonicLibraryAlbumsResponse, SubsonicLibraryArtistsResponse, SubsonicLibraryPlaylistsResponse, SubsonicLibrarySongsResponse, SubsonicPlaylistDetail } from './types'
+import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, ArtistSimilarResponse, DislikeState, HomeSummary, LikeState, PlaybackHistoryFilters, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, StationProviderInfo, AdminUser, Capabilities, User, UserSettingsPayload, UserSettings, LobbyJoinResponse, LobbyListResponse, LobbyPermissions, LobbyState, PlaylistImportPreview, PlaylistImportSource, PlaylistImportCandidate, SpotifyConnectionStatus, SpotifyPlaylist, SpotifyPlaylistList, SubsonicArtistResponse, SubsonicLibraryAlbumsResponse, SubsonicLibraryArtistsResponse, SubsonicLibraryPlaylistsResponse, SubsonicLibrarySongsResponse, SubsonicPlaylistDetail } from './types'
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const { headers, ...rest } = options
@@ -406,8 +406,13 @@ export const api = {
   reorderPlaylistTracks: async (playlistId: string, trackIds: string[]) => normalizePlaylistDetail(await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/reorder`, { method: 'PATCH', body: JSON.stringify({ track_ids: trackIds }) })),
   deletePlaylist: (id: string) => request<{ ok: boolean }>(`/api/playlists/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   exportPlaylist: (id: string) => request<Record<string, unknown>>(`/api/playlists/${encodeURIComponent(id)}/export`),
-  previewPlaylistImport: (playlistId: string, payload: { source: PlaylistImportSource; url?: string; filename?: string; content?: string }) => request<PlaylistImportPreview>(`/api/playlists/${encodeURIComponent(playlistId)}/import/preview`, { method: 'POST', body: JSON.stringify(payload) }),
+  previewPlaylistImport: (playlistId: string, payload: { source: PlaylistImportSource; url?: string; filename?: string; content?: string; spotify_playlist_id?: string }) => request<PlaylistImportPreview>(`/api/playlists/${encodeURIComponent(playlistId)}/import/preview`, { method: 'POST', body: JSON.stringify(payload) }),
   applyPlaylistImport: async (playlistId: string, tracks: PlaylistImportCandidate[], skipExisting = true) => normalizePlaylistDetail(await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(playlistId)}/import/apply`, { method: 'POST', body: JSON.stringify({ tracks, skip_existing: skipExisting }) })),
+
+  spotifyStatus: () => request<SpotifyConnectionStatus>('/api/spotify/status'),
+  spotifyAuthStart: () => request<{ oauth_url: string }>('/api/spotify/auth/start', { method: 'POST', body: JSON.stringify({}) }),
+  spotifyDisconnect: () => request<{ connected: boolean; cleared: boolean }>('/api/spotify/auth', { method: 'DELETE' }),
+  spotifyPlaylists: () => request<SpotifyPlaylistList>('/api/spotify/playlists'),
 
   lobbies: () => request<LobbyListResponse>('/api/lobbies'),
   createLobby: (name: string, guestPermissions?: LobbyPermissions, guestQueueLimit?: number, password?: string) => request<LobbyState>('/api/lobbies', { method: 'POST', body: JSON.stringify({ name, guest_permissions: guestPermissions, guest_queue_limit: guestQueueLimit, password: password?.trim() || null }) }),
