@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { Link, useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
-import type { SearchAlbum, SearchArtist, SearchSong, Station } from '../api/types'
+import type { SearchAlbum, SearchArtist, SearchSong, Station, SubsonicPlaylist } from '../api/types'
 import { Artwork } from '../components/Artwork'
 import { AlbumLink } from '../components/AlbumLink'
 import { ArtistLink } from '../components/ArtistLink'
@@ -12,7 +12,7 @@ import '../styles/library.css'
 
 type PlayerContext = ReturnType<typeof usePlayer>
 
-type LibraryTab = 'albums' | 'artists' | 'songs'
+type LibraryTab = 'albums' | 'artists' | 'songs' | 'playlists'
 type SongSort = 'random' | 'starred'
 
 const ALBUM_SORTS: Array<{ id: string; label: string }> = [
@@ -144,6 +144,30 @@ function ArtistTile({ artist, launching, onLaunchStation }: { artist: SearchArti
   )
 }
 
+function PlaylistCard({ playlist, onOpen }: { playlist: SubsonicPlaylist; onOpen: () => void }) {
+  return (
+    <article
+      className="library-album-card library-album-card-clickable"
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOpen()
+        }
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open playlist ${playlist.name}`}
+    >
+      <Artwork src={playlist.cover_url} alt={playlist.name} size="lg" />
+      <div className="library-album-card-body">
+        <strong>{playlist.name}</strong>
+        <span>{playlist.song_count} {playlist.song_count === 1 ? 'song' : 'songs'}</span>
+      </div>
+    </article>
+  )
+}
+
 function groupArtistsByLetter(artists: SearchArtist[]) {
   const groups = new Map<string, SearchArtist[]>()
   for (const artist of artists) {
@@ -172,6 +196,12 @@ export function LibraryPage() {
   const [songSort, setSongSort] = useState<SongSort>('random')
   const [songs, setSongs] = useState<SearchSong[]>([])
   const [songsLoading, setSongsLoading] = useState(false)
+
+  const [playlists, setPlaylists] = useState<SubsonicPlaylist[]>([])
+  const [playlistsLoading, setPlaylistsLoading] = useState(false)
+  const [playlistsLoaded, setPlaylistsLoaded] = useState(false)
+  const [openPlaylist, setOpenPlaylist] = useState<{ id: string; name: string; songs: SearchSong[] } | null>(null)
+  const [playlistDetailLoading, setPlaylistDetailLoading] = useState(false)
 
   const [error, setError] = useState('')
   const [launchingKey, setLaunchingKey] = useState<string | null>(null)
@@ -258,11 +288,60 @@ export function LibraryPage() {
     }
   }
 
+  async function loadPlaylists() {
+    if (playlistsLoaded) return
+    setPlaylistsLoading(true)
+    setError('')
+    try {
+      const res = await api.subsonicLibraryPlaylists()
+      setPlaylists(res.playlists ?? [])
+      setPlaylistsLoaded(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load playlists')
+    } finally {
+      setPlaylistsLoading(false)
+    }
+  }
+
+  async function openPlaylistDetail(playlistId: string) {
+    setOpenPlaylist(null)
+    setPlaylistDetailLoading(true)
+    setError('')
+    try {
+      const detail = await api.subsonicPlaylistDetail(playlistId)
+      setOpenPlaylist({ id: detail.id, name: detail.name, songs: detail.songs ?? [] })
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not load this playlist')
+    } finally {
+      setPlaylistDetailLoading(false)
+    }
+  }
+
+  function closePlaylistDetail() {
+    setOpenPlaylist(null)
+    setError('')
+  }
+
+  async function playPlaylistSongs(songsToPlay: SearchSong[], shuffle = false) {
+    if (!songsToPlay.length) return
+    const ordered = shuffle ? [...songsToPlay].sort(() => Math.random() - 0.5) : songsToPlay
+    try {
+      await player.run(() => api.playSong(ordered[0]), 'play')
+      for (const song of ordered.slice(1)) {
+        await api.queueSong(song)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not play this playlist')
+    }
+  }
+
   function switchTab(next: LibraryTab) {
     setTab(next)
     setError('')
+    setOpenPlaylist(null)
     if (next === 'artists' && !artistsLoaded && configured) void loadArtists()
     if (next === 'songs' && songs.length === 0 && configured) void loadSongs(songSort)
+    if (next === 'playlists' && !playlistsLoaded && configured) void loadPlaylists()
   }
 
   async function shuffleSongs(event: FormEvent) {
@@ -296,6 +375,7 @@ export function LibraryPage() {
           <button type="button" role="tab" aria-selected={tab === 'albums'} className={tab === 'albums' ? 'active' : ''} onClick={() => switchTab('albums')}>Albums</button>
           <button type="button" role="tab" aria-selected={tab === 'artists'} className={tab === 'artists' ? 'active' : ''} onClick={() => switchTab('artists')}>Artists</button>
           <button type="button" role="tab" aria-selected={tab === 'songs'} className={tab === 'songs' ? 'active' : ''} onClick={() => switchTab('songs')}>Songs</button>
+          <button type="button" role="tab" aria-selected={tab === 'playlists'} className={tab === 'playlists' ? 'active' : ''} onClick={() => switchTab('playlists')}>Playlists</button>
         </nav>
       </header>
 
@@ -388,6 +468,47 @@ export function LibraryPage() {
             </div>
           ) : (
             <p className="muted library-empty">{songsLoading ? 'Loading songs…' : songSort === 'starred' ? 'No starred songs yet.' : 'No songs found.'}</p>
+          )}
+        </section>
+      ) : null}
+
+      {tab === 'playlists' ? (
+        <section role="tabpanel" aria-label="Playlists">
+          {openPlaylist ? (
+            <div className="library-playlist-detail">
+              <div className="library-playlist-detail-head">
+                <div className="library-playlist-detail-title">
+                  <button type="button" className="library-back-button" onClick={closePlaylistDetail} aria-label="Back to playlists">←</button>
+                  <h2 className="library-playlist-name">{openPlaylist.name}</h2>
+                </div>
+                <div className="library-sort-row library-playlist-detail-actions">
+                  <button type="button" className="library-sort-chip" onClick={() => void playPlaylistSongs(openPlaylist.songs)} disabled={!openPlaylist.songs.length || playlistDetailLoading}>Play</button>
+                  <button type="button" className="library-sort-chip" onClick={() => void playPlaylistSongs(openPlaylist.songs, true)} disabled={!openPlaylist.songs.length || playlistDetailLoading}>Shuffle</button>
+                </div>
+              </div>
+              {openPlaylist.songs.length ? (
+                <div className="library-song-grid">
+                  {openPlaylist.songs.map((song, index) => {
+                    const stationKey = song.subsonic_song_id || `${song.artist}-${song.title}-${index}`
+                    return <SongRow key={`${song.subsonic_song_id || song.title}-${index}`} song={song} player={player} launching={launchingKey === stationKey} onLaunchStation={() => void launchStation(stationKey, song.artist || '')} />
+                  })}
+                </div>
+              ) : (
+                <p className="muted library-empty">{playlistDetailLoading ? 'Loading playlist…' : 'This playlist has no songs.'}</p>
+              )}
+            </div>
+          ) : (
+            <>
+              {playlists.length ? (
+                <div className="library-album-grid">
+                  {playlists.map((playlist) => (
+                    <PlaylistCard key={playlist.id} playlist={playlist} onOpen={() => void openPlaylistDetail(playlist.id)} />
+                  ))}
+                </div>
+              ) : (
+                <p className="muted library-empty">{playlistsLoading ? 'Loading playlists…' : 'No playlists found on the server.'}</p>
+              )}
+            </>
           )}
         </section>
       ) : null}

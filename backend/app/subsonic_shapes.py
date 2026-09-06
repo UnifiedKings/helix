@@ -80,5 +80,35 @@ def subsonic_songs_to_results(songs: List[Dict[str, Any]]) -> List[Dict[str, Any
     return [subsonic_song_to_result(song) for song in songs if isinstance(song, dict)]
 
 
+def subsonic_playlist_to_result(playlist: Dict[str, Any]) -> Dict[str, Any]:
+    """Shape a Subsonic playlist dict into the frontend SubsonicPlaylist payload."""
+    cover_id = str(playlist.get("coverArt") or "").strip()
+    playlist_id = str(playlist.get("id") or "")
+    return {
+        "id": playlist_id,
+        "name": str(playlist.get("name") or ""),
+        "comment": str(playlist.get("comment") or ""),
+        "owner": str(playlist.get("owner") or ""),
+        "song_count": _int_or_zero(playlist.get("songCount") or len(playlist.get("entry") or [])),
+        "duration_seconds": _int_or_zero(playlist.get("duration")),
+        "cover_url": subsonic_cover_url(cover_id),
+    }
+
+
+def subsonic_playlist_detail_to_result(playlist: Dict[str, Any]) -> Dict[str, Any]:
+    """Shape a full Subsonic playlist (getPlaylist) into a detail payload."""
+    raw_songs = playlist.get("entry") or []
+    songs = [song for song in raw_songs if isinstance(song, dict)]
+    return {
+        **subsonic_playlist_to_result(playlist),
+        "songs_count": len(songs),
+        "songs": subsonic_songs_to_results(songs),
+    }
+
+
+def subsonic_playlists_to_results(playlists: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [subsonic_playlist_to_result(playlist) for playlist in playlists if isinstance(playlist, dict)]
+
+
 def subsonic_albums_to_results(albums: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     return [subsonic_album_to_result(album) for album in albums if isinstance(album, dict)]

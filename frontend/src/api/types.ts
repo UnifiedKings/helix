@@ -163,6 +163,26 @@ export type SubsonicLibrarySongsResponse = {
   songs: SearchSong[]
 }
 
+export type SubsonicPlaylist = {
+  id: string
+  name: string
+  comment?: string
+  owner?: string
+  song_count: number
+  duration_seconds?: number
+  cover_url?: string
+}
+
+export type SubsonicPlaylistDetail = SubsonicPlaylist & {
+  songs_count: number
+  songs: SearchSong[]
+}
+
+export type SubsonicLibraryPlaylistsResponse = {
+  count: number
+  playlists: SubsonicPlaylist[]
+}
+
 export type PlaybackHistoryItem = QueueItem & {
   queue_item_id?: string
   station_id?: string

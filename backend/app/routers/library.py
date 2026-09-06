@@ -13,6 +13,8 @@ from ..settings_store import get_settings
 from ..subsonic_shapes import (
     subsonic_albums_to_results,
     subsonic_artist_to_result,
+    subsonic_playlist_detail_to_result,
+    subsonic_playlists_to_results,
     subsonic_songs_to_results,
 )
 
@@ -37,6 +39,7 @@ _LIBRARY_CACHE: TTLCache[Dict[str, Any]] = TTLCache(max_items=4096)
 _LIBRARY_ALBUM_TTL_S = 60 * 5
 _LIBRARY_ARTIST_TTL_S = 60 * 15
 _LIBRARY_SONG_TTL_S = 60 * 5
+_LIBRARY_PLAYLIST_TTL_S = 60 * 5
 
 
 def _load_settings_short() -> Dict[str, Any]:
@@ -287,4 +290,77 @@ async def library_songs(
 
     payload = {"type": song_type, "songs": subsonic_songs_to_results(raw_songs)}
     _LIBRARY_CACHE.set(cache_key, payload, _LIBRARY_SONG_TTL_S)
+    return payload
+
+
+@router.get("/playlists", response_model=Dict[str, Any])
+async def library_playlists(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """Return the Subsonic server's playlists (list view)."""
+    ip = _client_ip(request)
+    if not RATE_LIMITER.allow(make_key(scope="subsonic:library:playlists", user_id=str(user.id), ip=ip), limit=40, window_s=60):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+    settings = _load_settings_short()
+    client = _subsonic_client_from_settings(settings)
+    if client is None:
+        raise HTTPException(status_code=503, detail="Subsonic is not configured.")
+
+    cache_key = _cache_key("lib:playlists", _settings_identity(settings))
+    hit = _LIBRARY_CACHE.get(cache_key)
+    if hit is not None:
+        return hit
+
+    try:
+        raw_playlists = await client.get_playlists()
+    except Exception:
+        raise HTTPException(status_code=502, detail="Subsonic playlist list request failed.")
+    finally:
+        await client.close()
+
+    playlists = subsonic_playlists_to_results(raw_playlists)
+    payload = {"count": len(playlists), "playlists": playlists}
+    _LIBRARY_CACHE.set(cache_key, payload, _LIBRARY_PLAYLIST_TTL_S)
+    return payload
+
+
+@router.get("/playlists/{playlist_id}", response_model=Dict[str, Any])
+async def library_playlist_detail(
+    request: Request,
+    playlist_id: str,
+    user: User = Depends(get_current_user),
+):
+    """Return a full Subsonic playlist including its track list."""
+    ip = _client_ip(request)
+    if not RATE_LIMITER.allow(make_key(scope="subsonic:library:playlist", user_id=str(user.id), ip=ip), limit=40, window_s=60):
+        raise HTTPException(status_code=429, detail="Too many requests")
+
+    playlist_id = str(playlist_id or "").strip()
+    if not playlist_id:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+
+    settings = _load_settings_short()
+    client = _subsonic_client_from_settings(settings)
+    if client is None:
+        raise HTTPException(status_code=503, detail="Subsonic is not configured.")
+
+    cache_key = _cache_key("lib:playlist", _settings_identity(settings), playlist_id)
+    hit = _LIBRARY_CACHE.get(cache_key)
+    if hit is not None:
+        return hit
+
+    try:
+        raw_playlist = await client.get_playlist(playlist_id)
+    except Exception:
+        raise HTTPException(status_code=502, detail="Subsonic playlist request failed.")
+    finally:
+        await client.close()
+
+    if not raw_playlist:
+        raise HTTPException(status_code=404, detail="Playlist not found in Subsonic.")
+
+    payload = subsonic_playlist_detail_to_result(raw_playlist)
+    _LIBRARY_CACHE.set(cache_key, payload, _LIBRARY_PLAYLIST_TTL_S)
     return payload
