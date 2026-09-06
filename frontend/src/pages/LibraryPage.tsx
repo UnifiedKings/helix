@@ -2,10 +2,11 @@ import { FormEvent, useEffect, useMemo, useState } from 'react'
 import type { KeyboardEvent } from 'react'
 import { Link, useNavigate, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
-import type { SearchAlbum, SearchArtist, SearchSong } from '../api/types'
+import type { SearchAlbum, SearchArtist, SearchSong, Station } from '../api/types'
 import { Artwork } from '../components/Artwork'
 import { AlbumLink } from '../components/AlbumLink'
 import { ArtistLink } from '../components/ArtistLink'
+import { NavIcon } from '../components/navigation/NavIcon'
 import type { usePlayer } from '../hooks/usePlayer'
 import '../styles/library.css'
 
@@ -49,7 +50,15 @@ function formatDuration(song: SearchSong) {
   return ''
 }
 
-function SongRow({ song, player }: { song: SearchSong; player: PlayerContext }) {
+async function findOrCreateArtistStation(artistName: string) {
+  const artist = (artistName || '').trim()
+  const stations = await api.stations().catch(() => [] as Station[])
+  const existing = stations.find((station) => station.station_type === 'similar_artist' && String(station.seed_artist || station.config?.seed_artist || '').trim().toLowerCase() === artist.toLowerCase())
+  if (existing) return existing
+  return api.createStation({ name: `${artist} Radio`, station_type: 'similar_artist', config: { seed_artist: artist } })
+}
+
+function SongRow({ song, player, launching, onLaunchStation }: { song: SearchSong; player: PlayerContext; launching: boolean; onLaunchStation: () => void }) {
   const duration = formatDuration(song)
   const artwork = song.art_url || song.thumbnail_url || ''
   return (
@@ -65,13 +74,14 @@ function SongRow({ song, player }: { song: SearchSong; player: PlayerContext }) 
       <span className="library-song-duration">{duration}</span>
       <div className="library-row-actions">
         <button className="library-row-icon" aria-label={`Play ${song.title}`} data-tooltip="Play" title="Play" onClick={() => player.run(() => api.playSong(song), 'play')}>▶</button>
+        <button className="library-row-icon" disabled={launching} aria-label={`Launch a station from ${song.artist || song.title}`} data-tooltip="Launch station" title="Launch station" onClick={onLaunchStation}><NavIcon name="stations" /></button>
         <button className="library-row-icon library-queue-icon" aria-label={`Add ${song.title} to queue`} data-tooltip="Add to queue" title="Add to queue" onClick={() => player.run(() => api.queueSong(song))}>＋</button>
       </div>
     </article>
   )
 }
 
-function AlbumTile({ album, player }: { album: SearchAlbum; player: PlayerContext }) {
+function AlbumTile({ album, player, launching, onLaunchStation }: { album: SearchAlbum; player: PlayerContext; launching: boolean; onLaunchStation: () => void }) {
   const navigate = useNavigate()
   const path = albumDetailPath(album)
   const artwork = album.art_url || album.thumbnail_url || ''
@@ -104,13 +114,14 @@ function AlbumTile({ album, player }: { album: SearchAlbum; player: PlayerContex
       </div>
       <div className="library-row-actions" onClick={(event) => event.stopPropagation()}>
         <button className="library-row-icon" aria-label={`Play ${album.title}`} data-tooltip="Play" title="Play" onClick={() => player.run(() => api.playAlbum(album), 'play')}>▶</button>
+        <button className="library-row-icon" disabled={launching} aria-label={`Launch a station from ${album.artist || album.title}`} data-tooltip="Launch station" title="Launch station" onClick={onLaunchStation}><NavIcon name="stations" /></button>
         <button className="library-row-icon library-queue-icon" aria-label={`Add ${album.title} to queue`} data-tooltip="Add to queue" title="Add to queue" onClick={() => player.run(() => api.queueAlbum(album))}>＋</button>
       </div>
     </article>
   )
 }
 
-function ArtistTile({ artist }: { artist: SearchArtist }) {
+function ArtistTile({ artist, launching, onLaunchStation }: { artist: SearchArtist; launching: boolean; onLaunchStation: () => void }) {
   const path = artistPath(artist)
   const content = (
     <>
@@ -121,10 +132,15 @@ function ArtistTile({ artist }: { artist: SearchArtist }) {
       </div>
     </>
   )
-  return path ? (
-    <Link className="library-artist-tile" to={path}>{content}</Link>
-  ) : (
-    <div className="library-artist-tile">{content}</div>
+  return (
+    <article className="library-artist-tile">
+      {path ? (
+        <Link className="library-artist-tile-link" to={path}>{content}</Link>
+      ) : (
+        <div className="library-artist-tile-link">{content}</div>
+      )}
+      <button className="library-row-icon" disabled={launching} aria-label={`Launch a station from ${artist.name}`} data-tooltip="Launch station" title="Launch station" onClick={onLaunchStation}><NavIcon name="stations" /></button>
+    </article>
   )
 }
 
@@ -158,6 +174,23 @@ export function LibraryPage() {
   const [songsLoading, setSongsLoading] = useState(false)
 
   const [error, setError] = useState('')
+  const [launchingKey, setLaunchingKey] = useState<string | null>(null)
+
+  async function launchStation(key: string, artistName: string) {
+    if (launchingKey) return
+    const artist = (artistName || '').trim()
+    if (!artist) return
+    setLaunchingKey(key)
+    setError('')
+    try {
+      const station = await findOrCreateArtistStation(artist)
+      await player.run(() => api.playStation(station.id), 'play')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not launch station')
+    } finally {
+      setLaunchingKey(null)
+    }
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -285,7 +318,10 @@ export function LibraryPage() {
           {albums.items.length ? (
             <>
               <div className="library-album-grid">
-                {albums.items.map((album, index) => <AlbumTile key={`${album.subsonic_album_id || album.title}-${index}`} album={album} player={player} />)}
+                {albums.items.map((album, index) => {
+                  const stationKey = album.subsonic_album_id || `${album.artist}-${album.title}-${index}`
+                  return <AlbumTile key={`${album.subsonic_album_id || album.title}-${index}`} album={album} player={player} launching={launchingKey === stationKey} onLaunchStation={() => void launchStation(stationKey, album.artist || '')} />
+                })}
               </div>
               {albums.hasMore ? (
                 <div className="library-load-more">
@@ -312,7 +348,10 @@ export function LibraryPage() {
                 <div className="library-letter-group" key={letter}>
                   <h2 id={`library-letter-${letter}`} className="library-letter-heading">{letter}</h2>
                   <div className="library-artist-grid">
-                    {rows.map((artist) => <ArtistTile key={artist.browse_id || artist.name} artist={artist} />)}
+                    {rows.map((artist) => {
+                      const stationKey = artist.browse_id || artist.name
+                      return <ArtistTile key={artist.browse_id || artist.name} artist={artist} launching={launchingKey === stationKey} onLaunchStation={() => void launchStation(stationKey, artist.name)} />
+                    })}
                   </div>
                 </div>
               ))}
@@ -342,7 +381,10 @@ export function LibraryPage() {
           </div>
           {songs.length ? (
             <div className="library-song-grid">
-              {songs.map((song, index) => <SongRow key={`${song.subsonic_song_id || song.title}-${index}`} song={song} player={player} />)}
+              {songs.map((song, index) => {
+                const stationKey = song.subsonic_song_id || `${song.artist}-${song.title}-${index}`
+                return <SongRow key={`${song.subsonic_song_id || song.title}-${index}`} song={song} player={player} launching={launchingKey === stationKey} onLaunchStation={() => void launchStation(stationKey, song.artist || '')} />
+              })}
             </div>
           ) : (
             <p className="muted library-empty">{songsLoading ? 'Loading songs…' : songSort === 'starred' ? 'No starred songs yet.' : 'No songs found.'}</p>

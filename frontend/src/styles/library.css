@@ -223,6 +223,11 @@
   color: var(--accent-bright);
 }
 
+.library-row-icon:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
 .library-load-more {
   margin-top: 1.25rem;
   display: flex;
@@ -283,20 +288,28 @@
 .library-artist-tile {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.6rem;
   padding: 0.6rem;
   border-radius: 16px;
   border: 1px solid var(--border-soft);
   background: var(--surface-soft);
-  color: var(--text);
-  text-decoration: none;
   min-width: 0;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-a.library-artist-tile:hover {
+.library-artist-tile:hover {
   border-color: var(--accent-border);
   background: color-mix(in srgb, var(--surface-raised) 80%, var(--accent) 20%);
+}
+
+.library-artist-tile-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+  color: var(--text);
+  text-decoration: none;
 }
 
 .library-artist-tile .artwork-md {
