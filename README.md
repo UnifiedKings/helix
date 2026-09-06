@@ -219,6 +219,9 @@ services:
       HELIX_DB_WATCHDOG_WARN_S: "2"
       HELIX_DB_WATCHDOG_ERROR_S: "10"
 
+      # Make this false if you are using helix over an http connection
+      HELIX_COOKIE_SECURE: "${HELIX_COOKIE_SECURE:-true}"
+
     depends_on:
       - slskd
 
@@ -360,30 +363,6 @@ services:
 
 The paths inside the two containers do not have to be identical. They only need to point to the same host folder.
 
-### Configure slskd
-
-slskd requires Soulseek credentials. With the Compose example above these are supplied as:
-
-```env
-SLSKD_SLSK_USERNAME=your-soulseek-username
-SLSKD_SLSK_PASSWORD=your-soulseek-password
-```
-
-You can also configure slskd through its `slskd.yml`. A minimal equivalent looks like:
-
-```yaml
-soulseek:
-  username: your-soulseek-username
-  password: your-soulseek-password
-
-directories:
-  downloads: /downloads
-```
-
-The default slskd HTTP port is `5030`.
-
-For better Soulseek connectivity, expose and forward slskd's Soulseek listening port, commonly `50300`, to the machine running slskd.
-
 ### Create an API key
 
 Helix authenticates to slskd with an API key.
@@ -413,7 +392,7 @@ If slskd and Helix are in the same Docker Compose project, Helix can reach slskd
 SLSKD_URL=http://slskd:5030
 ```
 
-If slskd runs somewhere else, use the URL reachable **from inside the Helix container**, not necessarily the URL you type into your desktop browser.
+Otherwise provide an internal ip.
 
 ### Configure Helix
 
@@ -437,10 +416,8 @@ The Admin Settings page also provides a **Test connection** button.
 Helix's default upgrade policy is intentionally conservative:
 
 - quality upgrades are disabled until explicitly enabled
-- lossless candidates are required by default
 - minimum sample rate: **44.1 kHz**
 - minimum bit depth: **16-bit**
-- existing lossless files are not replaced by default
 - automatic replacement currently applies only to tracks originally added by Helix
 - Soulseek candidates must meet Helix's identity/match-confidence checks before they are considered eligible
 - downloaded files are validated before replacing the existing library copy
