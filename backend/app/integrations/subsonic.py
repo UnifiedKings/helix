@@ -619,6 +619,20 @@ class SubsonicClient:
         tracks = (data.get("randomSongs") or {}).get("song") or []
         return [track for track in tracks if isinstance(track, dict)]
 
+    async def get_playlists(self) -> List[Dict[str, Any]]:
+        """Return the server's playlists via getPlaylists."""
+        data = await self._browse_response_data("getPlaylists.view", {})
+        playlists = (data.get("playlists") or {}).get("playlist") or []
+        return [row for row in playlists if isinstance(row, dict)]
+
+    async def get_playlist(self, playlist_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a full playlist via getPlaylist.view, including its track list."""
+        if not playlist_id:
+            return None
+        data = await self._browse_response_data("getPlaylist.view", {"id": playlist_id})
+        playlist = data.get("playlist") or {}
+        return playlist if isinstance(playlist, dict) and playlist else None
+
     def stream_url(self, song_id: str) -> str:
         url = f"{self.base_url}/rest/stream.view"
         # We intentionally do NOT include password; use token auth.

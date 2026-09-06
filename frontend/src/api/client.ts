@@ -1,4 +1,4 @@
-import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, ArtistSimilarResponse, DislikeState, HomeSummary, LikeState, PlaybackHistoryFilters, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, StationProviderInfo, AdminUser, Capabilities, User, UserSettingsPayload, UserSettings, LobbyJoinResponse, LobbyListResponse, LobbyPermissions, LobbyState, PlaylistImportPreview, PlaylistImportSource, PlaylistImportCandidate, SubsonicArtistResponse, SubsonicLibraryAlbumsResponse, SubsonicLibraryArtistsResponse, SubsonicLibrarySongsResponse } from './types'
+import type { AlbumDetail, ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, ArtistSimilarResponse, DislikeState, HomeSummary, LikeState, PlaybackHistoryFilters, PlaybackHistoryResponse, PlayerState, Playlist, PlaylistDetail, QueueItem, SearchAlbum, SearchArtist, SearchMode, SearchResponse, SearchSong, Station, StationProviderInfo, AdminUser, Capabilities, User, UserSettingsPayload, UserSettings, LobbyJoinResponse, LobbyListResponse, LobbyPermissions, LobbyState, PlaylistImportPreview, PlaylistImportSource, PlaylistImportCandidate, SubsonicArtistResponse, SubsonicLibraryAlbumsResponse, SubsonicLibraryArtistsResponse, SubsonicLibraryPlaylistsResponse, SubsonicLibrarySongsResponse, SubsonicPlaylistDetail } from './types'
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const { headers, ...rest } = options
@@ -356,6 +356,14 @@ export const api = {
   subsonicLibrarySongs: async (type: string, size = 100) => {
     const payload = await request<SubsonicLibrarySongsResponse>(`/api/subsonic/library/songs?type=${encodeURIComponent(type)}&size=${size}`)
     return { ...payload, songs: (payload.songs ?? []).map(normalizeSong) }
+  },
+  subsonicLibraryPlaylists: async () => {
+    const payload = await request<SubsonicLibraryPlaylistsResponse>('/api/subsonic/library/playlists')
+    return payload
+  },
+  subsonicPlaylistDetail: async (playlistId: string) => {
+    const payload = await request<SubsonicPlaylistDetail>(`/api/subsonic/library/playlists/${encodeURIComponent(playlistId)}`)
+    return { ...payload, songs: (payload.songs ?? []).map((song) => normalizeSong({ ...song, source: 'subsonic' })) }
   },
 
   history: (filters: PlaybackHistoryFilters = {}) => {
