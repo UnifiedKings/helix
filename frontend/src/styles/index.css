@@ -19,6 +19,9 @@
 @import './lyrics.css';
 @import './big-picture.css';
 @import './playbar-styles.css';
+@import './playbar-transitions.css';
+@import './queue-full-bleed.css';
+@import './main-content-gutters.css';
 @import './ui-actions.css';
 @import './theme-amber.css';
 @import './typography.css';
