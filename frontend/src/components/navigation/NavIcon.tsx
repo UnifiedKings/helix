@@ -1,4 +1,4 @@
-export type IconName = 'home' | 'search' | 'stations' | 'playlists' | 'history' | 'lobbies' | 'settings'
+export type IconName = 'home' | 'search' | 'library' | 'stations' | 'playlists' | 'history' | 'lobbies' | 'settings'
 
 export function NavIcon({ name }: { name: IconName }) {
   const common = {
@@ -16,6 +16,7 @@ export function NavIcon({ name }: { name: IconName }) {
   switch (name) {
     case 'home': return <svg {...common}><path d="M3.5 10.8 12 3.8l8.5 7v8.7a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5Z"/><path d="M9.2 21v-6.2h5.6V21"/></svg>
     case 'search': return <svg {...common}><circle cx="10.8" cy="10.8" r="6.2"/><path d="m15.4 15.4 4.3 4.3"/></svg>
+    case 'library': return <svg {...common}><path d="M4 4.5h16v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><circle cx="9" cy="12" r="3.4"/><circle cx="15.4" cy="12" r="3.4"/><circle cx="9" cy="12" r="1.1"/><circle cx="15.4" cy="12" r="1.1"/></svg>
     case 'stations': return <svg {...common}><circle cx="12" cy="12" r="2.4"/><circle cx="12" cy="12" r="6.2"/><circle cx="12" cy="12" r="9" opacity=".55"/></svg>
     case 'playlists': return <svg {...common}><path d="M9 5v12.2"/><path d="m9 6 9-2v11"/><ellipse cx="6.5" cy="18.2" rx="2.5" ry="1.9"/><ellipse cx="15.5" cy="16.2" rx="2.5" ry="1.9"/></svg>
     case 'history': return <svg {...common}><circle cx="12" cy="12" r="8.5"/><path d="M12 7.4v5l3.3 2"/></svg>

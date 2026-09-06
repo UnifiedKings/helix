@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useOutletContext, useParams } from 'react-router-dom'
+import { Link, useLocation, useOutletContext, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import type { ArtistAlbumsResponse, ArtistDetail, ArtistPopularResponse, ArtistSimilarResponse, SearchAlbum, SearchSong } from '../api/types'
 import { AlbumLink } from '../components/AlbumLink'
@@ -11,7 +11,23 @@ type PlayerContext = ReturnType<typeof usePlayer>
 type ArtistModalKind = 'popular' | 'similar' | null
 
 function albumBrowseId(album: SearchAlbum) {
-  return album.yt_browse_id || album.browse_id || album.browseId || ''
+  return album.yt_browse_id || album.browse_id || album.browseId || album.subsonic_album_id || ''
+}
+
+function albumDetailPath(album: SearchAlbum) {
+  const albumId = albumBrowseId(album)
+  if (!albumId) return ''
+  return album.source === 'subsonic'
+    ? `/albums/${encodeURIComponent(albumId)}?source=subsonic`
+    : `/albums/${encodeURIComponent(albumId)}`
+}
+
+function similarArtistPath(artist: { browse_id?: string; artist_id?: string; source?: string }) {
+  const id = artist.browse_id || artist.artist_id || ''
+  if (!id) return ''
+  return artist.source === 'subsonic'
+    ? `/artists/${encodeURIComponent(id)}?source=subsonic`
+    : `/artists/${encodeURIComponent(id)}`
 }
 
 function songPayload(song: SearchSong, artist: ArtistDetail): SearchSong {
@@ -46,6 +62,9 @@ function formatDuration(song: SearchSong) {
 export function ArtistDetailPage() {
   const { browseId = '' } = useParams()
   const location = useLocation()
+  const [searchParams] = useSearchParams()
+  const source = searchParams.get('source') || ''
+  const isSubsonic = source === 'subsonic'
   const searchReturn = (location.state as { searchReturn?: unknown } | null)?.searchReturn
   const searchReturnState = searchReturn ? { searchReturn } : undefined
   const player = useOutletContext<PlayerContext>()
@@ -74,6 +93,23 @@ export function ArtistDetailPage() {
     let cancelled = false
     async function load() {
       setError('')
+      setArtist(null)
+      setPopular(null)
+      setAlbums(null)
+      setSimilar(null)
+      if (isSubsonic) {
+        try {
+          const res = await api.subsonicArtist(browseId)
+          if (cancelled) return
+          setArtist({ ...res.artist, source: 'subsonic' })
+          setPopular({ artist_name: res.artist.name, yt_browse_id: browseId, tracks: res.songs })
+          setAlbums({ artist_name: res.artist.name, yt_browse_id: browseId, albums: res.albums, singles: res.singles })
+          setSimilar({ artist_name: res.artist.name, yt_browse_id: browseId, similar_artists: res.similar_artists })
+        } catch (err) {
+          if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load artist')
+        }
+        return
+      }
       try {
         const [artistRes, popularRes, albumRes, similarRes] = await Promise.all([
           api.artist(browseId),
@@ -93,7 +129,7 @@ export function ArtistDetailPage() {
     }
     void load()
     return () => { cancelled = true }
-  }, [browseId])
+  }, [browseId, isSubsonic])
 
   useEffect(() => {
     if (!activeModal) return undefined
@@ -148,7 +184,7 @@ export function ArtistDetailPage() {
       {artist ? (
         <>
           <section className="artist-profile-hero">
-            <Artwork src={artist.art_url || artist.thumbnail_url} alt={artist.name} size="lg" />
+            <Artwork src={artist.art_url || artist.thumbnail_url || releases[0]?.art_url || releases[0]?.thumbnail_url} alt={artist.name} size="lg" />
             <div className="artist-profile-copy">
               <span className="eyebrow">Artist</span>
               <h1>{artist.name}</h1>
@@ -168,7 +204,7 @@ export function ArtistDetailPage() {
           <div className="artist-profile-main-grid">
             <section className="artist-profile-panel artist-popular-panel">
               <div className="artist-section-heading">
-                <h2>Popular tracks</h2>
+                <h2>{artist.source === 'subsonic' ? 'Tracks' : 'Popular tracks'}</h2>
                 {popularTracks.length > 5 ? (
                   <button type="button" className="artist-section-button" onClick={() => setActiveModal('popular')}>View all</button>
                 ) : null}
@@ -189,14 +225,16 @@ export function ArtistDetailPage() {
                       <div className="artist-popular-actions">
                         <button className="artist-track-action" data-tooltip="Play" title="Play" onClick={() => player.run(() => api.playSong(song), 'play')}>▶</button>
                         <button className="artist-track-action" data-tooltip="Add to queue" title="Add to queue" onClick={() => player.run(() => api.queueSong(song))}>＋</button>
-                        <button
-                          className={`artist-track-action artist-track-subsonic${queued ? ' is-queued' : ''}`}
-                          disabled={queued}
-                          aria-label={queued ? `${song.title} queued for Subsonic import` : `Add ${song.title} to Subsonic`}
-                          data-tooltip={queued ? 'Queued for Subsonic' : 'Add to Subsonic'}
-                          title={queued ? 'Queued for Subsonic' : 'Add to Subsonic'}
-                          onClick={() => void queueSongForSubsonic(song, importKey)}
-                        >S+</button>
+                        {artist.source === 'subsonic' ? null : (
+                          <button
+                            className={`artist-track-action artist-track-subsonic${queued ? ' is-queued' : ''}`}
+                            disabled={queued}
+                            aria-label={queued ? `${song.title} queued for Subsonic import` : `Add ${song.title} to Subsonic`}
+                            data-tooltip={queued ? 'Queued for Subsonic' : 'Add to Subsonic'}
+                            title={queued ? 'Queued for Subsonic' : 'Add to Subsonic'}
+                            onClick={() => void queueSongForSubsonic(song, importKey)}
+                          >S+</button>
+                        )}
                       </div>
                     </article>
                   )
@@ -213,7 +251,7 @@ export function ArtistDetailPage() {
               </div>
               <div className="artist-similar-list">
                 {similarArtists.slice(0, 5).map((item) => {
-                  const id = item.browse_id || item.artist_id || ''
+                  const path = similarArtistPath(item)
                   const content = (
                     <>
                       <Artwork src={item.art_url || item.thumbnail_url} alt={item.name} size="sm" />
@@ -221,8 +259,8 @@ export function ArtistDetailPage() {
                       <span className="artist-similar-arrow" aria-hidden="true">›</span>
                     </>
                   )
-                  return id ? (
-                    <Link className="artist-similar-row" to={`/artists/${encodeURIComponent(id)}`} key={`${item.name}-${id}`}>
+                  return path ? (
+                    <Link className="artist-similar-row" to={path} key={`${item.name}-${path}`}>
                       {content}
                     </Link>
                   ) : (
@@ -240,7 +278,7 @@ export function ArtistDetailPage() {
             </div>
             <div className="artist-release-strip">
               {releases.map((album) => {
-                const bid = albumBrowseId(album)
+                const path = albumDetailPath(album)
                 const card = (
                   <>
                     <Artwork src={album.art_url || album.thumbnail_url} alt={album.title} size="lg" />
@@ -248,8 +286,8 @@ export function ArtistDetailPage() {
                     <span>{album.year || ''}</span>
                   </>
                 )
-                return bid ? (
-                  <Link className="artist-release-card" key={`${album.title}-${bid}`} to={`/albums/${encodeURIComponent(bid)}`} state={searchReturnState}>
+                return path ? (
+                  <Link className="artist-release-card" key={`${album.title}-${path}`} to={path} state={searchReturnState}>
                     {card}
                   </Link>
                 ) : (
@@ -265,7 +303,7 @@ export function ArtistDetailPage() {
                 <div className="artist-modal-header">
                   <div>
                     <span className="eyebrow">Artist</span>
-                    <h2 id={`artist-modal-title-${activeModal}`}>{activeModal === 'popular' ? 'Popular tracks' : 'Similar artists'}</h2>
+                    <h2 id={`artist-modal-title-${activeModal}`}>{activeModal === 'popular' ? (artist?.source === 'subsonic' ? 'All tracks' : 'Popular tracks') : 'Similar artists'}</h2>
                   </div>
                   <button type="button" className="artist-modal-close" aria-label="Close" onClick={() => setActiveModal(null)}>×</button>
                 </div>
@@ -288,14 +326,16 @@ export function ArtistDetailPage() {
                             <div className="artist-popular-actions">
                               <button className="artist-track-action" data-tooltip="Play" title="Play" onClick={() => player.run(() => api.playSong(song), 'play')}>▶</button>
                               <button className="artist-track-action" data-tooltip="Add to queue" title="Add to queue" onClick={() => player.run(() => api.queueSong(song))}>＋</button>
-                              <button
-                                className={`artist-track-action artist-track-subsonic${queued ? ' is-queued' : ''}`}
-                                disabled={queued}
-                                aria-label={queued ? `${song.title} queued for Subsonic import` : `Add ${song.title} to Subsonic`}
-                                data-tooltip={queued ? 'Queued for Subsonic' : 'Add to Subsonic'}
-                                title={queued ? 'Queued for Subsonic' : 'Add to Subsonic'}
-                                onClick={() => void queueSongForSubsonic(song, importKey)}
-                              >S+</button>
+                              {artist.source === 'subsonic' ? null : (
+                                <button
+                                  className={`artist-track-action artist-track-subsonic${queued ? ' is-queued' : ''}`}
+                                  disabled={queued}
+                                  aria-label={queued ? `${song.title} queued for Subsonic import` : `Add ${song.title} to Subsonic`}
+                                  data-tooltip={queued ? 'Queued for Subsonic' : 'Add to Subsonic'}
+                                  title={queued ? 'Queued for Subsonic' : 'Add to Subsonic'}
+                                  onClick={() => void queueSongForSubsonic(song, importKey)}
+                                >S+</button>
+                              )}
                             </div>
                           </article>
                         )
@@ -304,7 +344,7 @@ export function ArtistDetailPage() {
                   ) : (
                     <div className="artist-modal-list artist-modal-similar-list">
                       {similarArtists.map((item) => {
-                        const id = item.browse_id || item.artist_id || ''
+                        const path = similarArtistPath(item)
                         const content = (
                           <>
                             <Artwork src={item.art_url || item.thumbnail_url} alt={item.name} size="sm" />
@@ -314,8 +354,8 @@ export function ArtistDetailPage() {
                             <span className="artist-similar-arrow" aria-hidden="true">›</span>
                           </>
                         )
-                        return id ? (
-                          <Link className="artist-similar-row artist-similar-row-modal" to={`/artists/${encodeURIComponent(id)}`} key={`${item.name}-${id}`} onClick={() => setActiveModal(null)}>
+                        return path ? (
+                          <Link className="artist-similar-row artist-similar-row-modal" to={path} key={`${item.name}-${path}`} onClick={() => setActiveModal(null)}>
                             {content}
                           </Link>
                         ) : (

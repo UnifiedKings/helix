@@ -11,6 +11,7 @@ import { HomePage } from './pages/HomePage'
 import { JoinLobbyPage } from './pages/JoinLobbyPage'
 import { LobbyPage } from './pages/LobbyPage'
 import { LobbiesPage } from './pages/LobbiesPage'
+import { LibraryPage } from './pages/LibraryPage'
 import { LoginPage } from './pages/LoginPage'
 import { PlaylistEditPage } from './pages/PlaylistEditPage'
 import { PlaylistsPage } from './pages/PlaylistsPage'
@@ -59,6 +60,7 @@ export function App() {
             <Route index element={<HomePage />} />
             <Route path="big-picture" element={<BigPicturePage />} />
             <Route path="search" element={<CacheRefreshBoundary prefixes={['capabilities']}><SearchPage /></CacheRefreshBoundary>} />
+            <Route path="library" element={<CacheRefreshBoundary prefixes={['capabilities']}><LibraryPage /></CacheRefreshBoundary>} />
             <Route path="stations" element={<CacheRefreshBoundary prefixes={['stations:', 'capabilities']}><StationsPage /></CacheRefreshBoundary>} />
             <Route path="playlists" element={<CacheRefreshBoundary prefixes={['playlists:', 'capabilities']}><PlaylistsPage /></CacheRefreshBoundary>} />
             <Route path="playlists/:playlistId" element={<CacheRefreshBoundary prefixes={['playlist:detail:', 'playlists:']}><PlaylistEditPage /></CacheRefreshBoundary>} />

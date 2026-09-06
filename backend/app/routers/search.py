@@ -205,6 +205,10 @@ from fastapi import Request as _Request
 
 from ..integrations.ytmusic import search_ytmusic as _ytmusic_search
 from ..integrations.subsonic import SubsonicClient as _SubsonicClient
+from ..subsonic_shapes import (
+    subsonic_album_to_result as _subsonic_album_to_result,
+    subsonic_song_to_result as _subsonic_song_to_result,
+)
 from ..rate_limit import RATE_LIMITER as _RATE_LIMITER, make_key as _make_key
 
 
@@ -288,38 +292,6 @@ def _search_album_score(query: str, title: str, artist: str) -> float:
     return max(ratios) * 0.85 + overlap * 0.15 + contains_bonus
 
 
-def _search_subsonic_song_to_result(song: Dict[str, Any]) -> Dict[str, Any]:
-    cover_id = str(song.get("coverArt") or "").strip()
-    return {
-        "kind": "song",
-        "source": "subsonic",
-        "subsonic_song_id": str(song.get("id") or ""),
-        "video_id": "",
-        "title": str(song.get("title") or ""),
-        "artist": str(song.get("artist") or ""),
-        "album": str(song.get("album") or ""),
-        "duration_seconds": int(song.get("duration") or 0) if str(song.get("duration") or "").isdigit() else 0,
-        "thumbnail_url": f"/api/art/subsonic/{cover_id}?size=512" if cover_id else "",
-        "youtube_url": "",
-        "ytmusic_url": "",
-    }
-
-
-def _search_subsonic_album_to_result(album: Dict[str, Any]) -> Dict[str, Any]:
-    cover_id = str(album.get("coverArt") or "").strip()
-    return {
-        "kind": "album",
-        "source": "subsonic",
-        "subsonic_album_id": str(album.get("id") or ""),
-        "browse_id": "",
-        "title": str(album.get("title") or album.get("name") or ""),
-        "artist": str(album.get("artist") or ""),
-        "year": str(album.get("year") or ""),
-        "thumbnail_url": f"/api/art/subsonic/{cover_id}?size=512" if cover_id else "",
-        "ytmusic_url": "",
-    }
-
-
 def _search_song_key(item: Dict[str, Any]) -> Tuple[str, str]:
     return (_search_norm(str(item.get("title") or "")), _search_norm(str(item.get("artist") or "")))
 
@@ -360,8 +332,8 @@ async def _search_subsonic_only(settings: Dict[str, Any], query: str, song_limit
         scored_albums.sort(key=lambda item: item[0], reverse=True)
 
         return {
-            "songs": [_search_subsonic_song_to_result(song) for _, song in scored_songs[:song_limit]],
-            "albums": [_search_subsonic_album_to_result(album) for _, album in scored_albums[:album_limit]],
+            "songs": [_subsonic_song_to_result(song) for _, song in scored_songs[:song_limit]],
+            "albums": [_subsonic_album_to_result(album) for _, album in scored_albums[:album_limit]],
         }
     finally:
         await client.close()

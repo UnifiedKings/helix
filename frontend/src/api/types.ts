@@ -84,6 +84,8 @@ export type SearchArtist = {
   subscriber_count?: string
   monthly_listeners?: string
   ytmusic_url?: string
+  source?: string
+  album_count?: number
 }
 
 export type ArtistDetail = SearchArtist & {
@@ -132,6 +134,33 @@ export type AlbumDetail = {
   tracks: SearchSong[]
   subsonic_complete?: boolean
   subsonic_album_id?: string | null
+}
+
+export type SubsonicLibraryAlbumsResponse = {
+  type: string
+  offset: number
+  size: number
+  count: number
+  has_more: boolean
+  albums: SearchAlbum[]
+}
+
+export type SubsonicLibraryArtistsResponse = {
+  count: number
+  artists: SearchArtist[]
+}
+
+export type SubsonicArtistResponse = {
+  artist: ArtistDetail
+  albums: SearchAlbum[]
+  singles: SearchAlbum[]
+  songs: SearchSong[]
+  similar_artists: SearchArtist[]
+}
+
+export type SubsonicLibrarySongsResponse = {
+  type: string
+  songs: SearchSong[]
 }
 
 export type PlaybackHistoryItem = QueueItem & {

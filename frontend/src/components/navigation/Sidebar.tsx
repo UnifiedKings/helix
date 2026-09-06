@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import type { User } from '../../api/types'
 import { NavIcon, type IconName } from './NavIcon'
 
@@ -13,21 +13,31 @@ const NAV_ITEMS: Array<{ to: string; label: string; icon: IconName }> = [
   { to: '/settings', label: 'Settings', icon: 'settings' },
 ]
 
-function SidebarLink({ to, label, icon }: { to: string; label: string; icon: IconName }) {
-  return <NavLink to={to} className="side-link"><span className="side-icon"><NavIcon name={icon} /></span><span>{label}</span></NavLink>
+function SidebarLink({ to, label, icon, active }: { to: string; label: string; icon: IconName; active?: boolean }) {
+  return (
+    <NavLink to={to} className={({ isActive }) => `side-link${active || isActive ? ' active' : ''}`}>
+      <span className="side-icon"><NavIcon name={icon} /></span>
+      <span>{label}</span>
+    </NavLink>
+  )
 }
 
 export function Sidebar({ user, onLogout }: { user: User | null; onLogout: () => void }) {
+  const location = useLocation()
+  const libraryContextActive = (location.pathname.startsWith('/artists/') || location.pathname.startsWith('/albums/')) && location.search.includes('source=subsonic')
   const [canUpgrade, setCanUpgrade] = useState(false)
+  const [subsonicConfigured, setSubsonicConfigured] = useState(false)
 
   useEffect(() => {
     let cancelled = false
     fetch('/capabilities', { credentials: 'include' })
       .then(async res => res.ok ? res.json() : null)
       .then(payload => {
-        if (!cancelled) setCanUpgrade(Boolean(payload?.features?.quality_upgrades ?? payload?.features?.subsonic_import))
+        if (cancelled) return
+        setCanUpgrade(Boolean(payload?.features?.quality_upgrades ?? payload?.features?.subsonic_import))
+        setSubsonicConfigured(Boolean(payload?.subsonic_configured))
       })
-      .catch(() => { if (!cancelled) setCanUpgrade(false) })
+      .catch(() => { if (!cancelled) { setCanUpgrade(false); setSubsonicConfigured(false) } })
     return () => { cancelled = true }
   }, [user?.id])
 
@@ -35,7 +45,9 @@ export function Sidebar({ user, onLogout }: { user: User | null; onLogout: () =>
     <aside className="app-sidebar">
       <NavLink to="/" className="sidebar-brand" aria-label="Helix home"><span className="sidebar-brand-logo" aria-hidden="true" /><span>Helix</span></NavLink>
       <nav className="side-nav" aria-label="Main navigation">
-        {NAV_ITEMS.map((item) => <SidebarLink key={item.to} {...item} />)}
+        <SidebarLink to="/" label="Home" icon="home" />
+        {subsonicConfigured ? <SidebarLink to="/library" label="Library" icon="library" active={libraryContextActive} /> : null}
+        {NAV_ITEMS.slice(1).map((item) => <SidebarLink key={item.to} {...item} />)}
         {canUpgrade ? <SidebarLink to="/quality-upgrades" label="Quality Upgrades" icon="history" /> : null}
         {user?.role === 'admin' ? <SidebarLink to="/admin/settings" label="Admin" icon="settings" /> : null}
       </nav>
