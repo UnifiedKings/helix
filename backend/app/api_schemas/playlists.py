@@ -79,5 +79,6 @@ class PlaylistImportApplyTrack(BaseModel):
 
 
 class PlaylistImportApplyRequest(BaseModel):
+    name: str = ""
     tracks: List[PlaylistImportApplyTrack] = Field(default_factory=list)
     skip_existing: bool = True

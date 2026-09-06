@@ -54,6 +54,23 @@ function formatDuration(ms?: number) {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
 }
 
+function downloadJson(filename: string, payload: unknown) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
+function safeFilename(name: string) {
+  const cleaned = (name || 'playlist').replace(/[\\/:*?"<>|]+/g, '').trim().replace(/\s+/g, '_')
+  return `${cleaned || 'playlist'}.json`
+}
+
 function sanitizeYtMusicSavedPage(html: string) {
   const documentNode = new DOMParser().parseFromString(html, 'text/html')
   const countText = Array.from(documentNode.querySelectorAll('span')).map((node) => node.textContent?.trim() ?? '').find((text) => /^[\d,]+\s+songs$/i.test(text)) ?? ''
@@ -92,13 +109,16 @@ function sanitizeYtMusicSavedPage(html: string) {
 
 type Props = {
   open: boolean
+  /** Empty when importing into a brand-new playlist that should be created on apply. */
   playlistId: string
   playlistName: string
+  /** Optional preferred name for a new playlist; falls back to the source playlist name. */
+  defaultName?: string
   onClose: () => void
   onImported: () => void | Promise<void>
 }
 
-export function PlaylistImportModal({ open, playlistId, playlistName: _playlistName, onClose, onImported }: Props) {
+export function PlaylistImportModal({ open, playlistId, playlistName, defaultName, onClose, onImported }: Props) {
   const [source, setSource] = useState<PlaylistImportSource>('helix')
   const [url, setUrl] = useState('')
   const [filename, setFilename] = useState('')
@@ -220,7 +240,6 @@ export function PlaylistImportModal({ open, playlistId, playlistName: _playlistN
   }
 
   async function createPreview() {
-    if (!playlistId) return
     if (source === 'spotify') {
       const hasCsv = Boolean(content)
       const hasPlaylist = Boolean(spotify.status?.connected && spotifyPlaylistId)
@@ -277,11 +296,25 @@ export function PlaylistImportModal({ open, playlistId, playlistName: _playlistN
     setBusy(true)
     setError('')
     try {
-      await api.applyPlaylistImport(playlistId, tracks, skipExisting)
+      const newPlaylistName = defaultName?.trim() || preview.playlist_name || 'Imported playlist'
+      await api.applyPlaylistImport(playlistId, tracks, skipExisting, newPlaylistName)
       await onImported()
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not import these tracks.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function exportCurrentPlaylist() {
+    setBusy(true)
+    setError('')
+    try {
+      const payload = await api.exportPlaylist(playlistId)
+      downloadJson(safeFilename(playlistName), payload)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not export this playlist.')
     } finally {
       setBusy(false)
     }
@@ -333,6 +366,9 @@ export function PlaylistImportModal({ open, playlistId, playlistName: _playlistN
             <div className="playlist-import-instructions">
               <h3>{help.title}</h3>
               <p>{help.text}</p>
+              {source === 'helix' && playlistId ? (
+                <button type="button" onClick={() => void exportCurrentPlaylist()} disabled={busy}>Export this playlist as JSON</button>
+              ) : null}
               {source === 'ytmusic' ? <small className="playlist-import-privacy-note">The saved page is parsed in your browser first; Google session data is not sent to Helix.</small> : null}
 {source === 'spotify' ? (
         <a href="https://exportify.app/" target="_blank" rel="noreferrer">Open Exportify ↗</a>

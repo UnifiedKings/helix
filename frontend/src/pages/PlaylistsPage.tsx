@@ -72,6 +72,7 @@ export function PlaylistsPage() {
   const [importOpen, setImportOpen] = useState(false)
   const [importPlaylistId, setImportPlaylistId] = useState('')
   const [importPlaylistName, setImportPlaylistName] = useState('')
+  const [importDefaultName, setImportDefaultName] = useState('')
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const [subsonicBusyPlaylistId, setSubsonicBusyPlaylistId] = useState('')
 
@@ -181,14 +182,13 @@ export function PlaylistsPage() {
     setCreating(true)
     setError('')
     try {
-      const playlist = await api.createPlaylist(name.trim() || 'Imported playlist')
+      const requestedName = name.trim()
       setName('')
       setCreateOpen(false)
-      setImportPlaylistId(playlist.id)
-      setImportPlaylistName(playlist.name)
+      setImportPlaylistId('')
+      setImportPlaylistName('')
+      setImportDefaultName(requestedName)
       setImportOpen(true)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not create playlist')
     } finally {
       setCreating(false)
     }
