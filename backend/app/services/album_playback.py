@@ -38,14 +38,13 @@ async def _load_subsonic_album(
     """Return a Subsonic album when album_id belongs to the local library.
 
     Album detail pages can carry a Subsonic album id in the same `browse_id`
-    field used by YTMusic album pages. The legacy album playback endpoints
-    assumed every value was a YouTube Music browse id, which caused a 500 when
-    a complete local album was played or queued.
-
-    Probe the configured Subsonic server first. A miss simply falls back to the
-    existing YTMusic implementation.
+    field used by YTMusic album pages. Search results can also arrive with an
+    empty browse_id but valid local album metadata. In that case, resolve the
+    album from title/artist instead of rejecting it before Subsonic is checked.
     """
-    if not album_id or not player_engine._is_subsonic_configured(settings):
+    if not player_engine._is_subsonic_configured(settings):
+        return None
+    if not album_id and not title:
         return None
 
     client = None
@@ -58,10 +57,9 @@ async def _load_subsonic_album(
             except Exception:
                 album = None
 
-        # Album detail pages opened through YTMusic can still be completely
-        # present in Subsonic. In that case the visible browse_id is not the
-        # local album id, so resolve the local album from the metadata already
-        # present in the request before falling back to YTMusic.
+        # Subsonic search results may not expose their local album id through
+        # the frontend's browse_id field. Resolve from metadata when a direct
+        # id lookup is unavailable or fails.
         if not isinstance(album, dict) and title:
             try:
                 match = await client.search_album_best(album=title, artist=artist)

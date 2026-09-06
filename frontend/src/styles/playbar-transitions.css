@@ -1,0 +1,104 @@
+/* Playbar style-switch animation.
+   Each style has its own animation name so changing the style retriggers the
+   transition even though the same footer element stays mounted. */
+
+.playback-bar.playback-style-helix {
+  animation: helix-playbar-enter-helix 240ms cubic-bezier(.2, .75, .25, 1);
+  transform-origin: 50% 100%;
+}
+
+.playback-bar.playback-style-ytmusic {
+  animation: helix-playbar-enter-ytmusic 240ms cubic-bezier(.2, .75, .25, 1);
+  transform-origin: 50% 100%;
+}
+
+.playback-bar.playback-style-spotify {
+  animation: helix-playbar-enter-spotify 240ms cubic-bezier(.2, .75, .25, 1);
+  transform-origin: 50% 100%;
+}
+
+.playback-bar.playback-style-pandora {
+  animation: helix-playbar-enter-pandora 240ms cubic-bezier(.2, .75, .25, 1);
+  transform-origin: 50% 100%;
+}
+
+@keyframes helix-playbar-enter-helix {
+  0% {
+    opacity: 0.74;
+    transform: translateY(7px) scaleY(0.96);
+    filter: blur(1.2px);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-1px) scaleY(1.008);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes helix-playbar-enter-ytmusic {
+  0% {
+    opacity: 0.72;
+    transform: translateY(5px) scaleX(0.985);
+    filter: blur(1px);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-1px) scaleX(1.004);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scaleX(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes helix-playbar-enter-spotify {
+  0% {
+    opacity: 0.72;
+    transform: translateY(6px) scale(0.992);
+    filter: blur(1px);
+  }
+  68% {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.002);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes helix-playbar-enter-pandora {
+  0% {
+    opacity: 0.74;
+    transform: translateY(6px) scaleY(0.94);
+    filter: blur(1px);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-1px) scaleY(1.008);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+    filter: blur(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .playback-bar.playback-style-helix,
+  .playback-bar.playback-style-ytmusic,
+  .playback-bar.playback-style-spotify,
+  .playback-bar.playback-style-pandora {
+    animation: none !important;
+  }
+}

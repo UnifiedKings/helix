@@ -62,6 +62,25 @@ def _loads(value_json: str, fallback: Any) -> Any:
         return fallback
 
 
+def _nonempty_env(name: str) -> str | None:
+    value = os.getenv(name)
+    if value is None:
+        return None
+    value = value.strip()
+    return value or None
+
+
+def _positive_int_env(name: str) -> int | None:
+    value = _nonempty_env(name)
+    if value is None:
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
 def get_settings(db: Session) -> dict[str, Any]:
     out: dict[str, Any] = dict(DEFAULTS)
     rows = db.execute(select(Setting)).scalars().all()
@@ -74,19 +93,34 @@ def get_settings(db: Session) -> dict[str, Any]:
 
     # Environment variables are authoritative when present. This keeps secrets
     # suitable for Docker/Compose while still allowing UI configuration.
+    #
+    # Keep empty environment values non-authoritative so Compose defaults such
+    # as "${SUBSONIC_PASSWORD:-}" do not erase values saved through the UI.
     env_map = {
+        # Subsonic-compatible server.
+        "SUBSONIC_BASE_URL": "subsonic_base_url",
+        "SUBSONIC_USERNAME": "subsonic_username",
+        "SUBSONIC_PASSWORD": "subsonic_password",
+        "SUBSONIC_CLIENT_NAME": "subsonic_client_name",
+        "SUBSONIC_API_VERSION": "subsonic_api_version",
+
+        # Optional slskd quality-upgrade layer.
         "SLSKD_URL": "slskd_url",
         "SLSKD_API_KEY": "slskd_api_key",
         "SLSKD_DOWNLOADS_PATH": "slskd_downloads_path",
     }
     for env_key, setting_key in env_map.items():
-        value = os.getenv(env_key)
-        if value is not None and value.strip():
-            out[setting_key] = value.strip()
+        value = _nonempty_env(env_key)
+        if value is not None:
+            out[setting_key] = value
 
-    enabled_env = os.getenv("SLSKD_ENABLED")
-    if enabled_env is not None and enabled_env.strip():
-        out["slskd_enabled"] = enabled_env.strip().lower() in {"1", "true", "yes", "on"}
+    subsonic_timeout = _positive_int_env("SUBSONIC_TIMEOUT_S")
+    if subsonic_timeout is not None:
+        out["subsonic_timeout_s"] = subsonic_timeout
+
+    enabled_env = _nonempty_env("SLSKD_ENABLED")
+    if enabled_env is not None:
+        out["slskd_enabled"] = enabled_env.lower() in {"1", "true", "yes", "on"}
 
     return out
 
