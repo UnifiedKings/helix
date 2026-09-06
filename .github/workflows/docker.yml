@@ -57,4 +57,3 @@ jobs:
       - name: Smoke test backend import
         if: github.event_name == 'pull_request'
         run: docker run --rm --entrypoint python ghcr.io/avedor/helix:sha-${{ github.sha }} -c "import app.main"
-
