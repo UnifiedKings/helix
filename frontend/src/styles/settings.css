@@ -641,3 +641,12 @@
     width: 100%;
   }
 }
+
+.settings-spotify-note {
+  margin: 0;
+  padding: 1rem 1.05rem;
+}
+
+.settings-spotify-card .spotify-connect {
+  flex: none;
+}

@@ -569,7 +569,7 @@
 
 .playlists-create-form {
   display: grid;
-  grid-template-columns: minmax(220px, 420px) auto auto;
+  grid-template-columns: minmax(220px, 420px) auto auto auto;
   gap: 0.65rem;
   align-items: center;
   margin: -0.55rem 0 1.6rem;
@@ -596,6 +596,16 @@
 
 .playlists-create-cancel:hover {
   color: var(--text);
+}
+
+.playlists-create-import {
+  border: 1px solid var(--border-soft);
+  background: color-mix(in srgb, var(--text) 4%, transparent);
+  color: var(--text);
+}
+
+.playlists-create-import:hover {
+  border-color: var(--accent);
 }
 
 .playlists-library-section {

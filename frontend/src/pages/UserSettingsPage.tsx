@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { api } from '../api/client'
 import type { UserSettings, UserSettingsPayload } from '../api/types'
+import { useSpotify } from '../hooks/useSpotify'
 import { TypographySettings } from '../components/TypographySettings'
 import type { HelixFontId } from '../lib/fonts'
 import '../styles/account-management.css'
@@ -21,6 +22,7 @@ type SettingsPayload = Omit<UserSettingsPayload, 'settings'> & { settings: Setti
 
 const SECTIONS = [
   ['account', 'Account'],
+  ['spotify', 'Spotify'],
   ['appearance', 'Appearance'],
   ['playback', 'Playback'],
   ['search', 'Search & Discovery'],
@@ -166,6 +168,7 @@ export function UserSettingsPage() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const savedPayloadRef = useRef(payload)
+  const spotify = useSpotify()
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(payload.settings), [draft, payload.settings])
   const safeUi = new URLSearchParams(window.location.search).get('safe-ui') === '1'
@@ -233,6 +236,32 @@ export function UserSettingsPage() {
       setError(err instanceof Error ? err.message : 'Could not save your settings')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function connectSpotify() {
+    setError('')
+    setStatus('')
+    const result = await spotify.connect()
+    if (result.status === 'blocked') {
+      setError('Your browser blocked the Spotify pop-up. Allow pop-ups for this site and try again.')
+    } else if (result.status === 'closed') {
+      setError('The Spotify pop-up was closed before connecting.')
+    } else if (result.status === 'error') {
+      setError(result.message)
+    } else {
+      setStatus('Connected to Spotify.')
+    }
+  }
+
+  async function disconnectSpotify() {
+    setError('')
+    setStatus('')
+    try {
+      await spotify.disconnect()
+      setStatus('Disconnected from Spotify.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not disconnect Spotify.')
     }
   }
 
@@ -337,6 +366,29 @@ export function UserSettingsPage() {
               <label className="settings-control-row"><div><strong>New password</strong><span>Use at least 8 characters.</span></div><input type="password" autoComplete="new-password" value={passwordDraft.next} onChange={(event) => setPasswordDraft((current) => ({ ...current, next: event.target.value }))} /></label>
               <label className="settings-control-row"><div><strong>Confirm new password</strong><span>Enter the new password again.</span></div><input type="password" autoComplete="new-password" value={passwordDraft.confirm} onChange={(event) => setPasswordDraft((current) => ({ ...current, confirm: event.target.value }))} /></label>
               <div className="account-password-actions"><button type="button" className="primary" disabled={passwordSaving || !passwordDraft.current || passwordDraft.next.length < 8 || passwordDraft.next !== passwordDraft.confirm} onClick={() => void changePassword()}>{passwordSaving ? 'Changing…' : 'Change password'}</button></div>
+            </div>
+          </> : null}
+
+          {section === 'spotify' ? <>
+            <div className="settings-section-heading"><h2>Spotify</h2><p>Connect your Spotify account so you can import playlists and Liked Songs directly into Helix.</p></div>
+            <div className="settings-card settings-spotify-card">
+              {spotify.loading ? (
+                <p className="muted settings-spotify-note">Checking your Spotify connection…</p>
+              ) : spotify.status && spotify.status.configured === false ? (
+                <div className="settings-control-row">
+                  <div><strong>Spotify login is not configured</strong><span>This Helix server does not have Spotify OAuth configured. Ask an administrator to set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET.</span></div>
+                </div>
+              ) : !spotify.status?.connected ? (
+                <div className="settings-control-row settings-control-row-stack-mobile">
+                  <div><strong>Not connected</strong><span>Authorize Helix to read your Spotify playlists for importing. Helix only requests read access and never writes to Spotify.</span></div>
+                  <button type="button" className="primary spotify-connect" onClick={() => void connectSpotify()} disabled={spotify.connecting || spotify.loading}>{spotify.connecting ? 'Waiting for Spotify…' : 'Connect Spotify'}</button>
+                </div>
+              ) : (
+                <div className="settings-control-row settings-control-row-stack-mobile">
+                  <div><strong>{spotify.status.display_name ? `Connected as ${spotify.status.display_name}` : 'Connected to Spotify'}</strong><span>This connection is tied to your account and used only for playlist importing. Disconnecting leaves your Helix data untouched.</span></div>
+                  <button type="button" className="danger" onClick={() => void disconnectSpotify()} disabled={spotify.loading}>Disconnect</button>
+                </div>
+              )}
             </div>
           </> : null}
 
