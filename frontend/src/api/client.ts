@@ -406,8 +406,8 @@ export const api = {
   reorderPlaylistTracks: async (playlistId: string, trackIds: string[]) => normalizePlaylistDetail(await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/reorder`, { method: 'PATCH', body: JSON.stringify({ track_ids: trackIds }) })),
   deletePlaylist: (id: string) => request<{ ok: boolean }>(`/api/playlists/${encodeURIComponent(id)}`, { method: 'DELETE' }),
   exportPlaylist: (id: string) => request<Record<string, unknown>>(`/api/playlists/${encodeURIComponent(id)}/export`),
-  previewPlaylistImport: (playlistId: string, payload: { source: PlaylistImportSource; url?: string; filename?: string; content?: string; spotify_playlist_id?: string }) => request<PlaylistImportPreview>(playlistId ? `/api/playlists/${encodeURIComponent(playlistId)}/import/preview` : '/api/playlists/import/preview', { method: 'POST', body: JSON.stringify(payload) }),
-  applyPlaylistImport: async (playlistId: string, tracks: PlaylistImportCandidate[], skipExisting = true, name = '') => normalizePlaylistDetail(await request<PlaylistDetail>(playlistId ? `/api/playlists/${encodeURIComponent(playlistId)}/import/apply` : '/api/playlists/import/apply', { method: 'POST', body: JSON.stringify({ name, tracks, skip_existing: skipExisting }) })),
+  previewPlaylistImport: (playlistId: string, payload: { source: PlaylistImportSource; url?: string; filename?: string; content?: string; spotify_playlist_id?: string }) => request<PlaylistImportPreview>(`/api/playlists/${encodeURIComponent(playlistId)}/import/preview`, { method: 'POST', body: JSON.stringify(payload) }),
+  applyPlaylistImport: async (playlistId: string, tracks: PlaylistImportCandidate[], skipExisting = true) => normalizePlaylistDetail(await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(playlistId)}/import/apply`, { method: 'POST', body: JSON.stringify({ tracks, skip_existing: skipExisting }) })),
 
   spotifyStatus: () => request<SpotifyConnectionStatus>('/api/spotify/status'),
   spotifyAuthStart: () => request<{ oauth_url: string }>('/api/spotify/auth/start', { method: 'POST', body: JSON.stringify({}) }),
