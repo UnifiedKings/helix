@@ -1,0 +1,660 @@
+/*
+ * Responsive application shell
+ *
+ * Layout decisions are based on available width, never orientation.
+ *
+ * Wide:
+ *   persistent navigation + page + persistent queue
+ *
+ * Compact:
+ *   page owns the viewport; navigation and queue become off-canvas drawers
+ *   opened by persistent shell controls.
+ *
+ * The playbar has its own width breakpoints so it remains usable independent
+ * of whether the viewport happens to be portrait or landscape.
+ */
+
+.app-shell {
+  --helix-responsive-playbar-height: var(--helix-active-playbar-height, 112px);
+}
+
+.shell-responsive-controls,
+.shell-drawer-scrim {
+  display: none;
+}
+
+/* -------------------------------------------------------------------------
+   Compact shell: drawers replace persistent side rails.
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 1180px) {
+  .app-shell:not(.app-shell-big-picture) {
+    --helix-responsive-playbar-height: 126px;
+    display: block !important;
+    width: 100%;
+    min-width: 0;
+    padding-bottom: var(--helix-responsive-playbar-height) !important;
+  }
+
+  .app-shell:not(.app-shell-big-picture) > .app-main-area {
+    width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+  }
+
+  .app-shell:not(.app-shell-big-picture) .dashboard-grid {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    gap: 0 !important;
+    padding: 0 !important;
+  }
+
+  .app-shell:not(.app-shell-big-picture) .dashboard-content-card {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding-left: clamp(0.9rem, 2.4vw, 1.4rem) !important;
+    padding-right: clamp(0.9rem, 2.4vw, 1.4rem) !important;
+    box-sizing: border-box;
+  }
+
+  /* Navigation drawer. Existing width-only CSS used display:none here;
+     explicitly restore the sidebar because transform now owns visibility. */
+  .app-shell:not(.app-shell-big-picture) > .app-sidebar {
+    display: flex !important;
+    position: fixed !important;
+    z-index: 96 !important;
+    top: 0 !important;
+    left: 0 !important;
+    bottom: var(--helix-responsive-playbar-height) !important;
+    width: min(280px, calc(100vw - 56px)) !important;
+    height: auto !important;
+    max-height: none !important;
+    padding-bottom: 0 !important;
+    transform: translateX(-105%);
+    transition: transform 180ms ease;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--surface) !important;
+    border-right: 1px solid var(--border-soft);
+    box-shadow: 18px 0 50px rgba(0, 0, 0, 0.38);
+  }
+
+  .app-shell.shell-nav-open:not(.app-shell-big-picture) > .app-sidebar {
+    transform: translateX(0);
+  }
+
+  /* Restore full labels/account content inside the drawer. */
+  .app-shell:not(.app-shell-big-picture) > .app-sidebar .sidebar-brand span,
+  .app-shell:not(.app-shell-big-picture) > .app-sidebar .side-link span,
+  .app-shell:not(.app-shell-big-picture) > .app-sidebar .sidebar-account-copy,
+  .app-shell:not(.app-shell-big-picture) > .app-sidebar .sidebar-logout-button {
+    display: initial;
+  }
+
+  .app-shell:not(.app-shell-big-picture) > .app-sidebar .side-link {
+    justify-content: flex-start;
+    padding-inline: 0.95rem;
+  }
+
+  /* Queue drawer. It remains the real QueuePanel, so drag/reorder, jump,
+     clear, and station context behavior are unchanged. */
+  .app-shell:not(.app-shell-big-picture) .dashboard-grid > .queue-panel,
+  .app-shell:not(.app-shell-big-picture) .dashboard-grid > .queue-panel-redesign {
+    display: block !important;
+    position: fixed !important;
+    z-index: 96 !important;
+    top: 0 !important;
+    right: 0 !important;
+    bottom: var(--helix-responsive-playbar-height) !important;
+    left: auto !important;
+    width: min(380px, calc(100vw - 56px)) !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    border: 0 !important;
+    border-left: 1px solid var(--border-soft) !important;
+    border-radius: 0 !important;
+    padding: 1.1rem !important;
+    overflow: hidden !important;
+    transform: translateX(105%);
+    transition: transform 180ms ease;
+    background: var(--surface) !important;
+    box-shadow: -18px 0 50px rgba(0, 0, 0, 0.38);
+  }
+
+  .app-shell.shell-queue-open:not(.app-shell-big-picture) .dashboard-grid > .queue-panel,
+  .app-shell.shell-queue-open:not(.app-shell-big-picture) .dashboard-grid > .queue-panel-redesign {
+    transform: translateX(0);
+  }
+
+  .app-shell:not(.app-shell-big-picture) .queue-list-redesign {
+    min-height: 0;
+    max-height: calc(100vh - var(--helix-responsive-playbar-height) - 150px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .app-shell:not(.app-shell-big-picture) .queue-summary {
+    position: sticky !important;
+    bottom: -1.1rem !important;
+  }
+
+  /* Drawer controls only become visible when the shell has collapsed. */
+  .shell-responsive-controls {
+    display: contents;
+  }
+
+  .shell-panel-toggle {
+    position: fixed;
+    z-index: 110;
+    top: 0.72rem;
+    width: 42px;
+    height: 42px;
+    min-width: 42px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--surface-raised) 92%, transparent);
+    color: var(--text);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.30);
+    backdrop-filter: blur(12px);
+  }
+
+  .shell-panel-toggle:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 13%, var(--surface-raised));
+    border-color: color-mix(in srgb, var(--accent) 34%, transparent);
+    transform: none;
+  }
+
+  .shell-nav-toggle {
+    left: 0.72rem;
+  }
+
+  .shell-queue-toggle {
+    right: 0.72rem;
+  }
+
+  .shell-nav-toggle > span {
+    font-size: 1.25rem;
+    line-height: 1;
+    transform: translateY(-0.02em);
+  }
+
+  .shell-queue-toggle-glyph {
+    width: 21px;
+    display: grid;
+    gap: 3px;
+  }
+
+  .shell-queue-toggle-glyph i {
+    display: block;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+
+  .shell-queue-toggle-glyph i:nth-child(1) { width: 100%; }
+  .shell-queue-toggle-glyph i:nth-child(2) { width: 76%; justify-self: end; }
+  .shell-queue-toggle-glyph i:nth-child(3) { width: 52%; justify-self: end; }
+
+  .shell-drawer-scrim {
+    display: block;
+    position: fixed;
+    z-index: 90;
+    inset: 0 0 var(--helix-responsive-playbar-height);
+    width: 100%;
+    height: auto;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: rgba(0, 0, 0, 0.54);
+    backdrop-filter: blur(2px);
+  }
+
+  .shell-drawer-scrim:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.54);
+    border: 0;
+    transform: none;
+  }
+
+  /* Leave space around the floating drawer buttons on page headers. */
+  .dashboard-content-card > :first-child {
+    scroll-margin-top: 4rem;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Playbar: medium width.
+   Keep the footer compact and horizontal instead of falling into the old
+   four-row layout.
+   ------------------------------------------------------------------------- */
+
+@media (min-width: 701px) and (max-width: 1180px) {
+  .playback-bar,
+  .playback-bar[data-playbar-style],
+  .playback-bar.playback-style-helix,
+  .playback-bar.playback-style-ytmusic,
+  .playback-bar.playback-style-spotify,
+  .playback-bar.playback-style-pandora {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    min-height: 126px !important;
+    height: 126px !important;
+    left: 0 !important;
+    right: 0 !important;
+    grid-template-columns:
+      minmax(230px, 1fr)
+      minmax(210px, 0.85fr)
+      minmax(150px, 0.55fr) !important;
+    grid-template-rows: minmax(72px, 1fr) 34px !important;
+    column-gap: clamp(0.7rem, 2vw, 1.5rem) !important;
+    row-gap: 0 !important;
+    padding: 0.45rem 0.9rem 0.5rem !important;
+    box-sizing: border-box;
+    overflow: hidden !important;
+  }
+
+  .playback-bar .now-playing,
+  .playback-bar[data-playbar-style] .now-playing,
+  .playback-style-ytmusic .now-playing,
+  .playback-style-spotify .now-playing,
+  .playback-style-pandora .now-playing {
+    position: static !important;
+    display: flex !important;
+    grid-column: 1 !important;
+    grid-row: 1 !important;
+    align-self: center !important;
+    justify-self: stretch !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    gap: 0.65rem !important;
+    transform: none !important;
+  }
+
+  .playback-bar .now-playing-info {
+    min-width: 0 !important;
+    overflow: hidden;
+  }
+
+  .playback-bar .now-playing .artwork,
+  .playback-bar .now-playing .artwork-md,
+  .playback-style-ytmusic .now-playing .artwork,
+  .playback-style-ytmusic .now-playing .artwork-md,
+  .playback-style-spotify .now-playing .artwork,
+  .playback-style-spotify .now-playing .artwork-md {
+    width: 52px !important;
+    height: 52px !important;
+    flex: 0 0 52px !important;
+  }
+
+  .playback-bar .rating-controls {
+    margin-left: auto !important;
+    gap: 0.18rem !important;
+    flex: 0 0 auto;
+  }
+
+  .playback-bar .rating-button {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+    padding: 0.38rem !important;
+  }
+
+  .playback-bar .transport-stack,
+  .playback-style-ytmusic .transport-stack,
+  .playback-style-spotify .transport-stack,
+  .playback-style-pandora .transport-stack {
+    position: static !important;
+    inset: auto !important;
+    grid-column: 2 !important;
+    grid-row: 1 !important;
+    align-self: center !important;
+    justify-self: center !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+  }
+
+  .playback-bar .transport {
+    justify-content: center !important;
+    gap: clamp(0.35rem, 1.5vw, 0.9rem) !important;
+  }
+
+  .playback-style-ytmusic .transport-extra,
+  .playback-style-spotify .transport-extra,
+  .playback-style-pandora .transport-extra {
+    position: static !important;
+    inset: auto !important;
+    transform: none !important;
+    z-index: auto !important;
+  }
+
+  .playback-bar .volume-row,
+  .playback-style-ytmusic .volume-row,
+  .playback-style-spotify .volume-row,
+  .playback-style-pandora .volume-row {
+    position: static !important;
+    grid-column: 3 !important;
+    grid-row: 1 !important;
+    align-self: center !important;
+    justify-self: end !important;
+    width: min(100%, 190px) !important;
+    max-width: 190px !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    transform: none !important;
+    grid-template-columns: auto minmax(0, 1fr) !important;
+  }
+
+  .playback-bar .scrub-row,
+  .playback-style-ytmusic .scrub-row,
+  .playback-style-spotify .scrub-row,
+  .playback-style-pandora .scrub-row {
+    position: static !important;
+    inset: auto !important;
+    grid-column: 1 / -1 !important;
+    grid-row: 2 !important;
+    align-self: center !important;
+    justify-self: stretch !important;
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 0.65rem !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+  }
+
+  .playback-style-ytmusic .scrub-row > span,
+  .playback-style-ytmusic .scrub-row > span:first-child,
+  .playback-style-ytmusic .scrub-row > span:last-child {
+    position: static !important;
+    display: block !important;
+    inset: auto !important;
+    left: auto !important;
+    bottom: auto !important;
+    pointer-events: auto;
+  }
+
+  .playback-style-ytmusic .scrub-row > span:first-child::after {
+    content: none !important;
+  }
+
+  .playback-bar .scrub-input,
+  .playback-style-ytmusic .scrub-input,
+  .playback-style-spotify .scrub-input,
+  .playback-style-pandora .scrub-input {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 6px !important;
+    margin: 0 !important;
+  }
+
+  .playback-bar .audio-error,
+  .playback-style-ytmusic .audio-error,
+  .playback-style-spotify .audio-error,
+  .playback-style-pandora .audio-error {
+    position: absolute !important;
+    right: 0.9rem !important;
+    bottom: 0.2rem !important;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   Playbar: narrow width.
+   Track information occupies the first row. Transport and volume occupy the
+   second. Progress owns the third. The volume slider disappears before it can
+   squeeze transport controls.
+   ------------------------------------------------------------------------- */
+
+@media (max-width: 700px) {
+  .app-shell:not(.app-shell-big-picture) {
+    --helix-responsive-playbar-height: 158px;
+    padding-bottom: var(--helix-responsive-playbar-height) !important;
+  }
+
+  .playback-bar,
+  .playback-bar[data-playbar-style],
+  .playback-bar.playback-style-helix,
+  .playback-bar.playback-style-ytmusic,
+  .playback-bar.playback-style-spotify,
+  .playback-bar.playback-style-pandora {
+    width: 100vw !important;
+    max-width: 100vw !important;
+    min-height: 158px !important;
+    height: 158px !important;
+    left: 0 !important;
+    right: 0 !important;
+    grid-template-columns: minmax(0, 1fr) auto !important;
+    grid-template-rows: 64px 48px 30px !important;
+    column-gap: 0.5rem !important;
+    row-gap: 0 !important;
+    padding: 0.45rem 0.65rem 0.4rem !important;
+    box-sizing: border-box;
+    overflow: hidden !important;
+  }
+
+  .playback-bar .now-playing,
+  .playback-bar[data-playbar-style] .now-playing,
+  .playback-style-ytmusic .now-playing,
+  .playback-style-spotify .now-playing,
+  .playback-style-pandora .now-playing {
+    position: static !important;
+    display: flex !important;
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+    align-self: center !important;
+    justify-self: stretch !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    gap: 0.55rem !important;
+    transform: none !important;
+  }
+
+  .playback-bar .now-playing .artwork,
+  .playback-bar .now-playing .artwork-md,
+  .playback-style-ytmusic .now-playing .artwork,
+  .playback-style-ytmusic .now-playing .artwork-md,
+  .playback-style-spotify .now-playing .artwork,
+  .playback-style-spotify .now-playing .artwork-md {
+    width: 48px !important;
+    height: 48px !important;
+    flex: 0 0 48px !important;
+  }
+
+  .playback-bar .rating-controls {
+    margin-left: auto !important;
+    gap: 0 !important;
+  }
+
+  .playback-bar .rating-button {
+    width: 34px !important;
+    height: 34px !important;
+    min-width: 34px !important;
+    padding: 0.35rem !important;
+  }
+
+  .playback-bar .transport-stack,
+  .playback-style-ytmusic .transport-stack,
+  .playback-style-spotify .transport-stack,
+  .playback-style-pandora .transport-stack {
+    position: static !important;
+    inset: auto !important;
+    grid-column: 1 !important;
+    grid-row: 2 !important;
+    align-self: center !important;
+    justify-self: start !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+  }
+
+  .playback-bar .transport {
+    justify-content: flex-start !important;
+    gap: clamp(0.2rem, 2vw, 0.65rem) !important;
+  }
+
+  .playback-style-ytmusic .transport-extra,
+  .playback-style-spotify .transport-extra,
+  .playback-style-pandora .transport-extra {
+    position: static !important;
+    inset: auto !important;
+    transform: none !important;
+    z-index: auto !important;
+  }
+
+  .playback-bar .volume-row,
+  .playback-style-ytmusic .volume-row,
+  .playback-style-spotify .volume-row,
+  .playback-style-pandora .volume-row {
+    position: static !important;
+    grid-column: 2 !important;
+    grid-row: 2 !important;
+    align-self: center !important;
+    justify-self: end !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    transform: none !important;
+    grid-template-columns: auto !important;
+  }
+
+  .playback-bar .volume-row input,
+  .playback-style-ytmusic .volume-row input,
+  .playback-style-spotify .volume-row input,
+  .playback-style-pandora .volume-row input {
+    display: none !important;
+  }
+
+  .playback-bar .scrub-row,
+  .playback-style-ytmusic .scrub-row,
+  .playback-style-spotify .scrub-row,
+  .playback-style-pandora .scrub-row {
+    position: static !important;
+    inset: auto !important;
+    grid-column: 1 / -1 !important;
+    grid-row: 3 !important;
+    align-self: center !important;
+    justify-self: stretch !important;
+    display: grid !important;
+    grid-template-columns: auto minmax(0, 1fr) auto !important;
+    align-items: center !important;
+    gap: 0.45rem !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    transform: none !important;
+    font-size: 0.7rem;
+  }
+
+  .playback-style-ytmusic .scrub-row > span,
+  .playback-style-ytmusic .scrub-row > span:first-child,
+  .playback-style-ytmusic .scrub-row > span:last-child {
+    position: static !important;
+    display: block !important;
+    inset: auto !important;
+    left: auto !important;
+    bottom: auto !important;
+  }
+
+  .playback-style-ytmusic .scrub-row > span:first-child::after {
+    content: none !important;
+  }
+
+  .playback-bar .scrub-input,
+  .playback-style-ytmusic .scrub-input,
+  .playback-style-spotify .scrub-input,
+  .playback-style-pandora .scrub-input {
+    position: static !important;
+    inset: auto !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 6px !important;
+    margin: 0 !important;
+  }
+
+  .playback-bar .audio-error,
+  .playback-style-ytmusic .audio-error,
+  .playback-style-spotify .audio-error,
+  .playback-style-pandora .audio-error {
+    position: absolute !important;
+    right: 0.65rem !important;
+    bottom: 0.1rem !important;
+  }
+
+  .shell-panel-toggle {
+    top: 0.55rem;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+  }
+
+  .shell-nav-toggle { left: 0.55rem; }
+  .shell-queue-toggle { right: 0.55rem; }
+
+  .app-shell:not(.app-shell-big-picture) > .app-sidebar,
+  .app-shell:not(.app-shell-big-picture) .dashboard-grid > .queue-panel,
+  .app-shell:not(.app-shell-big-picture) .dashboard-grid > .queue-panel-redesign {
+    bottom: var(--helix-responsive-playbar-height) !important;
+  }
+}
+
+/* Very narrow: preserve transport first. Drop nonessential metadata/control
+   density before ever allowing controls to overlap. */
+@media (max-width: 430px) {
+  .playback-bar .now-playing-meta {
+    max-width: 100%;
+  }
+
+  .playback-bar .rating-controls {
+    gap: 0 !important;
+  }
+
+  .playback-bar .rating-button {
+    width: 31px !important;
+    height: 31px !important;
+    min-width: 31px !important;
+  }
+
+  .playback-bar .transport-side,
+  .playback-bar .transport-extra {
+    width: 36px !important;
+    height: 36px !important;
+    min-width: 36px !important;
+  }
+
+  .playback-bar .transport-main {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-sidebar,
+  .queue-panel,
+  .queue-panel-redesign {
+    transition: none !important;
+  }
+}

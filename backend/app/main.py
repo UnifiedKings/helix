@@ -6,6 +6,18 @@ import os
 import sys
 from pathlib import Path
 
+# Album imports already contain duplicate/partial-album detection in
+# routers.subsonic_add, but that protection was opt-in and defaulted off.
+# Make duplicate prevention the normal Helix behavior while preserving an
+# explicit HELIX_SUBSONIC_ADD_SKIP_EXISTING_ALBUM_TRACKS=false override.
+os.environ.setdefault("HELIX_SUBSONIC_ADD_SKIP_EXISTING_ALBUM_TRACKS", "true")
+
+# Navidrome/Subsonic album search behavior varies enough that a single
+# "<album> <artist>" search can miss an album that is already present.
+# Install the broader album candidate resolver before requests are handled.
+from .album_duplicate_guard import install_album_duplicate_guard
+install_album_duplicate_guard()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles

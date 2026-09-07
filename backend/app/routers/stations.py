@@ -20,7 +20,7 @@ from ..settings_store import get_settings
 from ..stations_engine import generate_and_append_station_track, StationSeedArtistNotFound, StationGenerationError
 from ..station_providers import canonical_station_type, get_station_provider, list_station_providers, reload_station_providers
 from ..station_covers import ensure_station_cover, custom_station_cover_path, delete_custom_station_cover, delete_generated_station_cover, has_custom_station_cover, save_custom_station_cover
-from ..player.engine import state
+from ..player.engine import state, _STATION_PREFETCH_TASKS, _ensure_station_prefetch_task
 from ..realtime import schedule_player_state_broadcast
 
 router = APIRouter(prefix="/api/stations", tags=["stations"])
@@ -392,9 +392,9 @@ def update_station(station_id: str, payload: StationUpdateRequest, db: Session =
     if payload.allow_seed_alternates is not None:
         st.allow_seed_alternates = 1 if bool(payload.allow_seed_alternates) else 0
     if payload.era_start is not None:
-        st.era_start = max(0, min(3000, int(payload.era_start)))
+        st.era_start = max(0, min(3000, int(payload.era_start or 0)))
     if payload.era_end is not None:
-        st.era_end = max(0, min(3000, int(payload.era_end)))
+        st.era_end = max(0, min(3000, int(payload.era_end or 0)))
     if payload.popularity_bias is not None:
         st.popularity_bias = max(0, min(100, int(payload.popularity_bias)))
     if payload.tag_strictness is not None:
@@ -419,6 +419,20 @@ def update_station(station_id: str, payload: StationUpdateRequest, db: Session =
 
 @router.post("/{station_id}/play", response_model=PlayerStateResponse)
 async def play_station(station_id: str, payload: StationPlayRequest, user: User = Depends(get_current_user)):
+    # A previous station can still have an asynchronous queue-ahead fill running.
+    # Cancel and drain it before touching the queue so it cannot append stale tracks
+    # after this station becomes active.
+    previous_prefetch = _STATION_PREFETCH_TASKS.get(user.id)
+    if previous_prefetch and not previous_prefetch.done():
+        previous_prefetch.cancel()
+        try:
+            await previous_prefetch
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            # Prefetch is best-effort. A failed old task must not block a station switch.
+            pass
+
     # DB burst: validate station + set session active station / autoplay / reset if requested
     db = SessionLocal()
     try:
@@ -447,20 +461,29 @@ async def play_station(station_id: str, payload: StationPlayRequest, user: User 
     finally:
         db.close()
 
-    # Generate the current item immediately. Then prefetch ahead in the background so /play returns fast.
+    # Generate the new current item synchronously. Once that succeeds, start a
+    # fresh queue-ahead fill for this station using the user's configured horizon.
     try:
-        ahead = max(0, int(os.getenv("HELIX_PREFETCH_AHEAD", "1")))
-    except Exception:
-        ahead = 1
-
-    try:
-        first = await generate_and_append_station_track(user.id, station_id, settings=settings, advance_to_new_item=True)
+        first = await generate_and_append_station_track(
+            user.id,
+            station_id,
+            settings=settings,
+            advance_to_new_item=True,
+        )
         if not first:
-            raise StationGenerationError("Unable to generate station right now. The provider returned no playable tracks for the current station settings.", status_code=503)
+            raise StationGenerationError(
+                "Unable to generate station right now. The provider returned no playable tracks for the current station settings.",
+                status_code=503,
+            )
     except StationSeedArtistNotFound as e:
         raise HTTPException(status_code=404, detail=str(e)) from e
     except StationGenerationError as e:
         raise HTTPException(status_code=e.status_code, detail=e.detail) from e
+
+    # Force a new per-user station-prefetch task now that the old one has been
+    # drained. _ensure_station_prefetch_task() uses station_queue_ahead_for_user(),
+    # so this respects the user's configured "songs ahead" setting.
+    await _ensure_station_prefetch_task(user.id, station_id)
 
     # Return current player state
     db = SessionLocal()
