@@ -109,16 +109,13 @@ function sanitizeYtMusicSavedPage(html: string) {
 
 type Props = {
   open: boolean
-  /** Empty when importing into a brand-new playlist that should be created on apply. */
   playlistId: string
   playlistName: string
-  /** Optional preferred name for a new playlist; falls back to the source playlist name. */
-  defaultName?: string
   onClose: () => void
   onImported: () => void | Promise<void>
 }
 
-export function PlaylistImportModal({ open, playlistId, playlistName, defaultName, onClose, onImported }: Props) {
+export function PlaylistImportModal({ open, playlistId, playlistName, onClose, onImported }: Props) {
   const [source, setSource] = useState<PlaylistImportSource>('helix')
   const [url, setUrl] = useState('')
   const [filename, setFilename] = useState('')
@@ -296,8 +293,7 @@ export function PlaylistImportModal({ open, playlistId, playlistName, defaultNam
     setBusy(true)
     setError('')
     try {
-      const newPlaylistName = defaultName?.trim() || preview.playlist_name || 'Imported playlist'
-      await api.applyPlaylistImport(playlistId, tracks, skipExisting, newPlaylistName)
+      await api.applyPlaylistImport(playlistId, tracks, skipExisting)
       await onImported()
       onClose()
     } catch (err) {

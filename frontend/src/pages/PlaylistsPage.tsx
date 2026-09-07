@@ -69,10 +69,6 @@ export function PlaylistsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [createWithImport, setCreateWithImport] = useState(false)
   const [importTarget, setImportTarget] = useState<Playlist | null>(null)
-  const [importOpen, setImportOpen] = useState(false)
-  const [importPlaylistId, setImportPlaylistId] = useState('')
-  const [importPlaylistName, setImportPlaylistName] = useState('')
-  const [importDefaultName, setImportDefaultName] = useState('')
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const [subsonicBusyPlaylistId, setSubsonicBusyPlaylistId] = useState('')
 
@@ -177,23 +173,6 @@ export function PlaylistsPage() {
       setError(err instanceof Error ? err.message : 'Could not export playlist')
     }
   }
-  async function createAndImport() {
-    if (creating) return
-    setCreating(true)
-    setError('')
-    try {
-      const requestedName = name.trim()
-      setName('')
-      setCreateOpen(false)
-      setImportPlaylistId('')
-      setImportPlaylistName('')
-      setImportDefaultName(requestedName)
-      setImportOpen(true)
-    } finally {
-      setCreating(false)
-    }
-  }
-
   async function deletePlaylist(playlist: Playlist) {
     const confirmed = window.confirm(`Delete playlist "${playlist.name}"? This cannot be undone.`)
     if (!confirmed) return
@@ -262,39 +241,6 @@ export function PlaylistsPage() {
 
       {error ? <div className="error-banner">{error}</div> : null}
       {status ? <div className="status-banner">{status}</div> : null}
-
-      {createOpen ? (
-        <form className="playlists-create-form" onSubmit={create}>
-          <input
-            autoFocus
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            placeholder="Playlist name"
-            aria-label="Playlist name"
-          />
-          <button type="submit" className="primary" disabled={creating || !name.trim()}>
-            {creating ? 'Creating…' : 'Create playlist'}
-          </button>
-          <button
-            type="button"
-            className="playlists-create-import"
-            onClick={() => void createAndImport()}
-            disabled={creating}
-          >
-            Import…
-          </button>
-          <button
-            type="button"
-            className="playlists-create-cancel"
-            onClick={() => {
-              setCreateOpen(false)
-              setName('')
-            }}
-          >
-            Cancel
-          </button>
-        </form>
-      ) : null}
 
       <section className="playlists-library-section" aria-label="Your playlists">
         <div className="playlists-library-grid">
