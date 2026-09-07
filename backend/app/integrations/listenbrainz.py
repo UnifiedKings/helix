@@ -12,8 +12,6 @@ import json
 import httpx
 
 from ..cache import TTLCache
-from ..db import SessionLocal
-from ..settings_store import get_settings
 
 LOG = logging.getLogger("helix.listenbrainz")
 
@@ -236,15 +234,9 @@ _lb_client: Optional[ListenBrainzClient] = None
 _LB_USER_AGENT = "Helix/0.0.18 (contact@aidanbrennan.dev)"
 
 
-def _client() -> ListenBrainzClient:
+def _client_for_token(token: str) -> ListenBrainzClient:
+    token = str(token or "").strip()
     global _lb_client
-    db = SessionLocal()
-    try:
-        settings = get_settings(db)
-    finally:
-        db.close()
-    token = str(settings.get("listenbrainz_token") or "").strip()
-
     if _lb_client is not None and _lb_client._token == token:
         return _lb_client
 
@@ -294,6 +286,7 @@ def _track_metadata(
 
 async def submit_listen(
     *,
+    token: str,
     listened_at: float,
     track_name: str,
     artist_name: str,
@@ -307,7 +300,8 @@ async def submit_listen(
     Best-effort: silently no-ops when no token is configured or the track has no
     title/artist, so playback is never affected by scrobbling.
     """
-    if not (track_name and artist_name):
+    token = (token or "").strip()
+    if not (track_name and artist_name) or not token:
         return
     body = {
         "listen_type": "single",
@@ -320,11 +314,12 @@ async def submit_listen(
             }
         ],
     }
-    await _client().post_json("/1/submit-listens", body)
+    await _client_for_token(token).post_json("/1/submit-listens", body)
 
 
 async def submit_now_playing(
     *,
+    token: str,
     track_name: str,
     artist_name: str,
     release_name: str = "",
@@ -333,7 +328,8 @@ async def submit_now_playing(
     artist_mbid: str = "",
 ) -> None:
     """Send the currently playing track to ListenBrainz (playing_now)."""
-    if not (track_name and artist_name):
+    token = (token or "").strip()
+    if not (track_name and artist_name) or not token:
         return
     body = {
         "listen_type": "playing_now",
@@ -345,7 +341,7 @@ async def submit_now_playing(
             }
         ],
     }
-    await _client().post_json("/1/submit-listens", body)
+    await _client_for_token(token).post_json("/1/submit-listens", body)
 
 
 # Cache raw LB radio responses; these are large but reduce upstream calls a lot.
@@ -359,6 +355,7 @@ def _cache_key(prefix: str, seed: str, mode: str, pop_begin: int, pop_end: int, 
 async def lb_radio_for_artist(
     seed_artist_mbid: str,
     *,
+    token: str = "",
     mode: str = "medium",
     max_similar_artists: int = 200,
     max_recordings_per_artist: int = 50,
@@ -387,7 +384,7 @@ async def lb_radio_for_artist(
     }
 
     # LB Radio requires auth now. :contentReference[oaicite:9]{index=9}
-    data = await _client().get_json(f"/1/lb-radio/artist/{seed}", params=params, require_auth=True)
+    data = await _client_for_token(token).get_json(f"/1/lb-radio/artist/{seed}", params=params, require_auth=True)
     _lb_radio_cache.set(key, data, ttl_seconds=cache_ttl_s)
     return data
 
@@ -395,6 +392,7 @@ async def lb_radio_for_artist(
 async def lb_radio_for_tags(
     tags: List[str],
     *,
+    token: str = "",
     operator: str = "OR",
     count: int = 250,
     pop_begin: int = 0,
@@ -426,7 +424,7 @@ async def lb_radio_for_tags(
     }
 
     # Treat tags radio as requiring auth too to match current LB Radio policy. :contentReference[oaicite:10]{index=10}
-    data = await _client().get_json("/1/lb-radio/tags", params=params, require_auth=True)
+    data = await _client_for_token(token).get_json("/1/lb-radio/tags", params=params, require_auth=True)
     _lb_radio_cache.set(key, data, ttl_seconds=cache_ttl_s)
     return data
 

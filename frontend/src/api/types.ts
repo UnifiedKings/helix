@@ -275,6 +275,8 @@ export type UserSettings = {
   queue_show_duration: boolean
   queue_show_playing_indicator: boolean
   playback_default_volume: number
+  listenbrainz_token: string
+  scrobble_enabled: boolean
   search_default_mode: 'hybrid' | 'subsonic' | 'ytmusic'
   search_default_tab: 'songs' | 'albums' | 'artists'
   station_queue_ahead: number

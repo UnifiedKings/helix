@@ -12,10 +12,31 @@ from ..user_settings_store import get_user_settings, patch_user_settings, reset_
 
 router = APIRouter(prefix="/api/user/settings", tags=["user-settings"])
 
+# Per-user secrets: never echoed back to the client; a blank/"********" value on
+# PATCH means "keep the currently configured value".
+USER_SECRET_KEYS = frozenset({"listenbrainz_token"})
+
+
+def _redact_secrets(settings: dict[str, Any]) -> dict[str, Any]:
+    out = dict(settings)
+    for key in USER_SECRET_KEYS:
+        if key in out:
+            out[key] = ""
+    return out
+
+
+def _strip_secret_placeholders(payload: dict[str, Any]) -> dict[str, Any]:
+    clean: dict[str, Any] = {}
+    for key, value in payload.items():
+        if key in USER_SECRET_KEYS and (value is None or str(value) == "" or str(value).startswith("********")):
+            continue
+        clean[key] = value
+    return clean
+
 
 def _payload(db: Session, user: User) -> dict[str, Any]:
     return {
-        "settings": get_user_settings(db, user.id),
+        "settings": _redact_secrets(get_user_settings(db, user.id)),
         "limits": user_setting_limits(db),
     }
 
@@ -32,7 +53,7 @@ def update_user_settings(
     db: Session = Depends(get_db),
 ):
     try:
-        patch_user_settings(db, user.id, payload)
+        patch_user_settings(db, user.id, _strip_secret_placeholders(payload))
     except KeyError as exc:
         raise HTTPException(status_code=400, detail=f"Unknown user setting: {exc}") from exc
     except ValueError as exc:

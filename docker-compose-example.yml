@@ -23,6 +23,8 @@ services:
       - ./custom_stations:/data/plugins/stations
 
     environment:
+      # Optional server-wide ListenBrainz token used as a fallback for users
+      # without their own token in personal settings.
       LISTENBRAINZ_TOKEN: "${LISTENBRAINZ_TOKEN:-}"
 
       SUBSONIC_BASE_URL: "${SUBSONIC_BASE_URL:-}"
