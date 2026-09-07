@@ -963,6 +963,75 @@ def _to_history(h: ListenHistoryItem) -> PlayerHistoryItem:
     )
 
 
+# ---- ListenBrainz scrobbling (best-effort; never blocks or breaks playback) ----
+
+
+def _scrobble_snapshot(h) -> Tuple[str, str, str, int, str, str]:
+    return (
+        str(h.title or ""),
+        str(h.artist or ""),
+        str(h.album or ""),
+        int(h.duration_ms or 0),
+        str(getattr(h, "mb_recording_id", "") or ""),
+        str(getattr(h, "mb_artist_id", "") or ""),
+    )
+
+
+def _listens_long_enough(played_ms: int, duration_ms: int) -> bool:
+    # Standard scrobble rule: at least half the track, or at least 4 minutes.
+    if played_ms <= 0:
+        return False
+    if played_ms >= 240_000:
+        return True
+    return duration_ms > 0 and played_ms >= duration_ms * 0.5
+
+
+def _schedule_bg(coro_factory) -> None:
+    """Fire a background coroutine from sync or async request contexts."""
+    try:
+        asyncio.get_running_loop()
+        try:
+            asyncio.create_task(coro_factory())
+        except Exception:
+            pass
+    except RuntimeError:
+        try:
+            anyio.from_thread.run(coro_factory)
+        except Exception:
+            pass
+
+
+async def _submit_scrobble_async(snap: Tuple) -> None:
+    try:
+        from ..integrations.listenbrainz import submit_listen
+        await submit_listen(
+            listened_at=time.time(),
+            track_name=snap[0],
+            artist_name=snap[1],
+            release_name=snap[2],
+            duration_ms=snap[3],
+            recording_mbid=snap[4],
+            artist_mbid=snap[5],
+        )
+    except Exception:
+        LOG.warning("ListenBrainz scrobble failed", exc_info=True)
+
+
+async def _submit_now_playing_async(snap: Tuple) -> None:
+    try:
+        from ..integrations.listenbrainz import submit_now_playing
+        await submit_now_playing(
+            track_name=snap[0],
+            artist_name=snap[1],
+            release_name=snap[2],
+            duration_ms=snap[3],
+            recording_mbid=snap[4],
+            artist_mbid=snap[5],
+        )
+    except Exception:
+        LOG.warning("ListenBrainz now-playing failed", exc_info=True)
+
+
 def _push_history(db: Session, user_id: str, item: Optional[QueueItem], event: str, reason: str, played_ms: int, settings: Dict[str, Any]):
     if not item:
         return
@@ -1005,6 +1074,10 @@ def _push_history(db: Session, user_id: str, item: Optional[QueueItem], event: s
     )
     db.add(h)
     db.commit()
+
+    # Scrobble qualified listens (>=50% or >=4 minutes played) in the background.
+    if _listens_long_enough(h.played_ms, h.duration_ms):
+        _schedule_bg(lambda: _submit_scrobble_async(_scrobble_snapshot(h)))
 
     # Retention is per user, not per station, so one busy station cannot keep an
     # unbounded global history while other station histories are preserved.
@@ -1155,10 +1228,24 @@ def state(db: Session = Depends(get_db), user: User = Depends(get_current_user))
     )
 
 
+_NOW_PLAYING_LAST: Dict[str, str] = {}
+
+
 def _changed_state(db: Session, user: User):
     from ..realtime import schedule_player_state_broadcast
     snapshot = state(db=db, user=user)
     schedule_player_state_broadcast(user.id)
+
+    # Best-effort ListenBrainz now-playing update when the active track changes.
+    np = snapshot.now_playing
+    if snapshot.is_playing and np is not None:
+        if _NOW_PLAYING_LAST.get(user.id) != np.id:
+            _NOW_PLAYING_LAST[user.id] = np.id
+            _schedule_bg(
+                lambda: _submit_now_playing_async(
+                    (np.title, np.artist, np.album, np.duration_ms, np.mb_recording_id, np.mb_artist_id)
+                )
+            )
     return snapshot
 
 

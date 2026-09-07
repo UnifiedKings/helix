@@ -18,6 +18,9 @@ DEFAULTS: dict[str, Any] = {
     "subsonic_client_name": "Helix",
     "subsonic_api_version": "1.16.1",
     "subsonic_timeout_s": 20,
+
+    # Optional ListenBrainz token used by station discovery (e.g. Tag Radio).
+    "listenbrainz_token": "",
     "allow_all_users_subsonic_import": False,
     "player_max_queue_items": 500,
     "player_omit_missing": False,
@@ -103,6 +106,9 @@ def get_settings(db: Session) -> dict[str, Any]:
         "SUBSONIC_PASSWORD": "subsonic_password",
         "SUBSONIC_CLIENT_NAME": "subsonic_client_name",
         "SUBSONIC_API_VERSION": "subsonic_api_version",
+
+        # Optional ListenBrainz token for station discovery.
+        "LISTENBRAINZ_TOKEN": "listenbrainz_token",
 
         # Optional slskd quality-upgrade layer.
         "SLSKD_URL": "slskd_url",
