@@ -16,6 +16,7 @@ from ..db import get_db
 from ..models import User, Playlist, PlaylistTrack, LikedTrack
 from ..api_schemas.playlists import (
     PlaylistCreateRequest,
+    PlaylistRenameRequest,
     PlaylistResponse,
     PlaylistDetailResponse,
     PlaylistTrackAddRequest,
@@ -223,7 +224,7 @@ def list_playlists(db: Session = Depends(get_db), user: User = Depends(get_curre
 def create_playlist(payload: PlaylistCreateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     name = (payload.name or "").strip()
     if not name:
-        raise HTTPException(status_code=400, detail="name is required")
+        name = "New playlist"
 
     _normalize_user_playlist_system_keys(db, user.id)
 
@@ -232,6 +233,25 @@ def create_playlist(payload: PlaylistCreateRequest, db: Session = Depends(get_db
     db.commit()
     db.refresh(p)
     return _to_playlist_response(p, 0)
+
+
+@router.patch("/{playlist_id}", response_model=PlaylistResponse)
+def rename_playlist(payload: PlaylistRenameRequest, playlist_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    p = _resolve_user_playlist(db, user.id, playlist_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    if _is_liked_playlist_row(p):
+        raise HTTPException(status_code=400, detail="Cannot rename the Liked Songs playlist.")
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+
+    p.name = name
+    p.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(p)
+    track_count = int(db.execute(select(func.count(PlaylistTrack.id)).where(PlaylistTrack.playlist_id == p.id)).scalar_one() or 0)
+    return _to_playlist_response(p, track_count)
 
 
 @router.get("/{playlist_id}", response_model=PlaylistDetailResponse)

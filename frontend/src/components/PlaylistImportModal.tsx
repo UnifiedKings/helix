@@ -111,11 +111,12 @@ type Props = {
   open: boolean
   playlistId: string
   playlistName: string
+  inheritName?: boolean
   onClose: () => void
   onImported: () => void | Promise<void>
 }
 
-export function PlaylistImportModal({ open, playlistId, playlistName, onClose, onImported }: Props) {
+export function PlaylistImportModal({ open, playlistId, playlistName, inheritName = false, onClose, onImported }: Props) {
   const [source, setSource] = useState<PlaylistImportSource>('helix')
   const [url, setUrl] = useState('')
   const [filename, setFilename] = useState('')
@@ -275,6 +276,11 @@ export function PlaylistImportModal({ open, playlistId, playlistName, onClose, o
       }
       setSelected(initial)
       setSelectedCandidates(candidates)
+      if (inheritName && (next.playlist_name || '').trim()) {
+        api.renamePlaylist(playlistId, next.playlist_name.trim()).catch((err) => {
+          setError(err instanceof Error ? err.message : 'Could not rename the playlist.')
+        })
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not preview this import.')
     } finally {

@@ -69,6 +69,7 @@ export function PlaylistsPage() {
   const [createOpen, setCreateOpen] = useState(false)
   const [createWithImport, setCreateWithImport] = useState(false)
   const [importTarget, setImportTarget] = useState<Playlist | null>(null)
+  const [importInheritName, setImportInheritName] = useState(false)
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const [subsonicBusyPlaylistId, setSubsonicBusyPlaylistId] = useState('')
 
@@ -144,18 +145,22 @@ export function PlaylistsPage() {
   async function create(event: FormEvent) {
     event.preventDefault()
     const trimmedName = name.trim()
-    if (!trimmedName || creating) return
+    if (creating) return
+    if (!trimmedName && !createWithImport) return
 
     setCreating(true)
     setError('')
     try {
-      const created = await api.createPlaylist(trimmedName)
+      const created = await api.createPlaylist(trimmedName || 'New playlist')
       const shouldImport = createWithImport
       setName('')
       setCreateOpen(false)
       setCreateWithImport(false)
       await load()
-      if (shouldImport) setImportTarget(created)
+      if (shouldImport) {
+        setImportInheritName(!trimmedName)
+        setImportTarget(created)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create playlist')
     } finally {
@@ -333,14 +338,15 @@ export function PlaylistsPage() {
 
             <div className="playlist-create-body">
               <label className="playlist-create-field">
-                <span>Name</span>
+                <span>{createWithImport ? 'Name (optional)' : 'Name'}</span>
                 <input
                   autoFocus
                   value={name}
                   onChange={(event) => setName(event.target.value)}
-                  placeholder="Playlist name"
+                  placeholder={createWithImport ? 'Leave blank to use the source playlist name' : 'Playlist name'}
                   aria-label="Playlist name"
                 />
+                {createWithImport ? <small className="muted">Leave blank to name it after the imported playlist.</small> : null}
               </label>
 
               <div className="playlist-create-section">
@@ -399,7 +405,7 @@ export function PlaylistsPage() {
 
             <footer className="playlist-create-footer">
               <button type="button" onClick={closeCreateModal} disabled={creating}>Cancel</button>
-              <button type="submit" className="primary" disabled={creating || !name.trim()}>
+              <button type="submit" className="primary" disabled={creating || (!createWithImport && !name.trim())}>
                 {creating ? 'Creating…' : createWithImport ? 'Create & import' : 'Create playlist'}
               </button>
             </footer>
@@ -411,10 +417,16 @@ export function PlaylistsPage() {
         open={Boolean(importTarget)}
         playlistId={importTarget?.id ?? ''}
         playlistName={importTarget?.name ?? ''}
-        onClose={() => setImportTarget(null)}
+        inheritName={importInheritName}
+        onClose={async () => {
+          await load()
+          setImportTarget(null)
+          setImportInheritName(false)
+        }}
         onImported={async () => {
           await load()
           setImportTarget(null)
+          setImportInheritName(false)
         }}
       />
     </div>

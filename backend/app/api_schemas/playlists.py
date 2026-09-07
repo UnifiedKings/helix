@@ -8,6 +8,10 @@ from .likes import LikeToggleRequest
 
 
 class PlaylistCreateRequest(BaseModel):
+    name: str = ""
+
+
+class PlaylistRenameRequest(BaseModel):
     name: str
 
 

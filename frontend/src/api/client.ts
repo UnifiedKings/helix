@@ -400,6 +400,7 @@ export const api = {
 
   playlists: async () => (await request<Playlist[]>('/api/playlists')).map(normalizePlaylist),
   createPlaylist: (name: string) => request<Playlist>('/api/playlists', { method: 'POST', body: JSON.stringify({ name }) }),
+  renamePlaylist: (id: string, name: string) => request<Playlist>(`/api/playlists/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
   playlist: async (id: string) => normalizePlaylistDetail(await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(id)}`)),
   addSongToPlaylist: async (playlistId: string, song: SearchSong) => normalizePlaylistDetail(await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks`, { method: 'POST', body: JSON.stringify(songToPayload(song)) })),
   removePlaylistTrack: async (playlistId: string, trackId: string) => normalizePlaylistDetail(await request<PlaylistDetail>(`/api/playlists/${encodeURIComponent(playlistId)}/tracks/${encodeURIComponent(trackId)}`, { method: 'DELETE' })),
