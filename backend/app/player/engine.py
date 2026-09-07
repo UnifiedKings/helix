@@ -23,7 +23,7 @@ from ..db import get_db, SessionLocal
 from ..models import User, PlaybackSession, QueueItem, ListenHistoryItem, Station, Playlist, PlaylistTrack, LikedTrack
 from ..api_schemas.player import PlayerPlayAlbumRequest, PlayerPlayPlaylistRequest, PlayerPlayTrackRequest, PlayerJumpRequest, PlayerQueueItem, PlayerStateResponse, PlayerQueueAppendTrackRequest, PlayerQueueAppendAlbumRequest, PlayerQueueReorderRequest, PlayerRemoveQueueItemResponse, PlayerHistoryItem, PlayerHistoryResponse, PlayerActionRequest, PlayerReplayRequest, AutoplaySetRequest
 from ..settings_store import get_settings
-from ..user_settings_store import station_queue_ahead_for_user, queue_add_position_for_user
+from ..user_settings_store import station_queue_ahead_for_user, queue_add_position_for_user, get_user_settings
 from ..integrations.subsonic import SubsonicClient
 from ..integrations.ytmusic import get_album_full, find_track
 from ..download_manager import DOWNLOAD_MANAGER, DownloadJob
@@ -963,6 +963,89 @@ def _to_history(h: ListenHistoryItem) -> PlayerHistoryItem:
     )
 
 
+# ---- ListenBrainz scrobbling (best-effort; never blocks or breaks playback) ----
+
+
+def _scrobble_snapshot(h) -> Tuple[str, str, str, int, str, str]:
+    return (
+        str(h.title or ""),
+        str(h.artist or ""),
+        str(h.album or ""),
+        int(h.duration_ms or 0),
+        str(getattr(h, "mb_recording_id", "") or ""),
+        str(getattr(h, "mb_artist_id", "") or ""),
+    )
+
+
+def _listens_long_enough(played_ms: int, duration_ms: int) -> bool:
+    # Standard scrobble rule: at least half the track, or at least 4 minutes.
+    if played_ms <= 0:
+        return False
+    if played_ms >= 240_000:
+        return True
+    return duration_ms > 0 and played_ms >= duration_ms * 0.5
+
+
+def _schedule_bg(coro_factory) -> None:
+    """Fire a background coroutine from sync or async request contexts."""
+    try:
+        asyncio.get_running_loop()
+        try:
+            asyncio.create_task(coro_factory())
+        except Exception:
+            pass
+    except RuntimeError:
+        try:
+            anyio.from_thread.run(coro_factory)
+        except Exception:
+            pass
+
+
+async def _submit_scrobble_async(snap: Tuple, token: str) -> None:
+    try:
+        from ..integrations.listenbrainz import submit_listen
+        await submit_listen(
+            token=token,
+            listened_at=time.time(),
+            track_name=snap[0],
+            artist_name=snap[1],
+            release_name=snap[2],
+            duration_ms=snap[3],
+            recording_mbid=snap[4],
+            artist_mbid=snap[5],
+        )
+    except Exception:
+        LOG.warning("ListenBrainz scrobble failed", exc_info=True)
+
+
+async def _submit_now_playing_async(snap: Tuple, token: str) -> None:
+    try:
+        from ..integrations.listenbrainz import submit_now_playing
+        await submit_now_playing(
+            token=token,
+            track_name=snap[0],
+            artist_name=snap[1],
+            release_name=snap[2],
+            duration_ms=snap[3],
+            recording_mbid=snap[4],
+            artist_mbid=snap[5],
+        )
+    except Exception:
+        LOG.warning("ListenBrainz now-playing failed", exc_info=True)
+
+
+def _lb_submit_settings(db: Session, user_id: str) -> Tuple[bool, str]:
+    """Return (scrobbling_enabled, listenbrainz_token) for a user.
+
+    Falls back to the server-wide token for users who haven't set their own.
+    """
+    prefs = get_user_settings(db, user_id)
+    token = str(prefs.get("listenbrainz_token") or "").strip()
+    if not token:
+        token = str((get_settings(db).get("listenbrainz_token") or "")).strip()
+    return bool(prefs.get("scrobble_enabled")), token
+
+
 def _push_history(db: Session, user_id: str, item: Optional[QueueItem], event: str, reason: str, played_ms: int, settings: Dict[str, Any]):
     if not item:
         return
@@ -1005,6 +1088,13 @@ def _push_history(db: Session, user_id: str, item: Optional[QueueItem], event: s
     )
     db.add(h)
     db.commit()
+
+    # Scrobble qualified listens (>=50% or >=4 minutes played) in the background,
+    # gated by the user's scrobble toggle and ListenBrainz token.
+    if _listens_long_enough(h.played_ms, h.duration_ms):
+        enabled, token = _lb_submit_settings(db, user_id)
+        if enabled and token:
+            _schedule_bg(lambda: _submit_scrobble_async(_scrobble_snapshot(h), token))
 
     # Retention is per user, not per station, so one busy station cannot keep an
     # unbounded global history while other station histories are preserved.
@@ -1144,6 +1234,7 @@ def state(db: Session = Depends(get_db), user: User = Depends(get_current_user))
     # busy, and the request-scoped DB session remains open while that happens.
     # Prefetch is already triggered from playback/queue-changing paths and from
     # stream fulfillment.
+    _maybe_submit_now_playing(db, user.id, np=now, is_playing=bool(sess.is_playing))
     return PlayerStateResponse(
         is_playing=bool(sess.is_playing),
         current_index=int(sess.current_index),
@@ -1152,6 +1243,30 @@ def state(db: Session = Depends(get_db), user: User = Depends(get_current_user))
         autoplay_enabled=bool(getattr(sess, "autoplay_enabled", True)),
         active_station_id=active_station_id,
         active_station=active_station,
+    )
+
+
+_NOW_PLAYING_LAST: Dict[str, str] = {}
+
+
+def _maybe_submit_now_playing(db: Session, user_id: str, *, np, is_playing: bool) -> None:
+    """Best-effort ListenBrainz now-playing update when the active track changes.
+
+    Cheap after the first submission per track: a dict lookup per state read.
+    """
+    if not is_playing or np is None:
+        return
+    if _NOW_PLAYING_LAST.get(user_id) == np.id:
+        return
+    _NOW_PLAYING_LAST[user_id] = np.id
+    enabled, token = _lb_submit_settings(db, user_id)
+    if not enabled or not token:
+        return
+    _schedule_bg(
+        lambda: _submit_now_playing_async(
+            (np.title, np.artist, np.album, np.duration_ms, np.mb_recording_id, np.mb_artist_id),
+            token,
+        )
     )
 
 
@@ -1920,6 +2035,9 @@ async def ended(payload: Optional[PlayerActionRequest] = None, db: Session = Dep
     played_ms = 0
     if payload and payload.position_ms is not None:
         played_ms = int(payload.position_ms or 0)
+    # Natural completion without a reported position means the whole track played.
+    if played_ms <= 0 and cur is not None:
+        played_ms = int(cur.duration_ms or 0)
     _push_history(db, user.id, cur, event="completed", reason="ended", played_ms=played_ms, settings=settings)
 
     # advance

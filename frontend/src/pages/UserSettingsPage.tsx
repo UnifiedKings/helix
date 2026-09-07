@@ -108,6 +108,8 @@ const DEFAULT_SETTINGS: Settings = {
   queue_show_duration: true,
   queue_show_playing_indicator: true,
   playback_default_volume: 0.85,
+  listenbrainz_token: '',
+  scrobble_enabled: true,
   search_default_mode: 'hybrid',
   search_default_tab: 'songs',
   station_queue_ahead: 3,
@@ -392,6 +394,8 @@ export function UserSettingsPage() {
                 <Segmented value={playbarStyle(draft)} options={[["helix", "Helix"], ["ytmusic", "YTMusic"], ["spotify", "Spotify"], ["pandora", "Pandora"]]} onChange={(value) => update('playback_bar_style' as keyof Settings, value)} />
               </div>
               <label className="settings-control-row"><div><strong>Default volume</strong><span>Used as your initial playback volume on a new browser or device.</span></div><div className="settings-range-control"><input type="range" min="0" max="100" value={Math.round(draft.playback_default_volume * 100)} onChange={(event) => update('playback_default_volume', Number(event.target.value) / 100)} /><output>{Math.round(draft.playback_default_volume * 100)}%</output></div></label>
+              <label className="settings-control-row settings-control-row-stack"><div><strong>ListenBrainz token</strong><span>Used to scrobble your listens and power Tag Radio discovery. Leave blank to keep your current token.</span></div><input className="settings-text-input" type="password" placeholder="••••••••••" autoComplete="off" spellCheck={false} value={draft.listenbrainz_token} onChange={(event) => update('listenbrainz_token', event.target.value)} /></label>
+              <label className="settings-control-row"><div><strong>Scrobble to ListenBrainz</strong><span>Report tracks you play (including now playing) with your token.</span></div><SettingToggle checked={draft.scrobble_enabled} onChange={(checked) => update('scrobble_enabled', checked)} /></label>
             </div>
           </> : null}
 

@@ -7,8 +7,11 @@ import random
 import re
 from typing import Any, Iterable
 
+from ...db import SessionLocal
 from ...integrations.listenbrainz import lb_radio_for_tags
 from ...integrations.musicbrainz import _client as _musicbrainz_client, simplify_recording
+from ...settings_store import get_settings
+from ...user_settings_store import get_user_settings
 from ..base import StationProvider
 from ..models import StationConfigOption, StationContext, StationResult
 
@@ -311,9 +314,21 @@ class TagRadioProvider(StationProvider):
 
         candidates: list[StationResult] = []
         lb_error = ""
+        lb_token = ""
+        if context.user_id:
+            db = SessionLocal()
+            try:
+                lb_token = str(get_user_settings(db, context.user_id).get("listenbrainz_token") or "").strip()
+                if not lb_token:
+                    # Fall back to the server-wide token for users without their own.
+                    lb_token = str(get_settings(db).get("listenbrainz_token") or "").strip()
+            finally:
+                db.close()
         try:
             payload = await asyncio.wait_for(
-                lb_radio_for_tags(tags, operator=operator, count=candidate_count, pop_begin=pop_begin, pop_end=pop_end),
+                lb_radio_for_tags(
+                    tags, token=lb_token, operator=operator, count=candidate_count, pop_begin=pop_begin, pop_end=pop_end,
+                ),
                 timeout=float(os.getenv("HELIX_LB_TAG_RADIO_TIMEOUT_S", "15")),
             )
             candidates = _candidate_results(payload)
