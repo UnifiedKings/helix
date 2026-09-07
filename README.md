@@ -186,8 +186,8 @@ services:
       - ./slskd-downloads:/slskd-downloads
 
     environment:
-      # Optional ListenBrainz token. Some station/discovery features may work
-      # better with this configured.
+      # Optional server-wide ListenBrainz fallback token, used when a user has
+      # not configured their own token in personal settings.
       LISTENBRAINZ_TOKEN: ""
 
       # Optional Spotify OAuth for direct playlist importing.

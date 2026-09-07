@@ -57,6 +57,10 @@ USER_DEFAULTS: dict[str, Any] = {
     "search_default_mode": "hybrid",
     "search_default_tab": "songs",
 
+    # ListenBrainz
+    "listenbrainz_token": "",
+    "scrobble_enabled": True,
+
     # Stations
     "station_queue_ahead": 3,
 
@@ -147,8 +151,15 @@ def _validated_value(db: Session, key: str, value: Any) -> Any:
         "lobbies_default_guests_can_add",
         "lobbies_auto_copy_invite",
         "notifications_import_queued",
+        "scrobble_enabled",
     }:
         return bool(value)
+
+    if key == "listenbrainz_token":
+        raw = str(value or "").strip()
+        if len(raw) > 4096:
+            raise ValueError("ListenBrainz token is too long")
+        return raw
 
     if key in {
         "appearance_font_ui",

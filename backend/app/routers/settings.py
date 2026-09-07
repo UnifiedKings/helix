@@ -40,6 +40,7 @@ ADMIN_SETTING_KEYS = {
     "subsonic_client_name",
     "subsonic_api_version",
     "subsonic_timeout_s",
+    "listenbrainz_token",
     "player_max_queue_items",
     "station_queue_ahead_max",
     "download_prefetch_ahead",
