@@ -27,7 +27,6 @@ const DEFINITIONS: Record<string, { label: string; description: string; group: A
   search_default_country: { label: 'Preferred release country', description: 'Country Helix favors when selecting representative releases.', group: 'search' },
   search_hide_non_official: { label: 'Hide unofficial releases', description: 'Hide unofficial releases when alternate versions are listed.', group: 'search', kind: 'boolean' },
   search_prefer_original_release: { label: 'Prefer original release', description: 'Favor the earliest official release over the preferred country.', group: 'search', kind: 'boolean' },
-  listenbrainz_token: { label: 'ListenBrainz token', description: 'Optional ListenBrainz API token used by station discovery (e.g. Tag Radio). Leave blank to keep the currently configured token.', group: 'search', kind: 'secret' },
 }
 
 const OBSOLETE_CANDIDATES = new Set(['player_max_queue_items', 'player_omit_missing', 'fulfillment_library_subfolder', 'fulfillment_tag_comment', 'fulfillment_first_play_timeout_seconds', 'fulfillment_version_preference', 'musicbrainz_min_interval_ms', 'musicbrainz_user_agent'])

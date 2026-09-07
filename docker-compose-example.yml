@@ -23,8 +23,6 @@ services:
       - ./custom_stations:/data/plugins/stations
 
     environment:
-      LISTENBRAINZ_TOKEN: "${LISTENBRAINZ_TOKEN:-}"
-
       SUBSONIC_BASE_URL: "${SUBSONIC_BASE_URL:-}"
       SUBSONIC_USERNAME: "${SUBSONIC_USERNAME:-}"
       SUBSONIC_PASSWORD: "${SUBSONIC_PASSWORD:-}"

@@ -186,10 +186,6 @@ services:
       - ./slskd-downloads:/slskd-downloads
 
     environment:
-      # Optional ListenBrainz token. Some station/discovery features may work
-      # better with this configured.
-      LISTENBRAINZ_TOKEN: ""
-
       # Optional Spotify OAuth for direct playlist importing.
       # Register an app at https://developer.spotify.com/dashboard and add
       # <your-helix-origin>/spotify/auth/callback as a Redirect URI.

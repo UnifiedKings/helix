@@ -15,7 +15,6 @@ router = APIRouter(tags=["settings"])
 
 SECRET_SETTING_KEYS = {
     "subsonic_password",
-    "listenbrainz_token",
     "ytmusic_cookie",
     "ytmusic_cookies",
     "slskd_api_key",
@@ -40,7 +39,6 @@ ADMIN_SETTING_KEYS = {
     "subsonic_client_name",
     "subsonic_api_version",
     "subsonic_timeout_s",
-    "listenbrainz_token",
     "player_max_queue_items",
     "station_queue_ahead_max",
     "download_prefetch_ahead",
