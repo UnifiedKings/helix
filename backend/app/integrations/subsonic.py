@@ -224,6 +224,8 @@ class SubsonicClient:
         timeout_s: int = 20,
     ):
         self.base_url = (base_url or "").rstrip("/")
+        if self.base_url and not self.base_url.startswith(("http://", "https://")):
+            self.base_url = "http://" + self.base_url
         self.username = username
         self.password = password
         self.client_name = client_name
