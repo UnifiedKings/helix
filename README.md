@@ -186,6 +186,10 @@ services:
       - ./slskd-downloads:/slskd-downloads
 
     environment:
+      # Optional server-wide ListenBrainz fallback token, used when a user has
+      # not configured their own token in personal settings.
+      LISTENBRAINZ_TOKEN: ""
+
       # Optional Spotify OAuth for direct playlist importing.
       # Register an app at https://developer.spotify.com/dashboard and add
       # <your-helix-origin>/spotify/auth/callback as a Redirect URI.

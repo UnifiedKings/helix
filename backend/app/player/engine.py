@@ -1035,9 +1035,14 @@ async def _submit_now_playing_async(snap: Tuple, token: str) -> None:
 
 
 def _lb_submit_settings(db: Session, user_id: str) -> Tuple[bool, str]:
-    """Return (scrobbling_enabled, listenbrainz_token) for a user."""
+    """Return (scrobbling_enabled, listenbrainz_token) for a user.
+
+    Falls back to the server-wide token for users who haven't set their own.
+    """
     prefs = get_user_settings(db, user_id)
     token = str(prefs.get("listenbrainz_token") or "").strip()
+    if not token:
+        token = str((get_settings(db).get("listenbrainz_token") or "")).strip()
     return bool(prefs.get("scrobble_enabled")), token
 
 
