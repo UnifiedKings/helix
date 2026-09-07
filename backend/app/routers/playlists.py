@@ -16,6 +16,7 @@ from ..db import get_db
 from ..models import User, Playlist, PlaylistTrack, LikedTrack
 from ..api_schemas.playlists import (
     PlaylistCreateRequest,
+    PlaylistRenameRequest,
     PlaylistResponse,
     PlaylistDetailResponse,
     PlaylistTrackAddRequest,
@@ -29,6 +30,7 @@ from ..integrations.subsonic import SubsonicClient
 from ..playlist_covers import ensure_playlist_cover, invalidate_playlist_cover
 from ..validators import is_valid_yt_video_id
 from ..art_sources import yt_thumbnail_url, is_allowed_art_url
+from ..integrations.spotify import SpotifyAuthRequired, SpotifyConfigError
 from ..playlist_imports import (
     ImportedTrack,
     match_track,
@@ -222,7 +224,7 @@ def list_playlists(db: Session = Depends(get_db), user: User = Depends(get_curre
 def create_playlist(payload: PlaylistCreateRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     name = (payload.name or "").strip()
     if not name:
-        raise HTTPException(status_code=400, detail="name is required")
+        name = "New playlist"
 
     _normalize_user_playlist_system_keys(db, user.id)
 
@@ -231,6 +233,25 @@ def create_playlist(payload: PlaylistCreateRequest, db: Session = Depends(get_db
     db.commit()
     db.refresh(p)
     return _to_playlist_response(p, 0)
+
+
+@router.patch("/{playlist_id}", response_model=PlaylistResponse)
+def rename_playlist(payload: PlaylistRenameRequest, playlist_id: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    p = _resolve_user_playlist(db, user.id, playlist_id)
+    if not p:
+        raise HTTPException(status_code=404, detail="Playlist not found")
+    if _is_liked_playlist_row(p):
+        raise HTTPException(status_code=400, detail="Cannot rename the Liked Songs playlist.")
+    name = (payload.name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="name is required")
+
+    p.name = name
+    p.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(p)
+    track_count = int(db.execute(select(func.count(PlaylistTrack.id)).where(PlaylistTrack.playlist_id == p.id)).scalar_one() or 0)
+    return _to_playlist_response(p, track_count)
 
 
 @router.get("/{playlist_id}", response_model=PlaylistDetailResponse)
@@ -475,16 +496,23 @@ async def preview_playlist_import(payload: PlaylistImportPreviewRequest, playlis
     source = (payload.source or "").strip().lower()
     content = payload.content or ""
     url = (payload.url or "").strip()
+    spotify_playlist_id = (payload.spotify_playlist_id or "").strip()
     reported_count: Optional[int] = None
     imported_name = "Imported playlist"
     try:
         if source == "helix":
             imported_name, tracks = parse_helix_json(content)
         elif source == "spotify":
-            if not content:
-                raise ValueError("Export the Spotify playlist with Exportify, then upload its CSV file.")
-            tracks = parse_exportify_csv(content)
-            imported_name = (payload.filename or "Spotify playlist").rsplit(".", 1)[0].replace("_", " ")
+            if spotify_playlist_id:
+                from ..integrations.spotify import fetch_playlist_tracks
+                spotify_payload = await asyncio.to_thread(fetch_playlist_tracks, db, user.id, spotify_playlist_id)
+                tracks = spotify_payload["tracks"]
+                imported_name = spotify_payload["name"]
+            elif content:
+                tracks = parse_exportify_csv(content)
+                imported_name = (payload.filename or "Spotify playlist").rsplit(".", 1)[0].replace("_", " ")
+            else:
+                raise ValueError("Connect Spotify and choose a playlist to import, or upload an Exportify CSV file.")
         elif source == "ytmusic":
             if content:
                 reported_count, tracks = parse_ytmusic_saved_html(content)
@@ -497,6 +525,10 @@ async def preview_playlist_import(payload: PlaylistImportPreviewRequest, playlis
             raise ValueError("Unknown playlist import source.")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except SpotifyAuthRequired as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except SpotifyConfigError as exc:
+        raise HTTPException(status_code=503, detail="Spotify OAuth is not configured on this Helix server.") from exc
     except Exception as exc:
         raise HTTPException(status_code=502, detail=f"Could not read {source or 'playlist'} import: {exc}") from exc
 

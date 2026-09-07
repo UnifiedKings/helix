@@ -8,6 +8,10 @@ from .likes import LikeToggleRequest
 
 
 class PlaylistCreateRequest(BaseModel):
+    name: str = ""
+
+
+class PlaylistRenameRequest(BaseModel):
     name: str
 
 
@@ -63,6 +67,7 @@ class PlaylistImportPreviewRequest(BaseModel):
     url: str = ""
     filename: str = ""
     content: str = ""
+    spotify_playlist_id: str = ""
 
 
 class PlaylistImportApplyTrack(BaseModel):

@@ -75,6 +75,18 @@ def init_db() -> None:
         if lobby_queue_cols and "station_name" not in lobby_queue_cols:
             conn.execute(text("ALTER TABLE shared_lobby_queue_items ADD COLUMN station_name TEXT NOT NULL DEFAULT ''"))
 
+        # --- Spotify OAuth per-user app credentials ---
+        # Existing installs predate the client_id/client_secret snapshot columns
+        # on the connection and pending-state rows.
+        for table in ("spotify_connections", "spotify_oauth_states"):
+            cols = {row[1] for row in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()}
+            if not cols:
+                continue  # fresh table already has the columns from create_all
+            if "client_id" not in cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN client_id TEXT NOT NULL DEFAULT ''"))
+            if "client_secret" not in cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN client_secret TEXT NOT NULL DEFAULT ''"))
+
 
         # --- playlists.system_key uniqueness migration ---
         # Older schema used system_key='' for user-created playlists with a UNIQUE(user_id, system_key) constraint,

@@ -94,6 +94,7 @@ def _subsonic_configured(settings: dict[str, Any]) -> bool:
 
 
 def _capabilities_payload(db: Session, settings: dict[str, Any], user: User | None = None) -> dict[str, Any]:
+    from ..integrations.spotify import any_user_spotify_configured, spotify_configured
     subsonic_configured = _subsonic_configured(settings)
     import_allowed = bool(user and can_import_to_subsonic(db, user))
     return {
@@ -104,6 +105,7 @@ def _capabilities_payload(db: Session, settings: dict[str, Any], user: User | No
             "quality_upgrades": subsonic_configured and import_allowed,
             "library_only_stations": subsonic_configured,
             "subsonic_playback": subsonic_configured,
+            "spotify_import": spotify_configured() or any_user_spotify_configured(db),
             "ytmusic_discovery": True,
             "ytmusic_playback": True,
             "lobbies": True,

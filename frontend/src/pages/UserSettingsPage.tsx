@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { api } from '../api/client'
 import type { UserSettings, UserSettingsPayload } from '../api/types'
+import { useSpotify } from '../hooks/useSpotify'
 import { TypographySettings } from '../components/TypographySettings'
 import type { HelixFontId } from '../lib/fonts'
 import '../styles/account-management.css'
@@ -21,6 +22,7 @@ type SettingsPayload = Omit<UserSettingsPayload, 'settings'> & { settings: Setti
 
 const SECTIONS = [
   ['account', 'Account'],
+  ['spotify', 'Spotify'],
   ['appearance', 'Appearance'],
   ['playback', 'Playback'],
   ['search', 'Search & Discovery'],
@@ -166,6 +168,10 @@ export function UserSettingsPage() {
   const [error, setError] = useState('')
   const [status, setStatus] = useState('')
   const savedPayloadRef = useRef(payload)
+  const spotify = useSpotify()
+  const [spotifyClientId, setSpotifyClientId] = useState('')
+  const [spotifyClientSecret, setSpotifyClientSecret] = useState('')
+  const [credSaving, setCredSaving] = useState(false)
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(payload.settings), [draft, payload.settings])
   const safeUi = new URLSearchParams(window.location.search).get('safe-ui') === '1'
@@ -233,6 +239,70 @@ export function UserSettingsPage() {
       setError(err instanceof Error ? err.message : 'Could not save your settings')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function connectSpotify() {
+    setError('')
+    setStatus('')
+    const result = await spotify.connect()
+    if (result.status === 'blocked') {
+      setError('Your browser blocked the Spotify pop-up. Allow pop-ups for this site and try again.')
+    } else if (result.status === 'closed') {
+      setError('The Spotify pop-up was closed before connecting.')
+    } else if (result.status === 'error') {
+      setError(result.message)
+    } else {
+      setStatus('Connected to Spotify.')
+    }
+  }
+
+  async function disconnectSpotify() {
+    setError('')
+    setStatus('')
+    try {
+      await spotify.disconnect()
+      setStatus('Disconnected from Spotify.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not disconnect Spotify.')
+    }
+  }
+
+  async function saveSpotifyCredentials() {
+    const clientId = spotifyClientId.trim()
+    const clientSecret = spotifyClientSecret.trim()
+    if (!clientId || !clientSecret || credSaving) return
+    setCredSaving(true)
+    setError('')
+    setStatus('')
+    try {
+      await api.spotifyUpdateCredentials(clientId, clientSecret)
+      setSpotifyClientId('')
+      setSpotifyClientSecret('')
+      await spotify.refresh()
+      setStatus('Saved your Spotify app credentials. Connect your account to authorize.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not save Spotify credentials.')
+    } finally {
+      setCredSaving(false)
+    }
+  }
+
+  async function clearSpotifyCredentials() {
+    if (credSaving) return
+    setCredSaving(true)
+    setError('')
+    setStatus('')
+    try {
+      await api.spotifyUpdateCredentials('', '')
+      setSpotifyClientId('')
+      setSpotifyClientSecret('')
+      await spotify.refresh()
+      setStatus('Now using the server-wide Spotify app. Reconnect your Spotify account to authorize.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not clear Spotify credentials.')
+    } finally {
+      setCredSaving(false)
     }
   }
 
@@ -337,6 +407,43 @@ export function UserSettingsPage() {
               <label className="settings-control-row"><div><strong>New password</strong><span>Use at least 8 characters.</span></div><input type="password" autoComplete="new-password" value={passwordDraft.next} onChange={(event) => setPasswordDraft((current) => ({ ...current, next: event.target.value }))} /></label>
               <label className="settings-control-row"><div><strong>Confirm new password</strong><span>Enter the new password again.</span></div><input type="password" autoComplete="new-password" value={passwordDraft.confirm} onChange={(event) => setPasswordDraft((current) => ({ ...current, confirm: event.target.value }))} /></label>
               <div className="account-password-actions"><button type="button" className="primary" disabled={passwordSaving || !passwordDraft.current || passwordDraft.next.length < 8 || passwordDraft.next !== passwordDraft.confirm} onClick={() => void changePassword()}>{passwordSaving ? 'Changing…' : 'Change password'}</button></div>
+            </div>
+          </> : null}
+
+          {section === 'spotify' ? <>
+            <div className="settings-section-heading"><h2>Spotify</h2><p>Connect your Spotify account so you can import playlists and Liked Songs directly into Helix.</p></div>
+            <div className="settings-card settings-spotify-card">
+              {spotify.loading ? (
+                <p className="muted settings-spotify-note">Checking your Spotify connection…</p>
+              ) : spotify.status && spotify.status.configured === false ? (
+                <div className="settings-control-row settings-control-row-stack-mobile">
+                  <div><strong>No Spotify app is available yet</strong><span>This Helix server has no server-wide Spotify app configured. Add your own app credentials in the next card to enable Spotify imports for your account.</span></div>
+                </div>
+              ) : !spotify.status?.connected ? (
+                <div className="settings-control-row settings-control-row-stack-mobile">
+                  <div><strong>Not connected</strong><span>Authorize Helix to read your Spotify playlists for importing. Helix only requests read access and never writes to Spotify. {spotify.status?.own_credentials ? 'Your own Spotify app will be used.' : 'The server-wide Spotify app will be used.'}</span></div>
+                  <button type="button" className="primary spotify-connect" onClick={() => void connectSpotify()} disabled={spotify.connecting || spotify.loading}>{spotify.connecting ? 'Waiting for Spotify…' : 'Connect Spotify'}</button>
+                </div>
+              ) : (
+                <div className="settings-control-row settings-control-row-stack-mobile">
+                  <div><strong>{spotify.status.display_name ? `Connected as ${spotify.status.display_name}` : 'Connected to Spotify'}</strong><span>This connection is tied to your account and used only for playlist importing. Disconnecting leaves your Helix data untouched.</span></div>
+                  <button type="button" className="danger" onClick={() => void disconnectSpotify()} disabled={spotify.loading || spotify.connecting}>Disconnect</button>
+                </div>
+              )}
+            </div>
+
+            <div className="settings-card settings-spotify-card">
+              <div className="settings-card-heading-row">
+                <div><h3>Your own Spotify app (optional)</h3><p>Bring your own Client ID and Client Secret instead of using the server-wide app. Create an app at developer.spotify.com and add <code>{window.location.origin}/spotify/auth/callback</code> as a Redirect URI.</p></div>
+              </div>
+              {spotify.status?.own_credentials ? <p className="settings-note settings-spotify-app-note">This account is currently using your own Spotify app.</p> : null}
+              <label className="settings-control-row"><div><strong>Client ID</strong><span>Your Spotify app's Client ID.</span></div><input type="text" autoComplete="off" spellCheck={false} value={spotifyClientId} onChange={(event) => setSpotifyClientId(event.target.value)} placeholder="Leave blank to use the server's Spotify app" /></label>
+              <label className="settings-control-row"><div><strong>Client Secret</strong><span>Stored on the Helix server and used only for the token exchange. It is never sent to your browser.</span></div><input type="password" autoComplete="new-password" value={spotifyClientSecret} onChange={(event) => setSpotifyClientSecret(event.target.value)} placeholder="••••••••••••" /></label>
+              <div className="account-password-actions">
+                <button type="button" className="primary" disabled={credSaving || !spotifyClientId.trim() || !spotifyClientSecret.trim()} onClick={() => void saveSpotifyCredentials()}>{credSaving ? 'Saving…' : 'Save app credentials'}</button>
+                <button type="button" className="danger" disabled={credSaving || !spotify.status?.own_credentials} onClick={() => void clearSpotifyCredentials()}>Remove my app</button>
+              </div>
+              <p className="settings-note">Changing your app disconnects your Spotify account so Helix can re-authorize with the new app.</p>
             </div>
           </> : null}
 

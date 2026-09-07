@@ -31,6 +31,7 @@ def _allowed_hosts() -> set[str]:
         "lh3.googleusercontent.com",
         "yt3.googleusercontent.com",
         "yt3.ggpht.com",
+        "i.scdn.co",
     }
 
     raw = os.getenv("HELIX_ART_URL_ALLOWLIST", "")

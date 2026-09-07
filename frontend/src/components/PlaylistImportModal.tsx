@@ -1,6 +1,7 @@
 import { ChangeEvent, useEffect, useMemo, useState } from 'react'
 import { api } from '../api/client'
-import type { PlaylistImportCandidate, PlaylistImportPreview, PlaylistImportSource } from '../api/types'
+import type { PlaylistImportCandidate, PlaylistImportPreview, PlaylistImportSource, SpotifyPlaylist } from '../api/types'
+import { useSpotify } from '../hooks/useSpotify'
 import { Artwork } from './Artwork'
 
 const SOURCES: Array<{ id: PlaylistImportSource; label: string }> = [
@@ -31,7 +32,7 @@ function sourceHelp(source: PlaylistImportSource) {
     case 'spotify':
       return {
         title: 'Import from Spotify',
-        text: 'Use Exportify to export the Spotify playlist or Liked Songs as CSV, then upload the CSV here.',
+        text: 'Connect your Spotify account to choose a playlist directly, or use Exportify to export the Spotify playlist or Liked Songs as CSV and upload it here.',
         acceptsFile: true,
         acceptsUrl: false,
         fileAccept: '.csv,text/csv',
@@ -51,6 +52,23 @@ function formatDuration(ms?: number) {
   if (!ms) return ''
   const seconds = Math.max(0, Math.round(ms / 1000))
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+function downloadJson(filename: string, payload: unknown) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
+function safeFilename(name: string) {
+  const cleaned = (name || 'playlist').replace(/[\\/:*?"<>|]+/g, '').trim().replace(/\s+/g, '_')
+  return `${cleaned || 'playlist'}.json`
 }
 
 function sanitizeYtMusicSavedPage(html: string) {
@@ -93,11 +111,12 @@ type Props = {
   open: boolean
   playlistId: string
   playlistName: string
+  inheritName?: boolean
   onClose: () => void
   onImported: () => void | Promise<void>
 }
 
-export function PlaylistImportModal({ open, playlistId, playlistName: _playlistName, onClose, onImported }: Props) {
+export function PlaylistImportModal({ open, playlistId, playlistName, inheritName = false, onClose, onImported }: Props) {
   const [source, setSource] = useState<PlaylistImportSource>('helix')
   const [url, setUrl] = useState('')
   const [filename, setFilename] = useState('')
@@ -109,6 +128,11 @@ export function PlaylistImportModal({ open, playlistId, playlistName: _playlistN
   const [reviewFilter, setReviewFilter] = useState<'all' | 'attention'>('all')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+
+  const [spotifyPlaylists, setSpotifyPlaylists] = useState<SpotifyPlaylist[]>([])
+  const [spotifyPlaylistId, setSpotifyPlaylistId] = useState('')
+  const [spotifyListLoading, setSpotifyListLoading] = useState(false)
+  const spotify = useSpotify(open && source === 'spotify')
 
   const help = sourceHelp(source)
 
@@ -129,8 +153,29 @@ export function PlaylistImportModal({ open, playlistId, playlistName: _playlistN
     setSelected(new Set())
     setSelectedCandidates({})
     setReviewFilter('all')
+    setSpotifyPlaylistId('')
     setError('')
   }, [source])
+
+  useEffect(() => {
+    if (open && source === 'spotify') {
+      void spotify.refresh()
+    }
+  }, [open, source, spotify.refresh])
+
+  useEffect(() => {
+    if (!open || source !== 'spotify' || !spotify.status?.connected) {
+      setSpotifyPlaylists([])
+      return
+    }
+    let cancelled = false
+    setSpotifyListLoading(true)
+    api.spotifyPlaylists()
+      .then((payload) => { if (!cancelled) setSpotifyPlaylists(payload.playlists) })
+      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load Spotify playlists.') })
+      .finally(() => { if (!cancelled) setSpotifyListLoading(false) })
+    return () => { cancelled = true }
+  }, [open, source, spotify.status?.connected])
 
   const selectedCount = selected.size
   const importableCount = useMemo(() => preview?.tracks.filter((track) => track.candidate).length ?? 0, [preview])
@@ -141,6 +186,41 @@ export function PlaylistImportModal({ open, playlistId, playlistName: _playlistN
   }, [preview, reviewFilter])
 
   if (!open) return null
+
+  async function connectSpotify() {
+    if (busy) return
+    setBusy(true)
+    setError('')
+    try {
+      const result = await spotify.connect()
+      if (result.status === 'blocked') {
+        setError('Your browser blocked the Spotify pop-up. Allow pop-ups for this site and try again.')
+      } else if (result.status === 'closed') {
+        setError('The Spotify pop-up was closed before connecting.')
+      } else if (result.status === 'error') {
+        setError(result.message)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not start the Spotify connection.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function disconnectSpotify() {
+    if (busy) return
+    setBusy(true)
+    setError('')
+    try {
+      await spotify.disconnect()
+      setSpotifyPlaylists([])
+      setSpotifyPlaylistId('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not disconnect Spotify.')
+    } finally {
+      setBusy(false)
+    }
+  }
 
   async function readFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
@@ -158,16 +238,20 @@ export function PlaylistImportModal({ open, playlistId, playlistName: _playlistN
   }
 
   async function createPreview() {
-    if (!playlistId) return
-    if (help.acceptsFile && !help.acceptsUrl && !content) {
+    if (source === 'spotify') {
+      const hasCsv = Boolean(content)
+      const hasPlaylist = Boolean(spotify.status?.connected && spotifyPlaylistId)
+      if (!hasCsv && !hasPlaylist) {
+        setError(spotify.status?.connected ? 'Choose a Spotify playlist, or choose an Exportify CSV file to import.' : 'Connect Spotify and choose a playlist, or choose an Exportify CSV file to import.')
+        return
+      }
+    } else if (help.acceptsFile && !help.acceptsUrl && !content) {
       setError('Choose a file to import first.')
       return
-    }
-    if (help.acceptsUrl && !help.acceptsFile && !url.trim()) {
+    } else if (help.acceptsUrl && !help.acceptsFile && !url.trim()) {
       setError('Paste a playlist share link first.')
       return
-    }
-    if (help.acceptsUrl && help.acceptsFile && !url.trim() && !content) {
+    } else if (help.acceptsUrl && help.acceptsFile && !url.trim() && !content) {
       setError('Paste a playlist share link or choose a saved HTML file.')
       return
     }
@@ -180,6 +264,7 @@ export function PlaylistImportModal({ open, playlistId, playlistName: _playlistN
         url: url.trim(),
         filename,
         content,
+        spotify_playlist_id: spotifyPlaylistId,
       })
       setPreview(next)
       setReviewFilter('all')
@@ -191,6 +276,11 @@ export function PlaylistImportModal({ open, playlistId, playlistName: _playlistN
       }
       setSelected(initial)
       setSelectedCandidates(candidates)
+      if (inheritName && (next.playlist_name || '').trim()) {
+        api.renamePlaylist(playlistId, next.playlist_name.trim()).catch((err) => {
+          setError(err instanceof Error ? err.message : 'Could not rename the playlist.')
+        })
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not preview this import.')
     } finally {
@@ -214,6 +304,19 @@ export function PlaylistImportModal({ open, playlistId, playlistName: _playlistN
       onClose()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not import these tracks.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function exportCurrentPlaylist() {
+    setBusy(true)
+    setError('')
+    try {
+      const payload = await api.exportPlaylist(playlistId)
+      downloadJson(safeFilename(playlistName), payload)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not export this playlist.')
     } finally {
       setBusy(false)
     }
@@ -265,13 +368,52 @@ export function PlaylistImportModal({ open, playlistId, playlistName: _playlistN
             <div className="playlist-import-instructions">
               <h3>{help.title}</h3>
               <p>{help.text}</p>
-              {source === 'ytmusic' ? <small className="playlist-import-privacy-note">The saved page is parsed in your browser first; Google session data is not sent to Helix.</small> : null}
-              {source === 'spotify' ? (
-                <a href="https://exportify.app/" target="_blank" rel="noreferrer">Open Exportify ↗</a>
+              {source === 'helix' && playlistId ? (
+                <button type="button" onClick={() => void exportCurrentPlaylist()} disabled={busy}>Export this playlist as JSON</button>
               ) : null}
-            </div>
+              {source === 'ytmusic' ? <small className="playlist-import-privacy-note">The saved page is parsed in your browser first; Google session data is not sent to Helix.</small> : null}
+{source === 'spotify' ? (
+        <a href="https://exportify.app/" target="_blank" rel="noreferrer">Open Exportify ↗</a>
+      ) : null}
+    </div>
 
-            {help.acceptsUrl ? (
+    {source === 'spotify' ? (
+      <div className="playlist-import-spotify">
+        {spotify.loading || spotifyListLoading ? (
+          <p className="muted playlist-import-spotify-note">Checking your Spotify connection…</p>
+        ) : spotify.status && spotify.status.configured === false ? (
+          <p className="muted playlist-import-spotify-note">Spotify login is not configured yet. Add your own Spotify app credentials in Settings → Spotify, or ask an administrator to set SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET. You can also upload an Exportify CSV below.</p>
+        ) : !spotify.status?.connected ? (
+          <div className="playlist-import-spotify-connect">
+            <button type="button" className="primary spotify-connect" onClick={() => void connectSpotify()} disabled={busy || spotify.connecting}>
+              {spotify.connecting ? 'Waiting for Spotify…' : 'Connect Spotify'}
+            </button>
+            <small className="muted">Opens a Spotify pop-up. Helix only needs to read your playlists.</small>
+          </div>
+        ) : (
+          <div className="playlist-import-spotify-connected">
+            <div className="playlist-import-spotify-head">
+              <span>{spotify.status?.display_name ? `Connected to Spotify as ${spotify.status.display_name}` : 'Connected to Spotify'}</span>
+              <button type="button" onClick={() => void disconnectSpotify()} disabled={busy}>Disconnect</button>
+            </div>
+            <label className="playlist-import-field">
+              <span>Choose a Spotify playlist to import</span>
+              <select value={spotifyPlaylistId} onChange={(event) => setSpotifyPlaylistId(event.target.value)}>
+                <option value="">Select a playlist…</option>
+                {spotifyPlaylists.map((playlist) => (
+                  <option key={playlist.id} value={playlist.id}>
+                    {playlist.name}{playlist.track_count ? ` (${playlist.track_count} tracks)` : ''}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <small className="muted">Or skip the picker below and upload an Exportify CSV instead.</small>
+          </div>
+        )}
+      </div>
+    ) : null}
+
+    {help.acceptsUrl ? (
               <label className="playlist-import-field">
                 <span>Playlist share URL</span>
                 <input value={url} onChange={(event) => setUrl(event.target.value)} placeholder={source === 'pandora' ? 'https://www.pandora.com/playlist/…' : 'https://music.youtube.com/playlist?list=…'} />

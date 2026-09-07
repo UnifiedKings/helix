@@ -506,6 +506,26 @@ export type Capabilities = {
 
 export type PlaylistImportSource = 'helix' | 'ytmusic' | 'spotify' | 'pandora'
 
+export type SpotifyConnectionStatus = {
+  connected: boolean
+  configured: boolean
+  own_credentials?: boolean
+  display_name?: string
+  connected_at?: string | null
+}
+
+export type SpotifyPlaylist = {
+  id: string
+  name: string
+  track_count: number
+  is_liked: boolean
+}
+
+export type SpotifyPlaylistList = {
+  display_name: string
+  playlists: SpotifyPlaylist[]
+}
+
 export type PlaylistImportCandidate = {
   title: string
   artist: string

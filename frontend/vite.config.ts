@@ -11,7 +11,8 @@ export default defineConfig({
       '/setup': 'http://localhost:10011',
       '/settings': 'http://localhost:10011',
       '/health': 'http://localhost:10011',
-      '/admin': 'http://localhost:10011'
+      '/admin': 'http://localhost:10011',
+      '/spotify': 'http://localhost:10011'
     }
   }
 })
