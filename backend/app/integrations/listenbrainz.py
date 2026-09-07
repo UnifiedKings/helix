@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 import random
 import socket
@@ -13,6 +14,12 @@ import httpx
 from ..cache import TTLCache
 from ..db import SessionLocal
 from ..settings_store import get_settings
+
+LOG = logging.getLogger("helix.listenbrainz")
+
+# Warn once per process when a scrobble/now-playing is attempted without a token,
+# so a misconfigured server isn't silently quiet.
+_NO_TOKEN_WARNED = False
 
 
 # Simple in-memory TTL cache
@@ -178,6 +185,13 @@ class ListenBrainzClient:
     ) -> Dict[str, Any]:
         # Scrobble/now-playing submission: without a token there is nothing to do.
         if not self._token:
+            global _NO_TOKEN_WARNED
+            if not _NO_TOKEN_WARNED:
+                _NO_TOKEN_WARNED = True
+                LOG.warning(
+                    "ListenBrainz submit skipped (scrobble/now-playing): no token configured. "
+                    "Set a ListenBrainz token in Admin Settings."
+                )
             return {}
 
         await self._throttle()
@@ -258,7 +272,7 @@ def _track_metadata(
     if recording_mbid:
         additional["recording_mbid"] = recording_mbid
     if artist_mbid:
-        additional["artist_mbid"] = artist_mbid
+        additional["artist_mbids"] = [artist_mbid]
     meta["additional_info"] = additional
     return meta
 

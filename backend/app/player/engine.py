@@ -1217,6 +1217,7 @@ def state(db: Session = Depends(get_db), user: User = Depends(get_current_user))
     # busy, and the request-scoped DB session remains open while that happens.
     # Prefetch is already triggered from playback/queue-changing paths and from
     # stream fulfillment.
+    _maybe_submit_now_playing(user.id, np=now, is_playing=bool(sess.is_playing))
     return PlayerStateResponse(
         is_playing=bool(sess.is_playing),
         current_index=int(sess.current_index),
@@ -1231,21 +1232,27 @@ def state(db: Session = Depends(get_db), user: User = Depends(get_current_user))
 _NOW_PLAYING_LAST: Dict[str, str] = {}
 
 
+def _maybe_submit_now_playing(user_id: str, *, np, is_playing: bool) -> None:
+    """Best-effort ListenBrainz now-playing update when the active track changes.
+
+    Cheap after the first submission per track: a dict lookup per state read.
+    """
+    if not is_playing or np is None:
+        return
+    if _NOW_PLAYING_LAST.get(user_id) == np.id:
+        return
+    _NOW_PLAYING_LAST[user_id] = np.id
+    _schedule_bg(
+        lambda: _submit_now_playing_async(
+            (np.title, np.artist, np.album, np.duration_ms, np.mb_recording_id, np.mb_artist_id)
+        )
+    )
+
+
 def _changed_state(db: Session, user: User):
     from ..realtime import schedule_player_state_broadcast
     snapshot = state(db=db, user=user)
     schedule_player_state_broadcast(user.id)
-
-    # Best-effort ListenBrainz now-playing update when the active track changes.
-    np = snapshot.now_playing
-    if snapshot.is_playing and np is not None:
-        if _NOW_PLAYING_LAST.get(user.id) != np.id:
-            _NOW_PLAYING_LAST[user.id] = np.id
-            _schedule_bg(
-                lambda: _submit_now_playing_async(
-                    (np.title, np.artist, np.album, np.duration_ms, np.mb_recording_id, np.mb_artist_id)
-                )
-            )
     return snapshot
 
 
@@ -2007,6 +2014,9 @@ async def ended(payload: Optional[PlayerActionRequest] = None, db: Session = Dep
     played_ms = 0
     if payload and payload.position_ms is not None:
         played_ms = int(payload.position_ms or 0)
+    # Natural completion without a reported position means the whole track played.
+    if played_ms <= 0 and cur is not None:
+        played_ms = int(cur.duration_ms or 0)
     _push_history(db, user.id, cur, event="completed", reason="ended", played_ms=played_ms, settings=settings)
 
     # advance
