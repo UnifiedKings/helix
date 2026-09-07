@@ -2101,3 +2101,246 @@
     flex: 0 0 auto !important;
   }
 }
+
+
+/* Keep Songs and Albums on identical column geometry so Actions never shifts
+   when switching tabs. Albums intentionally reserve the Time column even
+   though that cell is visually empty. */
+.search-results-table .search-results-header,
+.search-results-table .search-result-row,
+.search-results-table .search-album-row {
+  grid-template-columns:
+    minmax(0, 1fr)
+    104px
+    64px
+    320px !important;
+}
+
+.search-results-table .search-results-header > :nth-child(1),
+.search-results-table .search-result-row > :nth-child(1),
+.search-results-table .search-album-row > :nth-child(1) {
+  grid-column: 1;
+}
+
+.search-results-table .search-results-header > :nth-child(2),
+.search-results-table .search-result-row > :nth-child(2),
+.search-results-table .search-album-row > :nth-child(2) {
+  grid-column: 2;
+}
+
+.search-results-table .search-results-header > :nth-child(3),
+.search-results-table .search-result-row > :nth-child(3),
+.search-results-table .search-album-row > :nth-child(3) {
+  grid-column: 3;
+}
+
+.search-results-table .search-results-header > :nth-child(4),
+.search-results-table .search-result-row > :nth-child(4),
+.search-results-table .search-album-row > :nth-child(4) {
+  grid-column: 4;
+}
+
+.search-results-table .search-album-row .search-album-time-spacer {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  visibility: hidden;
+}
+
+
+/* Prevent the entire Search content area from shifting horizontally when
+   switching between result tabs with different document heights. One tab may
+   need a vertical scrollbar while another may not; reserve that gutter for
+   the lifetime of the Search route so Source / Time / Actions stay fixed. */
+/* Firefox can still change the viewport width between Search tabs when the
+   document crosses the vertical-overflow threshold. Force the Search route to
+   always own a vertical scrollbar so the table width is identical on Songs,
+   Albums, and Artists. */
+html:has(.search-redesign) {
+  overflow-y: scroll !important;
+  scrollbar-gutter: stable !important;
+}
+
+
+/* Final explicit Songs / Albums column alignment.
+   The Time slot is a fixed 72px on both result types. Albums already render
+   an empty .album-duration-spacer, so it occupies exactly the same slot as a
+   song duration without displaying anything. */
+@container (min-width: 850px) {
+  .search-redesign .search-song-row,
+  .search-redesign #search-albums .search-album-card,
+  .search-redesign .search-table-section .search-column-heading {
+    grid-template-columns:
+      48px
+      minmax(180px, 1fr)
+      92px
+      72px
+      320px !important;
+    column-gap: 0.7rem !important;
+  }
+
+  .search-redesign .search-song-row > .badge,
+  .search-redesign #search-albums .search-album-card > .badge {
+    grid-column: 3 !important;
+  }
+
+  .search-redesign .search-song-row > .song-duration {
+    grid-column: 4 !important;
+    width: 72px !important;
+    min-width: 72px !important;
+    max-width: 72px !important;
+  }
+
+  .search-redesign #search-albums .album-duration-spacer {
+    display: block !important;
+    grid-column: 4 !important;
+    width: 72px !important;
+    min-width: 72px !important;
+    max-width: 72px !important;
+    height: 1px !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .search-redesign .search-song-row > .search-row-actions,
+  .search-redesign #search-albums .album-card-actions.search-row-actions {
+    grid-column: 5 !important;
+    width: 320px !important;
+    min-width: 320px !important;
+    max-width: 320px !important;
+    justify-self: start !important;
+  }
+
+  .search-redesign .search-table-section .search-heading-source {
+    grid-column: 3 !important;
+  }
+
+  .search-redesign .search-table-section .search-heading-time {
+    grid-column: 4 !important;
+    width: 72px !important;
+  }
+
+  .search-redesign .search-table-section .search-heading-actions {
+    grid-column: 5 !important;
+    width: 320px !important;
+  }
+}
+
+
+/* Final action alignment: the Actions columns were already aligned, but the
+   album action group still inherited an older justify-content:end rule.
+   Pin both button groups to the LEFT edge of the same fixed-width action cell. */
+@container (min-width: 850px) {
+  .search-redesign #search-songs .search-row-actions,
+  .search-redesign #search-albums .album-card-actions.search-row-actions {
+    display: grid !important;
+    grid-template-columns: 48px 102px 146px !important;
+    width: 320px !important;
+    min-width: 320px !important;
+    max-width: 320px !important;
+    column-gap: 0.55rem !important;
+
+    justify-content: start !important;
+    justify-items: start !important;
+    justify-self: start !important;
+
+    margin: 0 !important;
+    padding: 0 !important;
+    box-sizing: border-box !important;
+  }
+
+  .search-redesign #search-songs .search-row-actions > *,
+  .search-redesign #search-albums .album-card-actions.search-row-actions > * {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+}
+
+
+/* -----------------------------------------------------------------------
+   Shared Songs / Albums geometry.
+   Both result types now use the same markup-level layout class and the exact
+   same .search-row-actions class. No album-specific action layout remains.
+   ----------------------------------------------------------------------- */
+@container (min-width: 850px) {
+  .search-redesign .search-shared-result-row {
+    display: grid !important;
+    grid-template-columns:
+      48px
+      minmax(180px, 1fr)
+      92px
+      72px
+      320px !important;
+    column-gap: 0.7rem !important;
+    align-items: center !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+    padding-left: 0.9rem !important;
+    padding-right: 0.9rem !important;
+  }
+
+  .search-redesign .search-shared-result-row > :nth-child(1) {
+    grid-column: 1 !important;
+  }
+
+  .search-redesign .search-shared-result-row > :nth-child(2) {
+    grid-column: 2 !important;
+    min-width: 0 !important;
+  }
+
+  .search-redesign .search-shared-result-row > :nth-child(3) {
+    grid-column: 3 !important;
+    justify-self: start !important;
+  }
+
+  .search-redesign .search-shared-result-row > :nth-child(4) {
+    grid-column: 4 !important;
+    width: 72px !important;
+    min-width: 72px !important;
+    max-width: 72px !important;
+    justify-self: start !important;
+  }
+
+  .search-redesign .search-shared-result-row > .album-duration-spacer {
+    display: block !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+    height: 1px !important;
+  }
+
+  .search-redesign .search-shared-result-row > .search-row-actions {
+    grid-column: 5 !important;
+    display: grid !important;
+    grid-template-columns: 48px 102px 146px !important;
+    column-gap: 0.55rem !important;
+    width: 320px !important;
+    min-width: 320px !important;
+    max-width: 320px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    justify-self: start !important;
+    justify-content: start !important;
+    justify-items: start !important;
+    align-items: center !important;
+    overflow: visible !important;
+  }
+
+  .search-redesign .search-shared-result-row > .search-row-actions > * {
+    margin: 0 !important;
+  }
+
+  .search-redesign .search-table-section .search-column-heading {
+    display: grid !important;
+    grid-template-columns:
+      48px
+      minmax(180px, 1fr)
+      92px
+      72px
+      320px !important;
+    column-gap: 0.7rem !important;
+    padding-left: 0.9rem !important;
+    padding-right: 0.9rem !important;
+    box-sizing: border-box !important;
+  }
+}

@@ -1,0 +1,83 @@
+/* Desktop shell / queue sizing follows the active playbar.
+   This keeps the sidebar and queue flush with the playbar for every style. */
+
+.app-shell {
+  --helix-active-playbar-height: 112px;
+}
+
+.app-shell:has(> .playback-bar.playback-style-helix) {
+  --helix-active-playbar-height: 112px;
+}
+
+.app-shell:has(> .playback-bar.playback-style-ytmusic) {
+  --helix-active-playbar-height: 72px;
+}
+
+.app-shell:has(> .playback-bar.playback-style-spotify) {
+  --helix-active-playbar-height: 87px;
+}
+
+.app-shell:has(> .playback-bar.playback-style-pandora) {
+  --helix-active-playbar-height: 82px;
+}
+
+/* Keep page content clear of whichever player layout is currently active. */
+@media (min-width: 1101px) {
+  .app-shell {
+    padding-bottom: var(--helix-active-playbar-height) !important;
+  }
+}
+
+/* Normal desktop queue: use the full right-hand column instead of a floating
+   card, and terminate exactly at the top edge of the current playbar. */
+@media (min-width: 1101px) {
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr) 360px !important;
+    /* Match the visual gutter on both sides of the main content. The old
+       layout kept the original left inset but removed the queue gap entirely,
+       which made the content look shifted toward the queue. */
+    gap: 0.75rem !important;
+    padding-top: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: 0 !important;
+    padding-left: 0.75rem !important;
+  }
+
+  .dashboard-grid > .queue-panel-redesign,
+  .dashboard-grid > .queue-panel {
+    top: 0 !important;
+    height: calc(100vh - var(--helix-active-playbar-height)) !important;
+    max-height: calc(100vh - var(--helix-active-playbar-height)) !important;
+    margin: 0 !important;
+    border-top: 0 !important;
+    border-right: 0 !important;
+    border-bottom: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .dashboard-content-card {
+    /* Equal inner breathing room makes the visible content edge line up with
+       the new equal outer gutters rather than favoring the sidebar side. */
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+  }
+
+  .dashboard-grid > .queue-panel-redesign .queue-summary,
+  .dashboard-grid > .queue-panel .queue-summary {
+    bottom: 0 !important;
+    margin: 0 -1.1rem -1.1rem !important;
+    padding: 1.15rem 1.1rem 1.85rem !important;
+    min-height: 58px;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0;
+  }
+}
+
+/* The left navigation should end on the same line as the queue. */
+@media (min-width: 1081px) {
+  .app-sidebar {
+    height: calc(100vh - var(--helix-active-playbar-height)) !important;
+    max-height: calc(100vh - var(--helix-active-playbar-height)) !important;
+  }
+}

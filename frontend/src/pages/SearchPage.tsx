@@ -143,7 +143,7 @@ function SongRow({ song, player, onStatus, canImportToSubsonic }: { song: Search
   }
 
   return (
-    <article className="search-song-row">
+    <article className="search-song-row search-shared-result-row">
       <Artwork src={resultArtwork(song)} alt={song.title} size="sm" />
       <div className="song-title-cell">
         <strong>{song.title}</strong>
@@ -196,7 +196,7 @@ function AlbumCard({ album, player, onStatus, searchReturn, canImportToSubsonic 
 
   return (
     <article
-      className={`search-album-card ${albumPath ? 'search-album-card-clickable' : ''}`}
+      className={`search-album-card search-shared-result-row ${albumPath ? 'search-album-card-clickable' : ''}`}
       onClick={openAlbum}
       onKeyDown={handleAlbumKeyDown}
       role={albumPath ? 'button' : undefined}
@@ -210,7 +210,7 @@ function AlbumCard({ album, player, onStatus, searchReturn, canImportToSubsonic 
       </div>
       <SourceBadge source={album.source} />
       <span className="song-duration album-duration-spacer" aria-hidden="true" />
-      <div className="search-row-actions album-card-actions" onClick={(event) => event.stopPropagation()}>
+      <div className="search-row-actions" onClick={(event) => event.stopPropagation()}>
         <button className="search-row-icon" aria-label={`Play ${album.title}`} data-tooltip="Play" title="Play" onClick={() => player.run(() => api.playAlbum(album), 'play')}>▶</button>
         <button className="search-row-icon search-queue-icon" aria-label={`Add ${album.title} to queue`} data-tooltip="Add to queue" title="Add to queue" onClick={() => player.run(() => api.queueAlbum(album))}>＋</button>
         {canAdd && canImportToSubsonic && album.source !== 'subsonic' ? (

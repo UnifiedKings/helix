@@ -1,0 +1,247 @@
+/* Playlist creation modal.
+   Uses the existing Helix palette and import-modal visual language. */
+
+.playlist-create-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 140;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem;
+  background: rgba(0, 0, 0, 0.68);
+  backdrop-filter: blur(7px);
+}
+
+.playlist-create-modal {
+  width: min(620px, calc(100vw - 2rem));
+  max-height: min(760px, calc(100vh - 2rem));
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--text) 12%, transparent);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--surface) 97%, black);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.54);
+}
+
+.playlist-create-header,
+.playlist-create-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.playlist-create-header {
+  padding: 1.3rem 1.4rem 1rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.playlist-create-header h2 {
+  margin: 0.1rem 0 0;
+  font-size: 1.45rem;
+  letter-spacing: -0.025em;
+}
+
+.playlist-create-eyebrow {
+  margin: 0;
+  color: var(--faint);
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.playlist-create-close {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.playlist-create-body {
+  display: grid;
+  gap: 1.35rem;
+  padding: 1.3rem 1.4rem;
+}
+
+.playlist-create-field,
+.playlist-create-section {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.playlist-create-field > span,
+.playlist-create-section-copy strong {
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.playlist-create-field input {
+  min-height: 46px;
+  width: 100%;
+  font-size: 0.96rem;
+}
+
+.playlist-create-section-copy {
+  display: grid;
+  gap: 0.18rem;
+}
+
+.playlist-create-section-copy span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.playlist-create-choice-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+
+.playlist-create-choice {
+  min-height: 102px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  align-items: start;
+  gap: 0.75rem;
+  padding: 0.95rem;
+  text-align: left;
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--text) 2.4%, transparent);
+}
+
+.playlist-create-choice:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--accent) 32%, transparent);
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.playlist-create-choice.active {
+  border-color: color-mix(in srgb, var(--accent-bright) 48%, transparent);
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent-bright);
+}
+
+.playlist-create-choice-icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-bright);
+  font-size: 1rem;
+}
+
+.playlist-create-choice > span:last-child {
+  display: grid;
+  gap: 0.28rem;
+}
+
+.playlist-create-choice strong {
+  color: var(--text);
+  font-size: 0.9rem;
+}
+
+.playlist-create-choice small {
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+.playlist-create-import-panel {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+.playlist-create-import-panel strong {
+  font-size: 0.88rem;
+}
+
+.playlist-create-import-panel p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.playlist-create-source-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.playlist-create-source-chips span {
+  padding: 0.38rem 0.58rem;
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--text) 3%, transparent);
+  color: color-mix(in srgb, var(--text) 82%, transparent);
+  font-size: 0.75rem;
+  font-weight: 750;
+}
+
+.playlist-create-footer {
+  position: sticky;
+  bottom: 0;
+  padding: 1rem 1.4rem 1.2rem;
+  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  background: color-mix(in srgb, var(--surface) 97%, black);
+}
+
+.playlist-create-footer > button {
+  min-width: 112px;
+}
+
+.playlist-create-footer > button:last-child {
+  margin-left: auto;
+}
+
+@media (max-width: 620px) {
+  .playlist-create-backdrop {
+    padding: 0.65rem;
+  }
+
+  .playlist-create-modal {
+    width: 100%;
+    max-height: calc(100vh - 1.3rem);
+  }
+
+  .playlist-create-choice-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .playlist-create-footer {
+    align-items: stretch;
+  }
+
+  .playlist-create-footer > button {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+
+/* Playlist library overflow menus should open upward.
+   Opening below the trigger can push the final cards' menus behind the fixed
+   playback bar or off the bottom of the viewport. */
+.playlists-library-page .playlist-library-menu {
+  position: relative;
+}
+
+.playlists-library-page .playlist-library-menu .playlist-card-menu-popover {
+  top: auto !important;
+  bottom: calc(100% + 0.45rem) !important;
+  right: 0;
+  max-height: min(360px, calc(100vh - 150px));
+  overflow-y: auto;
+}

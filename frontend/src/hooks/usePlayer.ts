@@ -9,8 +9,10 @@ export function usePlayer() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [audioIntent, setAudioIntent] = useState<AudioIntent>({ id: 0, action: 'pause' })
+  const [transportBusy, setTransportBusy] = useState(false)
   const latestRequestRef = useRef(0)
   const actionInFlightRef = useRef(false)
+  const transportInFlightRef = useRef<Promise<PlayerState> | null>(null)
   const socketOpenRef = useRef(false)
   const lastSocketSeqRef = useRef(0)
 
@@ -30,26 +32,74 @@ export function usePlayer() {
     }
   }, [])
 
-  const run = useCallback(async (action: () => Promise<PlayerState>, audioMode: AudioRunMode = 'none') => {
-    const requestId = ++latestRequestRef.current
-    actionInFlightRef.current = true
-    try {
-      setError('')
-      const next = await action()
-      if (requestId === latestRequestRef.current) setPlayer(next)
-      if (audioMode === 'play' || audioMode === 'pause') {
-        setAudioIntent((current) => ({ id: current.id + 1, action: audioMode }))
-      }
-      return next
-    } catch (err) {
-      if (requestId === latestRequestRef.current) setError(err instanceof Error ? err.message : 'Playback action failed')
-      throw err
-    } finally {
-      if (requestId === latestRequestRef.current) {
-        actionInFlightRef.current = false
-        setLoading(false)
+  const run = useCallback((action: () => Promise<PlayerState>, audioMode: AudioRunMode = 'none') => {
+    const isDirectTransport = action === api.pause || action === api.resume
+
+    // A direct play/pause command owns the transport until its backend request
+    // settles. Ignore additional direct transport clicks completely, including
+    // their local audio intent, so button-spam cannot make browser audio and the
+    // authoritative backend state diverge.
+    if (isDirectTransport && transportInFlightRef.current) {
+      return transportInFlightRef.current
+    }
+
+    const execute = async () => {
+      const requestId = ++latestRequestRef.current
+      actionInFlightRef.current = true
+
+      try {
+        setError('')
+
+        // Pause should be audible immediately. Do this only after the transport
+        // lock has accepted the command so ignored spam cannot toggle local audio.
+        if (audioMode === 'pause' && action === api.pause) {
+          setAudioIntent((current) => ({ id: current.id + 1, action: 'pause' }))
+        }
+
+        const next = await action()
+
+        if (requestId === latestRequestRef.current) {
+          setPlayer(next)
+        }
+
+        // Starting playback remains backend-first. Non-direct actions such as
+        // next/previous retain their existing post-action audio behavior.
+        if (audioMode === 'play') {
+          setAudioIntent((current) => ({ id: current.id + 1, action: 'play' }))
+        } else if (audioMode === 'pause' && action !== api.pause) {
+          setAudioIntent((current) => ({ id: current.id + 1, action: 'pause' }))
+        }
+
+        return next
+      } catch (err) {
+        if (requestId === latestRequestRef.current) {
+          setError(err instanceof Error ? err.message : 'Playback action failed')
+        }
+        throw err
+      } finally {
+        if (requestId === latestRequestRef.current) {
+          actionInFlightRef.current = false
+          setLoading(false)
+        }
       }
     }
+
+    if (!isDirectTransport) {
+      return execute()
+    }
+
+    const transportPromise = execute()
+    transportInFlightRef.current = transportPromise
+    setTransportBusy(true)
+
+    void transportPromise.finally(() => {
+      if (transportInFlightRef.current === transportPromise) {
+        transportInFlightRef.current = null
+        setTransportBusy(false)
+      }
+    }).catch(() => undefined)
+
+    return transportPromise
   }, [])
 
   useEffect(() => {
@@ -78,10 +128,6 @@ export function usePlayer() {
           if (seq && seq <= lastSocketSeqRef.current) return
           if (seq) lastSocketSeqRef.current = seq
 
-          // HTTP playback/queue actions return an authoritative post-action state.
-          // Ignore websocket snapshots while one is in flight, because a broadcast
-          // queued just before the action can arrive afterward and overwrite that
-          // newer state (most visibly as queue reorder snapping back).
           if (actionInFlightRef.current) return
 
           setPlayer(message.state)
@@ -97,7 +143,6 @@ export function usePlayer() {
     }
     connect()
 
-    // WebSocket is primary. This slow fallback only matters while disconnected.
     const fallback = window.setInterval(() => {
       if (!socketOpenRef.current) void refresh()
     }, 15000)
@@ -112,5 +157,5 @@ export function usePlayer() {
     }
   }, [refresh])
 
-  return { player, loading, error, refresh, run, setPlayer, setError, audioIntent }
+  return { player, loading, error, refresh, run, setPlayer, setError, audioIntent, transportBusy }
 }

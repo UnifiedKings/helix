@@ -381,13 +381,19 @@
 /* Keep Helix's side columns pinned while the center content scrolls. */
 @media (min-width: 1081px) {
   .app-sidebar {
-    position: sticky !important;
+    position: fixed !important;
     top: 0;
+    left: 0;
+    width: 220px;
     align-self: start;
     height: calc(100vh - 104px);
     max-height: calc(100vh - 104px);
     overflow-y: auto;
     overscroll-behavior: contain;
+  }
+
+  .app-shell-with-sidebar > .app-main-area {
+    grid-column: 2;
   }
 
   .dashboard-grid > .queue-panel-redesign,
@@ -401,6 +407,12 @@
        panel scrollable creates nested scroll containers and breaks the
        pointer hand-off used by queue reordering. */
     overflow: hidden;
+  }
+}
+
+@media (min-width: 1081px) and (max-width: 1200px) {
+  .app-sidebar {
+    width: 200px;
   }
 }
 

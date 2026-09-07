@@ -1,0 +1,69 @@
+.playlist-editor-icon-actions {
+  gap: 0.5rem;
+}
+
+.playlist-editor-controls .playlist-editor-action-button {
+  position: relative;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 10px;
+  font-size: 1.05rem;
+  line-height: 1;
+}
+.playlist-editor-action-svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.playlist-editor-action-tooltip {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 0.55rem);
+  z-index: 50;
+  width: max-content;
+  max-width: 180px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--surface) 98%, black);
+  color: var(--text);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.36);
+  font-size: 0.76rem;
+  font-weight: 650;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, 4px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.playlist-editor-action-button:hover .playlist-editor-action-tooltip,
+.playlist-editor-action-button:focus-visible .playlist-editor-action-tooltip {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.playlist-editor-action-button:disabled .playlist-editor-action-tooltip {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .playlist-editor-icon-actions {
+    justify-content: flex-start;
+  }
+
+  .playlist-editor-controls .playlist-editor-action-button {
+    flex: 0 0 44px;
+  }
+}

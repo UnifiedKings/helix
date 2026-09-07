@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
+import { subscribePersistentCache } from '../api/persistentCache'
 import type { HomeActivityItem, HomeSummary } from '../api/types'
 import { Artwork } from '../components/Artwork'
 import { ArtistLink } from '../components/ArtistLink'
@@ -70,10 +71,32 @@ export function HomePage() {
 
   useEffect(() => {
     let cancelled = false
-    api.homeSummary()
-      .then((payload) => { if (!cancelled) setSummary(payload) })
-      .catch((err) => { if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load home summary') })
-    return () => { cancelled = true }
+
+    const loadSummary = () => {
+      api.homeSummary()
+        .then((payload) => {
+          if (cancelled) return
+          setSummary(payload)
+          setError('')
+        })
+        .catch((err) => {
+          if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load home summary')
+        })
+    }
+
+    loadSummary()
+
+    // Unlike the other cached pages, Home contains live playback-dependent UI.
+    // Applying fresh recent activity in-place prevents an SWR cache update from
+    // remounting Home and resetting transient state such as Subsonic resolution.
+    const unsubscribe = subscribePersistentCache(['home:summary'], () => {
+      loadSummary()
+    })
+
+    return () => {
+      cancelled = true
+      unsubscribe()
+    }
   }, [])
 
   useEffect(() => {

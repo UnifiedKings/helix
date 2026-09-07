@@ -95,6 +95,22 @@ def _track_number(track: Dict[str, Any], fallback: int) -> int:
     return int(fallback or 0)
 
 
+def _track_artist(track: Dict[str, Any], fallback: str = "") -> str:
+    artist = str(track.get("artist") or "").strip()
+    if artist:
+        return artist
+    artists = track.get("artists") or []
+    if isinstance(artists, list):
+        for item in artists:
+            if isinstance(item, dict):
+                value = str(item.get("name") or "").strip()
+            else:
+                value = str(item or "").strip()
+            if value:
+                return value
+    return (fallback or "").strip()
+
+
 def _resolve_album_track_video_id(track: Dict[str, Any], *, album_title: str, album_artist: str) -> str:
     vid = str(track.get("videoId") or track.get("video_id") or "").strip()
     if vid:
@@ -113,6 +129,207 @@ def _resolve_album_track_video_id(track: Dict[str, Any], *, album_title: str, al
     except Exception:
         found = None
     return str(getattr(found, "video_id", "") or "").strip() if getattr(found, "found", False) else ""
+
+
+def _candidate_song_matches(
+    candidate: Dict[str, Any],
+    *,
+    video_id: str,
+    title: str,
+    artist: str,
+    album: str,
+    duration_ms: int,
+) -> bool:
+    candidate_vid = str(
+        candidate.get("video_id")
+        or candidate.get("videoId")
+        or candidate.get("yt_video_id")
+        or ""
+    ).strip()
+    if video_id and candidate_vid and candidate_vid == video_id:
+        return True
+
+    if _norm_text(str(candidate.get("title") or "")) != _norm_text(title):
+        return False
+
+    candidate_artist = _norm_text(_track_artist(candidate))
+    wanted_artist = _norm_text(artist)
+    if candidate_artist and wanted_artist and candidate_artist != wanted_artist:
+        return False
+
+    candidate_album = _norm_text(str(candidate.get("album") or ""))
+    wanted_album = _norm_text(album)
+    if candidate_album and wanted_album and candidate_album != wanted_album:
+        return False
+
+    candidate_duration = _track_duration_ms(candidate)
+    if duration_ms and candidate_duration and not _duration_close_ms(duration_ms, candidate_duration, 4000):
+        return False
+
+    return True
+
+
+async def _resolve_import_track_metadata(
+    *,
+    video_id: str,
+    title: str,
+    artist: str,
+    album: str = "",
+    album_artist: str = "",
+    browse_id: str = "",
+    art_url: str = "",
+    duration_ms: int = 0,
+    track_no: int = 0,
+) -> Dict[str, Any]:
+    """Resolve canonical album context for an individual YTMusic track import.
+
+    Album imports already know their order. Single-track and playlist imports
+    historically used track_no=0, which meant TRACKNUMBER was left unset and
+    Navidrome displayed #0. Resolve the track back to its YTMusic album and use
+    that album's ordered track list before creating the DownloadJob.
+    """
+
+    resolved: Dict[str, Any] = {
+        "video_id": (video_id or "").strip(),
+        "title": (title or "").strip(),
+        "artist": (artist or "").strip(),
+        "album": (album or "").strip(),
+        "album_artist": (album_artist or "").strip(),
+        "browse_id": (browse_id or "").strip(),
+        "art_url": (art_url or "").strip(),
+        "duration_ms": int(duration_ms or 0),
+        "track_no": int(track_no or 0),
+    }
+
+    # Search results already expose album_browse_id, but not every caller
+    # currently forwards it. When it is missing, recover album context by
+    # finding the exact YTMusic song (video id is the strongest identity key).
+    if not resolved["browse_id"]:
+        try:
+            result = await asyncio.to_thread(
+                ytmusic_integration.search_ytmusic,
+                " ".join(part for part in (artist, title) if part).strip(),
+                song_limit=10,
+                album_limit=0,
+            )
+        except Exception:
+            result = {}
+
+        songs = result.get("songs") or []
+        chosen: Optional[Dict[str, Any]] = None
+        for candidate in songs:
+            if not isinstance(candidate, dict):
+                continue
+            candidate_vid = str(
+                candidate.get("video_id")
+                or candidate.get("videoId")
+                or candidate.get("yt_video_id")
+                or ""
+            ).strip()
+            if resolved["video_id"] and candidate_vid == resolved["video_id"]:
+                chosen = candidate
+                break
+
+        if chosen is None:
+            for candidate in songs:
+                if isinstance(candidate, dict) and _candidate_song_matches(
+                    candidate,
+                    video_id=resolved["video_id"],
+                    title=resolved["title"],
+                    artist=resolved["artist"],
+                    album=resolved["album"],
+                    duration_ms=resolved["duration_ms"],
+                ):
+                    chosen = candidate
+                    break
+
+        if chosen:
+            resolved["browse_id"] = str(
+                chosen.get("album_browse_id")
+                or chosen.get("yt_browse_id")
+                or chosen.get("browse_id")
+                or ""
+            ).strip()
+            if not resolved["album"]:
+                resolved["album"] = str(chosen.get("album") or "").strip()
+            if not resolved["duration_ms"]:
+                resolved["duration_ms"] = _track_duration_ms(chosen)
+            if not resolved["art_url"]:
+                resolved["art_url"] = str(
+                    chosen.get("art_url")
+                    or chosen.get("thumbnail_url")
+                    or ""
+                ).strip()
+
+    if not resolved["browse_id"]:
+        # Do not invent a track number when album context could not be proven.
+        return resolved
+
+    try:
+        full = await asyncio.to_thread(
+            ytmusic_integration.get_album_full,
+            resolved["browse_id"],
+        )
+    except Exception:
+        full = {}
+
+    if not isinstance(full, dict) or not full:
+        return resolved
+
+    album_title = str(full.get("title") or "").strip()
+    album_artist_value = str(full.get("artist") or "").strip()
+    album_art = str(
+        full.get("thumbnail_url")
+        or full.get("thumbnail")
+        or ""
+    ).strip()
+
+    if album_title:
+        resolved["album"] = album_title
+    if album_artist_value:
+        resolved["album_artist"] = album_artist_value
+    elif not resolved["album_artist"]:
+        resolved["album_artist"] = resolved["artist"]
+    if album_art:
+        resolved["art_url"] = album_art
+
+    tracks = full.get("tracks") or []
+    exact: Optional[tuple[int, Dict[str, Any]]] = None
+    fallback: Optional[tuple[int, Dict[str, Any]]] = None
+
+    for index, row in enumerate(tracks, start=1):
+        if not isinstance(row, dict):
+            continue
+        row_vid = str(row.get("videoId") or row.get("video_id") or "").strip()
+        if resolved["video_id"] and row_vid and row_vid == resolved["video_id"]:
+            exact = (index, row)
+            break
+        if fallback is None and _candidate_song_matches(
+            row,
+            video_id=resolved["video_id"],
+            title=resolved["title"],
+            artist=resolved["artist"],
+            album="",
+            duration_ms=resolved["duration_ms"],
+        ):
+            fallback = (index, row)
+
+    matched = exact or fallback
+    if not matched:
+        return resolved
+
+    index, row = matched
+    real_track_no = _track_number(row, index)
+    if real_track_no > 0:
+        resolved["track_no"] = real_track_no
+
+    row_artist = _track_artist(row, resolved["artist"])
+    if row_artist:
+        resolved["artist"] = row_artist
+    if not resolved["duration_ms"]:
+        resolved["duration_ms"] = _track_duration_ms(row)
+
+    return resolved
 
 
 def _build_existing_album_track_keys(songs: List[Dict[str, Any]]) -> tuple[Set[str], Set[tuple[str, int]]]:
@@ -146,7 +363,6 @@ def _subsonic_client_from_settings(settings: Dict[str, Any]) -> Optional[Subsoni
         api_version=settings.get("subsonic_api_version") or "1.16.1",
         timeout_s=int(settings.get("subsonic_timeout_s") or 20),
     )
-
 
 
 def _playlist_rows_for_user(user_id: str, playlist_id: str) -> tuple[Playlist, List[Any]]:
@@ -188,8 +404,6 @@ def _playlist_rows_for_user(user_id: str, playlist_id: str) -> tuple[Playlist, L
                 .order_by(PlaylistTrack.position.asc(), PlaylistTrack.created_at.asc())
             ).scalars().all()
 
-        # The ORM rows become detached after this function returns, but their
-        # scalar columns remain available because no commit/expire occurs here.
         return playlist, list(rows)
     finally:
         db.close()
@@ -229,13 +443,6 @@ async def _playlist_track_exists_in_subsonic(
     client: SubsonicClient,
     track: Any,
 ) -> bool:
-    """Do one inexpensive Subsonic lookup for an exact artist/title match.
-
-    Playlist rows that already carry a Subsonic id are handled before this
-    function. For YTMusic-origin rows, use one search3 request and inspect the
-    returned metadata locally instead of invoking the much broader multi-query
-    resolver for every playlist item.
-    """
     title = str(getattr(track, "title", "") or "").strip()
     artist = str(getattr(track, "artist", "") or "").strip()
     if not title or not artist:
@@ -254,9 +461,6 @@ async def _playlist_track_exists_in_subsonic(
         if candidate_title == wanted_title and candidate_artist == wanted_artist:
             return True
 
-    # Some Subsonic implementations rank combined queries poorly. A title-only
-    # lookup is a single fallback request, still far cheaper than the full
-    # search_song_best query ladder.
     result = await client.search3(title, song_count=75)
     for song in (result.get("song") or []):
         candidate_title = _norm_text(str(song.get("title") or ""))
@@ -279,8 +483,16 @@ async def add_track(request: Request, user: User = Depends(get_current_user)) ->
     title = (body.get("title") or "").strip()
     artist = (body.get("artist") or "").strip()
     album = (body.get("album") or "").strip()
+    album_artist = (body.get("album_artist") or "").strip()
+    browse_id = (
+        body.get("album_browse_id")
+        or body.get("yt_browse_id")
+        or body.get("browse_id")
+        or ""
+    ).strip()
     art_url = (body.get("art_url") or "").strip()
     duration_ms = int(body.get("duration_ms") or 0)
+    track_no = _track_number(body, 0)
 
     if not vid or not title or not artist:
         raise HTTPException(status_code=400, detail="yt_video_id, title, and artist are required")
@@ -289,15 +501,29 @@ async def add_track(request: Request, user: User = Depends(get_current_user)) ->
     if _subsonic_client_from_settings(settings) is None:
         raise HTTPException(status_code=409, detail="Subsonic is not configured. Add-to-library is disabled.")
 
-    job = DownloadJob(
+    metadata = await _resolve_import_track_metadata(
         video_id=vid,
-        url=f"https://music.youtube.com/watch?v={vid}",
         title=title,
         artist=artist,
         album=album,
+        album_artist=album_artist,
+        browse_id=browse_id,
         art_url=art_url,
-        track_no=0,
         duration_ms=duration_ms,
+        track_no=track_no,
+    )
+
+    job = DownloadJob(
+        video_id=vid,
+        url=f"https://music.youtube.com/watch?v={vid}",
+        title=metadata["title"],
+        artist=metadata["artist"],
+        album=metadata["album"],
+        album_artist=metadata["album_artist"],
+        browse_id=metadata["browse_id"],
+        art_url=metadata["art_url"],
+        track_no=metadata["track_no"],
+        duration_ms=metadata["duration_ms"],
         persist_to_subsonic=True,
         user_id=str(user.id),
         priority=30,
@@ -308,15 +534,23 @@ async def add_track(request: Request, user: User = Depends(get_current_user)) ->
         create_upgrade_job(
             user_id=str(user.id),
             yt_video_id=vid,
-            title=title,
-            artist=artist,
-            album=album,
-            duration_ms=duration_ms,
-            art_url=art_url,
+            yt_browse_id=metadata["browse_id"],
+            title=metadata["title"],
+            artist=metadata["artist"],
+            album=metadata["album"],
+            album_artist=metadata["album_artist"],
+            duration_ms=metadata["duration_ms"],
+            track_no=metadata["track_no"],
+            art_url=metadata["art_url"],
         )
 
     invalidate_song_cache(f"song:{vid}")
-    return {"ok": True, "video_id": vid}
+    return {
+        "ok": True,
+        "video_id": vid,
+        "track_no": metadata["track_no"],
+        "browse_id": metadata["browse_id"],
+    }
 
 
 @router.post("/album", response_model=Dict[str, Any])
@@ -483,13 +717,7 @@ async def add_playlist(
     request: Request,
     user: User = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Add every missing track from a Helix playlist to the Subsonic library.
-
-    Tracks already linked to Subsonic are skipped immediately. YTMusic-origin
-    tracks are checked against Subsonic by normalized artist/title before being
-    enqueued, so re-importing a playlist does not intentionally create duplicate
-    library copies.
-    """
+    """Add every missing track from a Helix playlist to the Subsonic library."""
     _require_import_permission(user)
 
     ip = getattr(getattr(request, "client", None), "host", "") or ""
@@ -518,12 +746,9 @@ async def add_playlist(
     unresolved_tracks: List[str] = []
     lookup_failed_tracks: List[str] = []
 
-    # Navidrome/Subsonic is local in the common Helix setup, so a few concurrent
-    # presence checks keep large playlists responsive without flooding search3.
     semaphore = asyncio.Semaphore(4)
 
     async def classify(track: Any) -> tuple[Any, str]:
-        # Playlist entries originating from Subsonic already prove presence.
         if str(getattr(track, "subsonic_song_id", "") or "").strip():
             return track, "existing"
 
@@ -533,6 +758,10 @@ async def add_playlist(
             except Exception:
                 return track, "lookup_failed"
         return track, "existing" if exists else "missing"
+
+    # Once one track resolves an album browse id, reuse it for other tracks from
+    # the same album instead of performing a fresh YTMusic song search each time.
+    resolved_album_ids: Dict[tuple[str, str], str] = {}
 
     try:
         classifications = await asyncio.gather(*(classify(track) for track in tracks))
@@ -550,8 +779,6 @@ async def add_playlist(
                 continue
 
             if state == "lookup_failed":
-                # Do not risk creating a duplicate when Subsonic could not be
-                # checked. The caller gets the exact tracks that need retrying.
                 lookup_failed += 1
                 lookup_failed_tracks.append(title or f"{artist} — unknown track")
                 continue
@@ -567,17 +794,33 @@ async def add_playlist(
                 unresolved_tracks.append(f"{artist} — {title}")
                 continue
 
-            job = DownloadJob(
+            album_key = (_norm_text(artist), _norm_text(album))
+            browse_hint = browse_id or resolved_album_ids.get(album_key, "")
+            metadata = await _resolve_import_track_metadata(
                 video_id=vid,
-                url=f"https://music.youtube.com/watch?v={vid}",
                 title=title,
                 artist=artist,
                 album=album,
                 album_artist=artist,
-                browse_id=browse_id,
+                browse_id=browse_hint,
                 art_url=art_url,
-                track_no=0,
                 duration_ms=duration_ms,
+                track_no=0,
+            )
+            if metadata["browse_id"] and album_key[1]:
+                resolved_album_ids[album_key] = metadata["browse_id"]
+
+            job = DownloadJob(
+                video_id=vid,
+                url=f"https://music.youtube.com/watch?v={vid}",
+                title=metadata["title"],
+                artist=metadata["artist"],
+                album=metadata["album"],
+                album_artist=metadata["album_artist"],
+                browse_id=metadata["browse_id"],
+                art_url=metadata["art_url"],
+                track_no=metadata["track_no"],
+                duration_ms=metadata["duration_ms"],
                 persist_to_subsonic=True,
                 user_id=str(user.id),
                 priority=40,
@@ -588,13 +831,14 @@ async def add_playlist(
                 create_upgrade_job(
                     user_id=str(user.id),
                     yt_video_id=vid,
-                    yt_browse_id=browse_id,
-                    title=title,
-                    artist=artist,
-                    album=album,
-                    album_artist=artist,
-                    duration_ms=duration_ms,
-                    art_url=art_url,
+                    yt_browse_id=metadata["browse_id"],
+                    title=metadata["title"],
+                    artist=metadata["artist"],
+                    album=metadata["album"],
+                    album_artist=metadata["album_artist"],
+                    duration_ms=metadata["duration_ms"],
+                    track_no=metadata["track_no"],
+                    art_url=metadata["art_url"],
                 )
 
             invalidate_song_cache(f"song:{vid}")

@@ -90,6 +90,8 @@ export function QueuePanel({ player, refresh, run }: Props) {
   const displayQueueRef = useRef<QueueItem[]>(queue)
   const reorderPendingRef = useRef(false)
   const suppressClicksUntilRef = useRef(0)
+  const queueListRef = useRef<HTMLDivElement | null>(null)
+  const lastAutoScrolledItemRef = useRef<string | null>(null)
   const currentIndex = player?.current_index ?? -1
   const currentItemId = queue[currentIndex]?.id ?? null
 
@@ -101,6 +103,31 @@ export function QueuePanel({ player, refresh, run }: Props) {
       setDisplayQueue(queue)
     }
   }, [queue])
+
+  useEffect(() => {
+    if (!currentItemId || lastAutoScrolledItemRef.current === currentItemId) return
+
+    const frame = window.requestAnimationFrame(() => {
+      const list = queueListRef.current
+      if (!list) return
+
+      const currentRow = Array.from(list.children).find(
+        (child) => child instanceof HTMLElement && child.dataset.queueItemId === currentItemId,
+      ) as HTMLElement | undefined
+
+      if (!currentRow) return
+
+      // Keep the current track at the top of the queue viewport. Previously
+      // played tracks remain immediately above it and are still available by
+      // scrolling upward.
+      const listRect = list.getBoundingClientRect()
+      const rowRect = currentRow.getBoundingClientRect()
+      list.scrollTop += rowRect.top - listRect.top
+      lastAutoScrolledItemRef.current = currentItemId
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [currentItemId, displayQueue])
 
   const totalMs = displayQueue.reduce((sum, item) => sum + (item.duration_ms ?? 0), 0)
   const totalMinutes = Math.round(totalMs / 60000)
@@ -158,7 +185,7 @@ export function QueuePanel({ player, refresh, run }: Props) {
       }}
     >
       <div className="queue-header">
-        <h2>Up Next</h2>
+        <h2>Queue</h2>
         <button
           className="ghost queue-clear-placeholder"
           type="button"
@@ -185,7 +212,7 @@ export function QueuePanel({ player, refresh, run }: Props) {
       ) : null}
       {reorderError ? <p className="queue-reorder-error" role="alert">Could not save queue order: {reorderError}</p> : null}
       {displayQueue.length === 0 ? <p className="muted">Nothing queued right now.</p> : null}
-      <div className={`queue-list-redesign ${draggingId ? 'is-reordering' : ''}`}>
+      <div ref={queueListRef} className={`queue-list-redesign ${draggingId ? 'is-reordering' : ''}`}>
         {displayQueue.map((item, index) => {
           // Keep only the currently playing item fixed. Every other queue item,
           // including tracks before the current song, can be reordered.
@@ -235,7 +262,7 @@ export function QueuePanel({ player, refresh, run }: Props) {
           )
         })}
       </div>
-      {displayQueue.length ? <div className="queue-summary"><span>{displayQueue.length} songs</span><span>{totalMinutes} min</span></div> : null}
+      {displayQueue.length ? <div className="queue-summary"><span>{displayQueue.length} songs <span aria-hidden="true">•</span> {totalMinutes} min</span></div> : null}
     </aside>
   )
 }

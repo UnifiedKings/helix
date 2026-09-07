@@ -15,7 +15,7 @@ function sourceHelp(source: PlaylistImportSource) {
     case 'helix':
       return {
         title: 'Import from Helix',
-        text: 'Export a playlist from Helix as JSON, then upload that file here.',
+        text: 'Upload a Helix playlist JSON file here.',
         acceptsFile: true,
         acceptsUrl: false,
         fileAccept: '.json,application/json',
@@ -51,23 +51,6 @@ function formatDuration(ms?: number) {
   if (!ms) return ''
   const seconds = Math.max(0, Math.round(ms / 1000))
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
-}
-
-function downloadJson(filename: string, payload: unknown) {
-  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = filename
-  document.body.appendChild(anchor)
-  anchor.click()
-  anchor.remove()
-  URL.revokeObjectURL(url)
-}
-
-function safeFilename(name: string) {
-  const cleaned = (name || 'playlist').replace(/[\\/:*?"<>|]+/g, '').trim().replace(/\s+/g, '_')
-  return `${cleaned || 'playlist'}.json`
 }
 
 function sanitizeYtMusicSavedPage(html: string) {
@@ -114,7 +97,7 @@ type Props = {
   onImported: () => void | Promise<void>
 }
 
-export function PlaylistImportModal({ open, playlistId, playlistName, onClose, onImported }: Props) {
+export function PlaylistImportModal({ open, playlistId, playlistName: _playlistName, onClose, onImported }: Props) {
   const [source, setSource] = useState<PlaylistImportSource>('helix')
   const [url, setUrl] = useState('')
   const [filename, setFilename] = useState('')
@@ -236,19 +219,6 @@ export function PlaylistImportModal({ open, playlistId, playlistName, onClose, o
     }
   }
 
-  async function exportCurrentPlaylist() {
-    setBusy(true)
-    setError('')
-    try {
-      const payload = await api.exportPlaylist(playlistId)
-      downloadJson(safeFilename(playlistName), payload)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not export this playlist.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
   function toggleTrack(index: number) {
     setSelected((current) => {
       const next = new Set(current)
@@ -295,9 +265,6 @@ export function PlaylistImportModal({ open, playlistId, playlistName, onClose, o
             <div className="playlist-import-instructions">
               <h3>{help.title}</h3>
               <p>{help.text}</p>
-              {source === 'helix' ? (
-                <button type="button" onClick={() => void exportCurrentPlaylist()} disabled={busy}>Export this playlist as JSON</button>
-              ) : null}
               {source === 'ytmusic' ? <small className="playlist-import-privacy-note">The saved page is parsed in your browser first; Google session data is not sent to Helix.</small> : null}
               {source === 'spotify' ? (
                 <a href="https://exportify.app/" target="_blank" rel="noreferrer">Open Exportify ↗</a>

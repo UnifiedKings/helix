@@ -1,0 +1,22 @@
+/* Equalize the desktop main-content gutters.
+   The visible content area should sit the same distance from the sidebar and
+   the queue. Keep the queue itself flush to the right edge. */
+
+@media (min-width: 1101px) {
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr) 360px !important;
+    column-gap: 24px !important;
+    row-gap: 0 !important;
+    padding-left: 24px !important;
+    padding-right: 0 !important;
+  }
+
+  /* Do not add a second horizontal inset inside the main column. The grid
+     itself now owns both outside gutters. */
+  .dashboard-content-card {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+}

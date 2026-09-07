@@ -7,13 +7,13 @@ import { ArtistLink } from '../components/ArtistLink'
 import { AlbumLink } from '../components/AlbumLink'
 import { PlaylistImportModal } from '../components/PlaylistImportModal'
 import type { usePlayer } from '../hooks/usePlayer'
+import '../styles/playlist-detail-actions.css'
 
 const SEARCH_MODES: Array<{ id: SearchMode; label: string }> = [
   { id: 'hybrid', label: 'All' },
   { id: 'subsonic', label: 'Library' },
   { id: 'ytmusic', label: 'YTMusic' },
 ]
-
 
 function formatDuration(ms?: number) {
   const totalSeconds = Math.max(0, Math.floor((ms ?? 0) / 1000))
@@ -51,6 +51,23 @@ function normalizeDetail(detail: PlaylistDetail): PlaylistDetail {
   }
 }
 
+function downloadJson(filename: string, payload: unknown) {
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  URL.revokeObjectURL(url)
+}
+
+function safeFilename(name: string) {
+  const cleaned = (name || 'playlist').replace(/[\\/:*?"<>|]+/g, '').trim().replace(/\s+/g, '_')
+  return `${cleaned || 'playlist'}.json`
+}
+
 export function PlaylistEditPage() {
   const { playlistId = '' } = useParams()
   const player = useOutletContext<ReturnType<typeof usePlayer>>()
@@ -67,6 +84,7 @@ export function PlaylistEditPage() {
   const [reorderBusy, setReorderBusy] = useState(false)
   const [openTrackMenuId, setOpenTrackMenuId] = useState('')
   const [importOpen, setImportOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const [subsonicQueuedTrackIds, setSubsonicQueuedTrackIds] = useState<Set<string>>(new Set())
   const [subsonicAvailability, setSubsonicAvailability] = useState<Record<string, boolean>>({})
@@ -303,6 +321,19 @@ export function PlaylistEditPage() {
     }
   }
 
+  async function exportPlaylist() {
+    if (!playlist || exporting) return
+    setExporting(true)
+    setError('')
+    try {
+      const payload = await api.exportPlaylist(playlist.id)
+      downloadJson(safeFilename(playlist.name), payload)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not export playlist')
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="page-stack playlist-editor-page">
@@ -317,15 +348,49 @@ export function PlaylistEditPage() {
           <p className="playlist-editor-count">{detail?.tracks.length ?? playlist?.track_count ?? 0} tracks{isSystemPlaylist ? ' • system playlist' : ''}</p>
         </div>
         {playlist ? (
-          <div className="playlist-editor-controls">
-            <button className="primary" onClick={() => player.run(() => api.playPlaylist(playlist.id), 'play')}>
-              ▶ Play Playlist
+          <div className="playlist-editor-controls playlist-editor-icon-actions" aria-label="Playlist actions">
+            <button
+              className="playlist-editor-action-button primary"
+              onClick={() => player.run(() => api.playPlaylist(playlist.id), 'play')}
+              aria-label="Play playlist"
+              title="Play playlist"
+            >
+              <span aria-hidden="true">▶</span>
+              <span className="playlist-editor-action-tooltip" role="tooltip">Play playlist</span>
             </button>
-            <button onClick={() => player.run(() => api.playPlaylist(playlist.id, true), 'play')}>
-              Shuffle Play
+            <button
+              className="playlist-editor-action-button"
+              onClick={() => player.run(() => api.playPlaylist(playlist.id, true), 'play')}
+              aria-label="Shuffle play"
+              title="Shuffle play"
+            >
+              <span aria-hidden="true">⇄</span>
+              <span className="playlist-editor-action-tooltip" role="tooltip">Shuffle play</span>
             </button>
-            <button type="button" onClick={() => setImportOpen(true)}>
-              Import playlist
+            <button
+              type="button"
+              className="playlist-editor-action-button"
+              onClick={() => setImportOpen(true)}
+              aria-label="Import playlist"
+              title="Import playlist"
+            >
+              <svg className="playlist-editor-action-svg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 3v11m0 0 4-4m-4 4-4-4M5 17v3h14v-3" />
+              </svg>
+              <span className="playlist-editor-action-tooltip" role="tooltip">Import playlist</span>
+            </button>
+            <button
+              type="button"
+              className="playlist-editor-action-button"
+              onClick={() => void exportPlaylist()}
+              disabled={exporting}
+              aria-label={exporting ? 'Exporting playlist' : 'Export playlist'}
+              title={exporting ? 'Exporting playlist…' : 'Export playlist'}
+            >
+              <svg className="playlist-editor-action-svg" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 21V10m0 0-4 4m4-4 4 4M5 7V4h14v3" />
+              </svg>
+              <span className="playlist-editor-action-tooltip" role="tooltip">{exporting ? 'Exporting…' : 'Export playlist'}</span>
             </button>
           </div>
         ) : null}

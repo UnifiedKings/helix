@@ -130,8 +130,6 @@ export function AudioPlayer({ player, audioIntent, onStateChange, repeatTrack = 
       }).catch((err) => {
         if (attemptId !== playAttemptRef.current || currentItemIdRef.current !== nowId) return
         const name = err instanceof DOMException ? err.name : ''
-        // Rapid next/previous clicks intentionally interrupt pending play() calls
-        // by changing src/load(). Those should not leave the playbar stuck.
         if (name === 'AbortError' || name === 'NotAllowedError') {
           onLocalPlayingChange?.(false)
           return
