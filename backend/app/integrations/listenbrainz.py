@@ -248,6 +248,21 @@ def _client() -> ListenBrainzClient:
     if _lb_client is not None and _lb_client._token == token:
         return _lb_client
 
+    old = _lb_client
+    _lb_client = ListenBrainzClient(
+        user_agent=_LB_USER_AGENT,
+        token=token,
+        min_interval_ms=250,
+        timeout_s=20,
+        max_retries=2,
+    )
+    if old is not None:
+        try:
+            asyncio.get_running_loop().create_task(old.close())
+        except RuntimeError:
+            pass
+    return _lb_client
+
 
 def _track_metadata(
     track_name: str,
@@ -331,21 +346,6 @@ async def submit_now_playing(
         ],
     }
     await _client().post_json("/1/submit-listens", body)
-
-    old = _lb_client
-    _lb_client = ListenBrainzClient(
-        user_agent=_LB_USER_AGENT,
-        token=token,
-        min_interval_ms=250,
-        timeout_s=20,
-        max_retries=2,
-    )
-    if old is not None:
-        try:
-            asyncio.get_running_loop().create_task(old.close())
-        except RuntimeError:
-            pass
-    return _lb_client
 
 
 # Cache raw LB radio responses; these are large but reduce upstream calls a lot.
