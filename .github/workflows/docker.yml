@@ -3,7 +3,7 @@ name: docker
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, dev]
     tags: ['v*']
 
 concurrency:
@@ -41,6 +41,7 @@ jobs:
             type=sha,prefix=sha-,format=long
             type=raw,value=pr-${{ github.event.pull_request.number }},enable=${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
             type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
             type=semver,pattern={{version}}
 
       - name: Build and push
