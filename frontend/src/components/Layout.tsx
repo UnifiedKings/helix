@@ -3,6 +3,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { PlaybackBar } from './PlaybackBar'
 import { QueuePanel } from './QueuePanel'
 import { Sidebar } from './navigation/Sidebar'
+import { api } from '../api/client'
 import { usePlayer } from '../hooks/usePlayer'
 import { useAuth } from '../auth'
 import { ImportQueuedToast } from './ImportQueuedToast'
@@ -46,6 +47,20 @@ export function Layout() {
       setQueueOpen(false)
     }
   }, [location.pathname])
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.code !== 'Space' || event.repeat) return
+      const target = event.target as HTMLElement | null
+      if (target?.closest('input, textarea, select, button, a, [role="button"], [contenteditable]')) return
+      if (!player.player?.now_playing) return
+      event.preventDefault()
+      const playing = Boolean(player.player.is_playing)
+      void player.run(playing ? api.pause : api.resume, playing ? 'pause' : 'play')
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [player.player?.is_playing, player.run])
 
   async function logout() {
     await auth.logout()
