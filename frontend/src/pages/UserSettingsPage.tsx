@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+import type { CSSProperties, ChangeEvent } from 'react'
 import { api } from '../api/client'
 import type { UserSettings, UserSettingsPayload } from '../api/types'
 import { TypographySettings } from '../components/TypographySettings'
@@ -18,6 +18,20 @@ type Settings = UserSettings & {
   appearance_google_font_url_lyrics: string
 }
 type SettingsPayload = Omit<UserSettingsPayload, 'settings'> & { settings: Settings }
+
+type UserProfile = {
+  username: string
+  display_name: string
+  avatar_data_url: string
+  role: string
+}
+
+const EMPTY_PROFILE: UserProfile = {
+  username: '',
+  display_name: '',
+  avatar_data_url: '',
+  role: 'user',
+}
 
 const SECTIONS = [
   ['account', 'Account'],
@@ -154,12 +168,46 @@ async function accountRequest<T>(path: string, options: RequestInit = {}): Promi
   return responseText ? JSON.parse(responseText) as T : undefined as T
 }
 
+async function avatarDataUrl(file: File): Promise<string> {
+  if (file.size > 8 * 1024 * 1024) throw new Error('Choose an image smaller than 8 MB.')
+
+  const source = URL.createObjectURL(file)
+  try {
+    const image = new Image()
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve()
+      image.onerror = () => reject(new Error('Could not read that image.'))
+      image.src = source
+    })
+
+    const size = 256
+    const canvas = document.createElement('canvas')
+    canvas.width = size
+    canvas.height = size
+    const context = canvas.getContext('2d')
+    if (!context) throw new Error('Avatar processing is not available in this browser.')
+
+    const crop = Math.min(image.naturalWidth, image.naturalHeight)
+    const sx = Math.max(0, (image.naturalWidth - crop) / 2)
+    const sy = Math.max(0, (image.naturalHeight - crop) / 2)
+    context.drawImage(image, sx, sy, crop, crop, 0, 0, size, size)
+
+    return canvas.toDataURL('image/webp', 0.86)
+  } finally {
+    URL.revokeObjectURL(source)
+  }
+}
+
 export function UserSettingsPage() {
   const [section, setSection] = useState<SectionKey>('appearance')
   const [payload, setPayload] = useState<SettingsPayload>(DEFAULT_PAYLOAD)
   const [draft, setDraft] = useState<Settings>(DEFAULT_SETTINGS)
+  const [profile, setProfile] = useState<UserProfile>(EMPTY_PROFILE)
+  const [profileDraft, setProfileDraft] = useState<UserProfile>(EMPTY_PROFILE)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [avatarBusy, setAvatarBusy] = useState(false)
   const [passwordSaving, setPasswordSaving] = useState(false)
   const [passwordDraft, setPasswordDraft] = useState({ current: '', next: '', confirm: '' })
   const [previewing, setPreviewing] = useState(false)
@@ -168,6 +216,10 @@ export function UserSettingsPage() {
   const savedPayloadRef = useRef(payload)
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(payload.settings), [draft, payload.settings])
+  const profileDirty = useMemo(
+    () => profileDraft.display_name !== profile.display_name || profileDraft.avatar_data_url !== profile.avatar_data_url,
+    [profileDraft, profile],
+  )
   const safeUi = new URLSearchParams(window.location.search).get('safe-ui') === '1'
 
   useEffect(() => { savedPayloadRef.current = payload }, [payload])
@@ -175,9 +227,14 @@ export function UserSettingsPage() {
   async function load() {
     setLoading(true)
     try {
-      const next = await api.userSettings() as SettingsPayload
+      const [next, nextProfile] = await Promise.all([
+        api.userSettings() as Promise<SettingsPayload>,
+        accountRequest<UserProfile>('/api/user/settings/profile'),
+      ])
       setPayload(next)
       setDraft({ ...DEFAULT_SETTINGS, ...next.settings })
+      setProfile(nextProfile)
+      setProfileDraft(nextProfile)
       setError('')
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not load your settings')
@@ -233,6 +290,47 @@ export function UserSettingsPage() {
       setError(err instanceof Error ? err.message : 'Could not save your settings')
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function saveProfile() {
+    if (!profileDirty || profileSaving) return
+    setProfileSaving(true)
+    setError('')
+    setStatus('')
+    try {
+      const next = await accountRequest<UserProfile>('/api/user/settings/profile', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          display_name: profileDraft.display_name.trim(),
+          avatar_data_url: profileDraft.avatar_data_url,
+        }),
+      })
+      setProfile(next)
+      setProfileDraft(next)
+      window.dispatchEvent(new CustomEvent('helix-user-profile-updated', { detail: next }))
+      setStatus('Profile updated.')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update your profile')
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
+  async function chooseAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+
+    setAvatarBusy(true)
+    setError('')
+    try {
+      const nextAvatar = await avatarDataUrl(file)
+      setProfileDraft((current) => ({ ...current, avatar_data_url: nextAvatar }))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not process that avatar')
+    } finally {
+      setAvatarBusy(false)
     }
   }
 
@@ -308,6 +406,8 @@ export function UserSettingsPage() {
   }
 
   const maxAhead = payload.limits.station_queue_ahead_max
+  const profileName = profileDraft.display_name.trim() || profileDraft.username || 'Helix'
+  const profileInitial = profileName.slice(0, 1).toUpperCase()
 
   return (
     <div className="settings-page settings-page-user">
@@ -330,7 +430,42 @@ export function UserSettingsPage() {
 
         <section className="settings-section-content" aria-busy={loading}>
           {section === 'account' ? <>
-            <div className="settings-section-heading"><h2>Account</h2><p>Manage your Helix account credentials.</p></div>
+            <div className="settings-section-heading"><h2>Account</h2><p>Manage your public Helix profile and account credentials.</p></div>
+
+            <div className="settings-card account-profile-card">
+              <div className="settings-card-heading-row"><div><h3>Profile</h3><p>Your display name and avatar are shown in the sidebar and can be reused by social features such as lobbies.</p></div></div>
+              <div className="account-profile-editor">
+                <div className="account-profile-avatar-column">
+                  <div className="account-profile-avatar-preview">
+                    {profileDraft.avatar_data_url ? <img src={profileDraft.avatar_data_url} alt="" /> : <span aria-hidden="true">{profileInitial}</span>}
+                  </div>
+                  <div className="account-profile-avatar-actions">
+                    <label className="button-link account-avatar-upload">
+                      {avatarBusy ? 'Processing…' : profileDraft.avatar_data_url ? 'Change avatar' : 'Choose avatar'}
+                      <input type="file" accept="image/png,image/jpeg,image/webp" disabled={avatarBusy || profileSaving} onChange={(event) => void chooseAvatar(event)} />
+                    </label>
+                    {profileDraft.avatar_data_url ? <button type="button" disabled={profileSaving} onClick={() => setProfileDraft((current) => ({ ...current, avatar_data_url: '' }))}>Remove</button> : null}
+                  </div>
+                </div>
+
+                <div className="account-profile-fields">
+                  <label>
+                    <strong>Display name</strong>
+                    <span>This can be different from the username you use to sign in.</span>
+                    <input type="text" maxLength={64} value={profileDraft.display_name} placeholder={profileDraft.username || 'Display name'} onChange={(event) => setProfileDraft((current) => ({ ...current, display_name: event.target.value }))} />
+                  </label>
+                  <div className="account-profile-username">
+                    <strong>Login username</strong>
+                    <span>{profileDraft.username || '—'}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="account-profile-save-row">
+                <button type="button" disabled={!profileDirty || profileSaving} onClick={() => setProfileDraft(profile)}>Discard profile changes</button>
+                <button type="button" className="primary" disabled={!profileDirty || profileSaving || avatarBusy} onClick={() => void saveProfile()}>{profileSaving ? 'Saving…' : 'Save profile'}</button>
+              </div>
+            </div>
+
             <div className="settings-card account-password-card">
               <div className="settings-card-heading-row"><div><h3>Change password</h3><p>Enter your current password, then choose a new password with at least 8 characters.</p></div></div>
               <label className="settings-control-row"><div><strong>Current password</strong><span>Required to confirm this account change.</span></div><input type="password" autoComplete="current-password" value={passwordDraft.current} onChange={(event) => setPasswordDraft((current) => ({ ...current, current: event.target.value }))} /></label>

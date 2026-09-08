@@ -449,6 +449,7 @@ async def play_station(station_id: str, payload: StationPlayRequest, user: User 
 
         sess.autoplay_enabled = True
         sess.active_station_id = st.id
+        st.updated_at = datetime.utcnow()
 
         settings = get_settings(db)
 

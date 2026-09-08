@@ -5,6 +5,7 @@ import { subscribePersistentCache } from '../api/persistentCache'
 import type { HomeActivityItem, HomeSummary } from '../api/types'
 import { Artwork } from '../components/Artwork'
 import { ArtistLink } from '../components/ArtistLink'
+import { NavIcon } from '../components/navigation/NavIcon'
 import type { usePlayer } from '../hooks/usePlayer'
 
 type PlayerContext = ReturnType<typeof usePlayer>
@@ -205,19 +206,19 @@ export function HomePage() {
 
       <nav className="home-quick-actions" aria-label="Quick actions">
         <Link className="home-quick-action" to="/search">
-          <span className="home-quick-icon" aria-hidden="true">⌕</span>
+          <span className="home-quick-icon"><NavIcon name="search" /></span>
           <span><strong>Search Music</strong><small>Find songs, albums, and artists</small></span>
         </Link>
         <Link className="home-quick-action" to="/stations">
-          <span className="home-quick-icon" aria-hidden="true">◉</span>
+          <span className="home-quick-icon"><NavIcon name="stations" /></span>
           <span><strong>Start Station</strong><small>Create a station and let Helix build the vibe</small></span>
         </Link>
         <Link className="home-quick-action" to="/playlists">
-          <span className="home-quick-icon" aria-hidden="true">♫</span>
+          <span className="home-quick-icon"><NavIcon name="playlists" /></span>
           <span><strong>Playlists</strong><small>Play or manage saved playlists</small></span>
         </Link>
         <Link className="home-quick-action" to="/lobbies">
-          <span className="home-quick-icon" aria-hidden="true">◎</span>
+          <span className="home-quick-icon"><NavIcon name="lobbies" /></span>
           <span><strong>Lobbies</strong><small>Listen together with friends</small></span>
         </Link>
       </nav>

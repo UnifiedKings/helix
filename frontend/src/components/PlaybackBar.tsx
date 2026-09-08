@@ -9,6 +9,7 @@ import { AlbumLink } from './AlbumLink'
 import { AudioPlayer } from './AudioPlayer'
 
 type PlaybarStyle = 'helix' | 'ytmusic' | 'spotify' | 'pandora'
+type SkipDirection = 'previous' | 'next'
 
 type UserSettingsWithPlaybar = UserSettings & { playback_bar_style?: PlaybarStyle }
 
@@ -81,6 +82,8 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
   const [ratingBusy, setRatingBusy] = useState(false)
   const [repeatTrack, setRepeatTrack] = useState(() => window.localStorage.getItem('helix.repeatTrack') === '1')
   const [playbarStyle, setPlaybarStyle] = useState<PlaybarStyle>('helix')
+  const [skipDirection, setSkipDirection] = useState<SkipDirection | null>(null)
+  const skipFeedbackTimerRef = useRef<number | null>(null)
   const now = player?.now_playing
   const hasTrack = Boolean(now)
   const shouldKeepPlaying = Boolean(player?.is_playing || localPlaying)
@@ -142,6 +145,10 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
     window.localStorage.setItem('helix.repeatTrack', repeatTrack ? '1' : '0')
   }, [repeatTrack])
 
+  useEffect(() => () => {
+    if (skipFeedbackTimerRef.current !== null) window.clearTimeout(skipFeedbackTimerRef.current)
+  }, [])
+
   useEffect(() => {
     if (playbarStyle !== 'ytmusic') return
 
@@ -165,7 +172,6 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
     }
   }, [playbarStyle, trackIdentity])
 
-
   function updateYtMusicSeek(clientX: number) {
     const bar = barRef.current
     if (!bar || playbarStyle !== 'ytmusic') return
@@ -180,6 +186,19 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
     input.dispatchEvent(new Event('input', { bubbles: true }))
     input.dispatchEvent(new Event('change', { bubbles: true }))
     bar.style.setProperty('--helix-scrub-progress', `${ratio * 100}%`)
+  }
+
+  function runDirectionalSkip(direction: SkipDirection, action: () => Promise<PlayerState>) {
+    setSkipDirection(null)
+    window.requestAnimationFrame(() => {
+      setSkipDirection(direction)
+      if (skipFeedbackTimerRef.current !== null) window.clearTimeout(skipFeedbackTimerRef.current)
+      skipFeedbackTimerRef.current = window.setTimeout(() => {
+        setSkipDirection(null)
+        skipFeedbackTimerRef.current = null
+      }, 230)
+    })
+    void run(action, shouldKeepPlaying ? 'play' : 'pause')
   }
 
   async function toggleLike() {
@@ -211,7 +230,7 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
   }
 
   return (
-    <footer ref={barRef} className={`playback-bar playback-style-${playbarStyle}`} data-playbar-style={playbarStyle}>
+    <footer ref={barRef} className={`playback-bar playback-style-${playbarStyle}`} data-playbar-style={playbarStyle} data-skip-direction={skipDirection ?? undefined}>
       <div className="now-playing">
         <Artwork src={now?.art_url} alt={now?.title ?? 'No track'} />
         <div className="now-playing-info">
@@ -234,7 +253,7 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
 
       <div className="transport-stack">
         <div className="transport">
-          <button className="icon-button transport-side transport-previous" aria-label="Previous track" title="Previous" onClick={() => run(api.previous, shouldKeepPlaying ? 'play' : 'pause')} disabled={!player}>
+          <button className="icon-button transport-side transport-previous" aria-label="Previous track" title="Previous" onClick={() => runDirectionalSkip('previous', api.previous)} disabled={!player}>
             <IconPrevious />
           </button>
           {localPlaying ? (
@@ -246,7 +265,7 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
               <IconPlay />
             </button>
           )}
-          <button className="icon-button transport-side transport-next" aria-label="Next track" title="Next" onClick={() => run(api.next, shouldKeepPlaying ? 'play' : 'pause')} disabled={!player}>
+          <button className="icon-button transport-side transport-next" aria-label="Next track" title="Next" onClick={() => runDirectionalSkip('next', api.next)} disabled={!player}>
             <IconNext />
           </button>
           <button

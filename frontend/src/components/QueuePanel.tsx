@@ -27,6 +27,15 @@ function moveQueueItem(queue: QueueItem[], fromId: string, toId: string) {
   return next
 }
 
+function blocksQueueDrag(target: EventTarget | null) {
+  if (!(target instanceof Element)) return false
+  return Boolean(
+    target.closest(
+      '.queue-remove-icon, .queue-clear-placeholder, a, input, select, textarea, button:not(.queue-main)',
+    ),
+  )
+}
+
 function QueueRow({
   item,
   active,
@@ -37,6 +46,7 @@ function QueueRow({
   onRemove,
   onPointerDown,
   onPointerMove,
+  onRemovePointerDown,
 }: {
   item: QueueItem
   active: boolean
@@ -47,6 +57,7 @@ function QueueRow({
   onRemove: () => void
   onPointerDown: (event: ReactPointerEvent<HTMLDivElement>) => void
   onPointerMove: (event: ReactPointerEvent<HTMLDivElement>) => void
+  onRemovePointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => void
 }) {
   return (
     <div
@@ -67,6 +78,7 @@ function QueueRow({
       ) : (
         <span className="queue-drag-placeholder" aria-hidden="true">⁝⁝</span>
       )}
+
       <button className="queue-main" onClick={onJump}>
         <Artwork src={item.art_url} alt={item.title} size="sm" />
         <span>
@@ -74,8 +86,17 @@ function QueueRow({
           <span className="muted">{item.artist}</span>
         </span>
       </button>
+
       <span className="queue-duration">{formatDuration(item.duration_ms)}</span>
-      <button className="queue-remove-icon" onClick={onRemove} aria-label={`Remove ${item.title} from queue`}><span className="queue-remove-glyph" aria-hidden="true">×</span></button>
+
+      <button
+        className="queue-remove-icon"
+        onPointerDown={onRemovePointerDown}
+        onClick={onRemove}
+        aria-label={`Remove ${item.title} from queue`}
+      >
+        <span className="queue-remove-glyph" aria-hidden="true">×</span>
+      </button>
     </div>
   )
 }
@@ -85,6 +106,7 @@ export function QueuePanel({ player, refresh, run }: Props) {
   const [displayQueue, setDisplayQueue] = useState<QueueItem[]>(queue)
   const [draggingId, setDraggingId] = useState<string | null>(null)
   const [reorderError, setReorderError] = useState('')
+
   const dragIdRef = useRef<string | null>(null)
   const pointerCandidateRef = useRef<{ id: string; x: number; y: number } | null>(null)
   const displayQueueRef = useRef<QueueItem[]>(queue)
@@ -92,12 +114,11 @@ export function QueuePanel({ player, refresh, run }: Props) {
   const suppressClicksUntilRef = useRef(0)
   const queueListRef = useRef<HTMLDivElement | null>(null)
   const lastAutoScrolledItemRef = useRef<string | null>(null)
+
   const currentIndex = player?.current_index ?? -1
   const currentItemId = queue[currentIndex]?.id ?? null
 
   useEffect(() => {
-    // Do not let realtime player-state updates overwrite the optimistic drag
-    // order while a drag or its PATCH request is still in progress.
     if (!dragIdRef.current && !reorderPendingRef.current) {
       displayQueueRef.current = queue
       setDisplayQueue(queue)
@@ -117,9 +138,6 @@ export function QueuePanel({ player, refresh, run }: Props) {
 
       if (!currentRow) return
 
-      // Keep the current track at the top of the queue viewport. Previously
-      // played tracks remain immediately above it and are still available by
-      // scrolling upward.
       const listRect = list.getBoundingClientRect()
       const rowRect = currentRow.getBoundingClientRect()
       list.scrollTop += rowRect.top - listRect.top
@@ -135,21 +153,30 @@ export function QueuePanel({ player, refresh, run }: Props) {
   const isStationPlaying = Boolean(player?.active_station_id || activeStation)
   const stationName = activeStation?.name || (isStationPlaying ? 'Station radio' : '')
 
+  const cancelPendingDrag = () => {
+    pointerCandidateRef.current = null
+    dragIdRef.current = null
+    setDraggingId(null)
+  }
+
   const persistDragOrder = async () => {
-    // The pointer handlers update this ref synchronously as the card moves, so
-    // pointer-up always persists the exact order currently shown on screen.
     const itemIds = displayQueueRef.current.map((item) => item.id)
+
     reorderPendingRef.current = true
     setDraggingId(null)
     setReorderError('')
+
     try {
       const next = await run(() => api.reorderQueue(itemIds), 'none')
       const committedQueue = next.queue ?? []
       displayQueueRef.current = committedQueue
       setDisplayQueue(committedQueue)
     } catch (err) {
-      displayQueueRef.current = queue
-      setDisplayQueue(queue)
+      try {
+        await refresh()
+      } catch {
+        // Preserve the original reorder error.
+      }
       setReorderError(err instanceof Error ? err.message : 'Could not reorder queue')
     } finally {
       dragIdRef.current = null
@@ -162,12 +189,14 @@ export function QueuePanel({ player, refresh, run }: Props) {
     const finishPointerDrag = () => {
       pointerCandidateRef.current = null
       if (!dragIdRef.current) return
+
       suppressClicksUntilRef.current = Date.now() + 250
       void persistDragOrder()
     }
 
     window.addEventListener('pointerup', finishPointerDrag)
     window.addEventListener('pointercancel', finishPointerDrag)
+
     return () => {
       window.removeEventListener('pointerup', finishPointerDrag)
       window.removeEventListener('pointercancel', finishPointerDrag)
@@ -178,10 +207,21 @@ export function QueuePanel({ player, refresh, run }: Props) {
     <aside
       className="queue-panel queue-panel-redesign"
       onClickCapture={(event) => {
-        if (Date.now() < suppressClicksUntilRef.current) {
-          event.preventDefault()
-          event.stopPropagation()
+        if (Date.now() >= suppressClicksUntilRef.current) return
+
+        // A real drag that began on the track button will naturally produce a
+        // click when released. Suppress that click so dragging does not also jump.
+        // Explicit queue controls remain usable immediately.
+        const target = event.target
+        if (
+          target instanceof Element
+          && target.closest('.queue-remove-icon, .queue-clear-placeholder')
+        ) {
+          return
         }
+
+        event.preventDefault()
+        event.stopPropagation()
       }}
     >
       <div className="queue-header">
@@ -193,12 +233,15 @@ export function QueuePanel({ player, refresh, run }: Props) {
           title={isStationPlaying ? 'Clear queue and stop station radio' : 'Clear queue'}
           onClick={() => {
             if (!queue.length && !isStationPlaying) return
+            cancelPendingDrag()
+            setReorderError('')
             void run(() => api.clearQueue(), 'pause')
           }}
         >
           Clear
         </button>
       </div>
+
       {isStationPlaying ? (
         <div className="queue-station-banner">
           <span className="queue-station-icon queue-station-record" aria-hidden="true">
@@ -210,14 +253,23 @@ export function QueuePanel({ player, refresh, run }: Props) {
           </div>
         </div>
       ) : null}
-      {reorderError ? <p className="queue-reorder-error" role="alert">Could not save queue order: {reorderError}</p> : null}
+
+      {reorderError ? (
+        <p className="queue-reorder-error" role="alert">
+          Could not save queue order: {reorderError}
+        </p>
+      ) : null}
+
       {displayQueue.length === 0 ? <p className="muted">Nothing queued right now.</p> : null}
-      <div ref={queueListRef} className={`queue-list-redesign ${draggingId ? 'is-reordering' : ''}`}>
+
+      <div
+        ref={queueListRef}
+        className={`queue-list-redesign ${draggingId ? 'is-reordering' : ''}`}
+      >
         {displayQueue.map((item, index) => {
-          // Keep only the currently playing item fixed. Every other queue item,
-          // including tracks before the current song, can be reordered.
           const isCurrentItem = item.id === currentItemId
           const canDrag = !isCurrentItem
+
           return (
             <QueueRow
               key={item.id}
@@ -228,12 +280,37 @@ export function QueuePanel({ player, refresh, run }: Props) {
               dragging={draggingId === item.id}
               onJump={() => run(() => api.jump(index), 'play')}
               onRemove={async () => {
-                await api.removeQueueItem(item.id)
-                await refresh()
+                cancelPendingDrag()
+                setReorderError('')
+
+                setDisplayQueue((current) => {
+                  const next = current.filter((queueItem) => queueItem.id !== item.id)
+                  displayQueueRef.current = next
+                  return next
+                })
+
+                try {
+                  await api.removeQueueItem(item.id)
+                  await refresh()
+                } catch {
+                  await refresh()
+                }
+              }}
+              onRemovePointerDown={(event) => {
+                // The remove control is the one part of the row that must never
+                // participate in dragging.
+                event.stopPropagation()
+                cancelPendingDrag()
               }}
               onPointerDown={(event) => {
                 if (!canDrag || event.button !== 0 || reorderPendingRef.current) return
-                pointerCandidateRef.current = { id: item.id, x: event.clientX, y: event.clientY }
+                if (blocksQueueDrag(event.target)) return
+
+                pointerCandidateRef.current = {
+                  id: item.id,
+                  x: event.clientX,
+                  y: event.clientY,
+                }
                 displayQueueRef.current = displayQueue
               }}
               onPointerMove={(event) => {
@@ -244,6 +321,7 @@ export function QueuePanel({ player, refresh, run }: Props) {
                   const dx = event.clientX - candidate.x
                   const dy = event.clientY - candidate.y
                   if (Math.hypot(dx, dy) < 6) return
+
                   dragIdRef.current = candidate.id
                   setDraggingId(candidate.id)
                   suppressClicksUntilRef.current = Date.now() + 250
@@ -251,6 +329,7 @@ export function QueuePanel({ player, refresh, run }: Props) {
 
                 const draggedId = dragIdRef.current
                 if (!draggedId || draggedId === item.id || isCurrentItem) return
+
                 event.preventDefault()
                 setDisplayQueue((current) => {
                   const next = moveQueueItem(current, draggedId, item.id)
@@ -262,7 +341,14 @@ export function QueuePanel({ player, refresh, run }: Props) {
           )
         })}
       </div>
-      {displayQueue.length ? <div className="queue-summary"><span>{displayQueue.length} songs <span aria-hidden="true">•</span> {totalMinutes} min</span></div> : null}
+
+      {displayQueue.length ? (
+        <div className="queue-summary">
+          <span>
+            {displayQueue.length} songs <span aria-hidden="true">•</span> {totalMinutes} min
+          </span>
+        </div>
+      ) : null}
     </aside>
   )
 }

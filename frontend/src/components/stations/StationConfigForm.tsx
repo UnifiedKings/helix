@@ -4,14 +4,12 @@ import { Artwork } from '../Artwork'
 import type { SearchArtist, SearchSong, StationConfigOption, StationProviderInfo } from '../../api/types'
 import { optionDefault, type StationConfig } from './stationUtils'
 
-
 function seedArtwork(item: SearchSong | SearchArtist) {
   if ('title' in item) {
     return item.art_url || item.thumbnail_url || item.thumbnail || item.thumbnails?.[item.thumbnails.length - 1]?.url || item.thumbnails?.[0]?.url || ''
   }
   return item.art_url || item.thumbnail_url || ''
 }
-
 
 function songAlbumName(song: SearchSong): string {
   const raw = song as SearchSong & {
@@ -45,6 +43,12 @@ type TrackSeedSelection = {
   video_id?: string
   art_url?: string
   thumbnail_url?: string
+}
+
+type PresetChoice = {
+  label?: string
+  value: unknown
+  apply?: Record<string, unknown>
 }
 
 function artistSelections(value: unknown): ArtistSeedSelection[] {
@@ -263,6 +267,13 @@ function categoryTitle(option: StationConfigOption) {
   return id.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())
 }
 
+function choiceApply(option: StationConfigOption, value: unknown): Record<string, unknown> {
+  if (option.type !== 'select') return {}
+  const selected = (option.choices ?? []).find((choice) => String(choice.value) === String(value)) as PresetChoice | undefined
+  if (!selected?.apply || typeof selected.apply !== 'object' || Array.isArray(selected.apply)) return {}
+  return selected.apply
+}
+
 export function StationConfigForm({ provider, config, onChange }: { provider: StationProviderInfo; config: StationConfig; onChange: (config: StationConfig) => void }) {
   const declared = (provider.config_options ?? [])
     .filter((option) => !(provider.station_type === 'similar_artist' && option.key === 'seed_artist'))
@@ -299,7 +310,7 @@ export function StationConfigForm({ provider, config, onChange }: { provider: St
       <div className="station-config-category-heading"><span>{active.label}</span><small>Options provided by {provider.display_name}.</small></div>
       <div className="station-config-grid">
         {specialCategories.find((item) => item.id === active.id)?.content}
-        {active.options.sort((a, b) => Number(a.order ?? 100) - Number(b.order ?? 100)).map((option) => <ConfigOptionField key={option.key} option={option} value={config[option.key] ?? optionDefault(option)} onChange={(value) => onChange({ ...config, [option.key]: value })} />)}
+        {active.options.sort((a, b) => Number(a.order ?? 100) - Number(b.order ?? 100)).map((option) => <ConfigOptionField key={option.key} option={option} value={config[option.key] ?? optionDefault(option)} onChange={(value) => onChange({ ...config, [option.key]: value, ...choiceApply(option, value) })} />)}
       </div>
     </section> : null}
   </div>

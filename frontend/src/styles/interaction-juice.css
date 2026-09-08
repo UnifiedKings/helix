@@ -1,0 +1,247 @@
+/* --------------------------------------------------------------------------
+   Interaction juice
+   Small, feedback-focused motion for playback, queue, and station actions.
+
+   Helix's appearance_reduce_motion setting already injects a global rule that
+   collapses animation/transition durations to ~0ms, so every effect here is
+   automatically disabled by that setting. The media query below also respects
+   the operating system's reduced-motion preference.
+   -------------------------------------------------------------------------- */
+
+/* A track change remounts Artwork when its source changes. This makes the new
+   cover arrive instead of snapping into place, without delaying playback. */
+.now-playing > .artwork {
+  animation: helix-track-art-enter 220ms cubic-bezier(.2, .75, .25, 1);
+  transform-origin: 50% 50%;
+}
+
+@keyframes helix-track-art-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(3px) scale(.965);
+    filter: blur(1px);
+  }
+  65% {
+    opacity: 1;
+    transform: translateY(-1px) scale(1.008);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+/* Manual skips get directional feedback. The movement is intentionally tiny:
+   previous comes from the left, next comes from the right. */
+.playback-bar[data-skip-direction="next"] .now-playing > .artwork,
+.playback-bar[data-skip-direction="next"] .now-playing > .now-playing-info {
+  animation: helix-skip-next 210ms cubic-bezier(.2, .75, .25, 1);
+}
+
+.playback-bar[data-skip-direction="previous"] .now-playing > .artwork,
+.playback-bar[data-skip-direction="previous"] .now-playing > .now-playing-info {
+  animation: helix-skip-previous 210ms cubic-bezier(.2, .75, .25, 1);
+}
+
+@keyframes helix-skip-next {
+  0% { opacity: .58; transform: translateX(7px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes helix-skip-previous {
+  0% { opacity: .58; transform: translateX(-7px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+
+/* Rating controls should acknowledge a successful state change rather than
+   only changing color. The pop is intentionally small. */
+.rating-button[data-active="true"] svg {
+  animation: helix-rating-pop 190ms cubic-bezier(.2, .9, .25, 1.25);
+  transform-origin: 50% 50%;
+}
+
+@keyframes helix-rating-pop {
+  0% { transform: scale(.78); }
+  65% { transform: scale(1.13); }
+  100% { transform: scale(1); }
+}
+
+/* Make the main transport control feel pressable without adding another
+   persistent animation to the playbar. */
+.transport-main {
+  transition: transform 110ms ease, box-shadow 140ms ease, background 140ms ease;
+}
+
+.transport-main:active:not(:disabled) {
+  transform: scale(.94);
+}
+
+/* Queue rows move often, so motion stays short. The active-track arrival is
+   also used when playback advances naturally, not only when the user clicks. */
+.queue-panel-redesign .queue-row-redesign {
+  transition:
+    transform 150ms cubic-bezier(.2, .75, .25, 1),
+    opacity 130ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.queue-panel-redesign .queue-row-redesign.active {
+  animation: helix-queue-current-enter 210ms cubic-bezier(.2, .75, .25, 1);
+}
+
+@keyframes helix-queue-current-enter {
+  0% {
+    opacity: .68;
+    transform: translateX(5px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Newly appended queue items briefly arrive from the edge and receive a faint
+   accent wash. Existing rows do not animate merely because player state polls. */
+.queue-panel-redesign .queue-row-redesign.is-newly-added {
+  animation: helix-queue-add 300ms cubic-bezier(.2, .75, .25, 1);
+}
+
+@keyframes helix-queue-add {
+  0% {
+    opacity: .25;
+    transform: translateX(10px) scale(.992);
+    background: color-mix(in srgb, var(--accent) 16%, transparent);
+  }
+  70% {
+    opacity: 1;
+    transform: translateX(-1px) scale(1.002);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    background: transparent;
+  }
+}
+
+/* Removal feedback starts immediately, then the existing API call removes the
+   item. The component reads the computed animation duration, so Helix's Reduce
+   motion setting also removes the wait instead of causing an invisible delay. */
+.queue-panel-redesign .queue-row-redesign.is-removing {
+  pointer-events: none;
+  animation: helix-queue-remove 155ms ease forwards;
+}
+
+@keyframes helix-queue-remove {
+  0% {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(8px) scale(.985);
+  }
+}
+
+/* Existing drag logic supplies is-dragging. Give that state a physical lift
+   while leaving ordering and persistence behavior untouched. */
+.queue-panel-redesign .queue-row-redesign.is-dragging {
+  opacity: .78;
+  transform: scale(1.018);
+  background: color-mix(in srgb, var(--surface-raised) 82%, var(--accent-soft));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, .24);
+  z-index: 2;
+}
+
+.queue-list-redesign.is-reordering .queue-row-redesign:not(.is-dragging) {
+  transition-duration: 125ms;
+}
+
+/* Starting a station should acknowledge the click immediately, even if station
+   generation takes a moment. The existing `starting` state drives this. */
+.station-card-redesign.is-starting {
+  animation: helix-station-start-card 780ms ease-in-out infinite alternate;
+}
+
+.station-card-redesign.is-starting .station-art-wrap .artwork {
+  transform: scale(1.012);
+  transition: transform 180ms ease;
+}
+
+.station-floating-play[data-starting="true"] {
+  cursor: progress;
+  overflow: hidden;
+}
+
+.station-floating-play[data-starting="true"] > span {
+  opacity: 0;
+}
+
+.station-floating-play[data-starting="true"]::after {
+  content: "";
+  position: absolute;
+  width: 15px;
+  height: 15px;
+  left: 50%;
+  top: 50%;
+  margin-left: -9.5px;
+  margin-top: -9.5px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: helix-station-start-spinner 620ms linear infinite;
+}
+
+@keyframes helix-station-start-card {
+  from {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent);
+  }
+  to {
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent),
+      0 8px 22px color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+}
+
+@keyframes helix-station-start-spinner {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .now-playing > .artwork,
+  .playback-bar[data-skip-direction="next"] .now-playing > .artwork,
+  .playback-bar[data-skip-direction="next"] .now-playing > .now-playing-info,
+  .playback-bar[data-skip-direction="previous"] .now-playing > .artwork,
+  .playback-bar[data-skip-direction="previous"] .now-playing > .now-playing-info,
+  .rating-button[data-active="true"] svg,
+  .queue-panel-redesign .queue-row-redesign.active,
+  .queue-panel-redesign .queue-row-redesign.is-newly-added,
+  .queue-panel-redesign .queue-row-redesign.is-removing,
+  .station-card-redesign.is-starting,
+  .station-floating-play[data-starting="true"]::after {
+    animation: none !important;
+  }
+
+  .transport-main,
+  .queue-panel-redesign .queue-row-redesign,
+  .queue-list-redesign.is-reordering .queue-row-redesign:not(.is-dragging),
+  .station-card-redesign.is-starting .station-art-wrap .artwork {
+    transition: none !important;
+  }
+
+  .transport-main:active:not(:disabled),
+  .queue-panel-redesign .queue-row-redesign.is-dragging,
+  .station-card-redesign.is-starting .station-art-wrap .artwork {
+    transform: none !important;
+  }
+
+  .station-floating-play[data-starting="true"] > span {
+    opacity: 1;
+  }
+
+  .station-floating-play[data-starting="true"]::after {
+    display: none;
+  }
+}

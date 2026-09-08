@@ -29,3 +29,31 @@
 @import './rating-icons.css';
 @import './station-tune-fix.css';
 @import './responsive-shell.css';
+
+/* Big Picture is a true viewport overlay. Keeping the presentation fixed to
+   the viewport avoids inheriting any shell/playbar sizing and guarantees the
+   artwork/background layers reach the physical bottom edge of the screen. */
+.app-shell-big-picture {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-shell-big-picture .app-main-area,
+.big-picture-route-shell {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.big-picture-page {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  width: 100vw;
+  width: 100dvw;
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+}
