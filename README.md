@@ -24,6 +24,18 @@ Helix is still early software. It is usable, but expect rough edges, breaking ch
 - Optionally use slskd/Soulseek in the background to replace Helix-added tracks with verified higher-quality copies
 - Use custom station providers through a plugin system
 - Continue working with or without a configured Subsonic server, with unsupported features hidden or disabled
+- Optionally use [authentik](docs/authentik.md) for OpenID Connect single sign-on while keeping Helix local login available
+- Optionally use [Unsplash](docs/unsplash.md) to provide randomized music-themed login backgrounds
+
+## Optional integrations
+
+### authentik
+
+Helix can use authentik as an OpenID Connect identity provider for browser sign-in. Local Helix accounts remain available as a fallback, and new OIDC users can optionally be created automatically. See the [authentik setup guide](docs/authentik.md) for provider configuration, redirect URI, environment variables, account linking, and optional role synchronization.
+
+### Unsplash login backgrounds
+
+Helix can use the Unsplash API to pull a small pool of relevant landscape music images and randomly select one for the login screen. Search results are cached server-side so normal page views do not consume an API request each time, and the browser loads the selected image directly from Unsplash. See the [Unsplash setup guide](docs/unsplash.md) for API-key setup, caching, search terms, attribution, and rate-limit notes.
 
 ## Demo
 

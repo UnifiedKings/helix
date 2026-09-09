@@ -17,6 +17,14 @@ def setup_enabled(db: Session) -> bool:
     return user_count(db) == 0
 
 
+def create_session_for_user(db: Session, *, user: User) -> str:
+    """Create a Helix session for an already-authenticated user."""
+    token = new_session_token()
+    db.add(SessionToken(token=token, user_id=user.id))
+    db.commit()
+    return token
+
+
 def create_initial_admin(db: Session, *, username: str, password: str) -> tuple[User, str]:
     """Create the first admin user and session token."""
     user = User(username=username, password_hash=hash_password(password), role="admin", is_active=True)
@@ -24,9 +32,7 @@ def create_initial_admin(db: Session, *, username: str, password: str) -> tuple[
     db.commit()
     db.refresh(user)
 
-    token = new_session_token()
-    db.add(SessionToken(token=token, user_id=user.id))
-    db.commit()
+    token = create_session_for_user(db, user=user)
     return user, token
 
 
@@ -36,9 +42,7 @@ def authenticate_user(db: Session, *, username: str, password: str) -> tuple[Use
     if not user or not user.is_active or not verify_password(password, user.password_hash):
         return None, ""
 
-    token = new_session_token()
-    db.add(SessionToken(token=token, user_id=user.id))
-    db.commit()
+    token = create_session_for_user(db, user=user)
     return user, token
 
 
