@@ -169,6 +169,57 @@ Leave role synchronization disabled if you want Helix roles to be managed only i
 HELIX_OIDC_SYNC_ROLES=false
 ```
 
+
+## Environment variable reference
+
+| Variable | Default | What it does |
+|---|---|---|
+| `HELIX_OIDC_ENABLED` | `false` | Enables or disables OIDC login. When disabled, Helix only shows and uses its normal local authentication flow. |
+| `HELIX_OIDC_DISPLAY_NAME` | `authentik` | Controls the provider name shown on the Helix login page, for example `authentik`, `Keycloak`, or another OIDC provider name. |
+| `HELIX_OIDC_ISSUER` | empty | The OIDC issuer URL for the provider. For authentik this is typically the application-specific issuer, such as `https://auth.example.com/application/o/helix/`. Helix uses this to discover the provider's authorization, token, user-info, and JWKS endpoints. |
+| `HELIX_OIDC_CLIENT_ID` | empty | The OAuth/OIDC client ID assigned to Helix by the provider. |
+| `HELIX_OIDC_CLIENT_SECRET` | empty | The client secret assigned to Helix by the provider. Treat this as a secret and keep it server-side. |
+| `HELIX_OIDC_REDIRECT_URI` | empty | The exact callback URL the provider redirects the browser to after login. This must match the Strict redirect URI configured in authentik, for example `https://helix.example.com/auth/oidc/callback`. |
+| `HELIX_OIDC_SCOPES` | `openid profile email` | Space-separated OIDC scopes requested during login. `openid` is required for OIDC. `profile` and `email` provide common identity claims used for usernames and profile data. |
+| `HELIX_OIDC_USERNAME_CLAIM` | `preferred_username` | The claim Helix prefers when choosing the Helix username for a newly provisioned OIDC user. If the claim is unavailable, Helix can fall back to other identity data. |
+| `HELIX_OIDC_GROUPS_CLAIM` | `groups` | The claim Helix reads when checking OIDC group membership for optional role synchronization. |
+| `HELIX_OIDC_AUTO_CREATE_USERS` | `true` | When enabled, Helix automatically creates a local Helix user record the first time a previously unknown OIDC identity signs in. When disabled, the user must already exist or be linked before OIDC login can succeed. |
+| `HELIX_OIDC_ALLOW_FIRST_USER_ADMIN` | `false` | Controls whether the first successful OIDC login is allowed to create the initial Helix administrator account when no Helix users exist. The safer default is `false`; create the first admin locally instead. |
+| `HELIX_OIDC_AUTO_LINK_BY_USERNAME` | `false` | Allows Helix to link an OIDC identity to an existing local account when the usernames match. This is disabled by default because username matching alone is weaker than explicit identity linkage. |
+| `HELIX_OIDC_ADMIN_GROUP` | empty | Optional OIDC group name that should correspond to the Helix administrator role, for example `helix-admins`. This is used together with `HELIX_OIDC_SYNC_ROLES=true`. |
+| `HELIX_OIDC_SYNC_ROLES` | `false` | When enabled, Helix updates a user's Helix role based on membership in `HELIX_OIDC_ADMIN_GROUP` during OIDC login. When disabled, Helix roles remain managed inside Helix. |
+
+### Recommended starting configuration
+
+For a typical authentik deployment where you want OIDC sign-in but want Helix to retain control over roles:
+
+```env
+HELIX_OIDC_ENABLED=true
+HELIX_OIDC_DISPLAY_NAME=authentik
+HELIX_OIDC_ISSUER=https://auth.example.com/application/o/helix/
+HELIX_OIDC_CLIENT_ID=replace-with-client-id
+HELIX_OIDC_CLIENT_SECRET=replace-with-client-secret
+HELIX_OIDC_REDIRECT_URI=https://helix.example.com/auth/oidc/callback
+
+HELIX_OIDC_SCOPES=openid profile email
+HELIX_OIDC_USERNAME_CLAIM=preferred_username
+HELIX_OIDC_GROUPS_CLAIM=groups
+
+HELIX_OIDC_AUTO_CREATE_USERS=true
+HELIX_OIDC_ALLOW_FIRST_USER_ADMIN=false
+HELIX_OIDC_AUTO_LINK_BY_USERNAME=false
+
+HELIX_OIDC_ADMIN_GROUP=
+HELIX_OIDC_SYNC_ROLES=false
+```
+
+If you want authentik to control Helix administrator membership through a group:
+
+```env
+HELIX_OIDC_ADMIN_GROUP=helix-admins
+HELIX_OIDC_SYNC_ROLES=true
+```
+
 ## Complete environment reference
 
 ```env
