@@ -4,6 +4,7 @@ import { api } from '../api/client'
 import type { Capabilities, Playlist } from '../api/types'
 import { Artwork } from '../components/Artwork'
 import { PlaylistImportModal } from '../components/PlaylistImportModal'
+import { ShareLinkModal, type ShareTarget } from '../components/ShareLinkModal'
 import type { usePlayer } from '../hooks/usePlayer'
 import '../styles/create-playlist-modal.css'
 
@@ -71,6 +72,7 @@ export function PlaylistsPage() {
   const [importTarget, setImportTarget] = useState<Playlist | null>(null)
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const [subsonicBusyPlaylistId, setSubsonicBusyPlaylistId] = useState('')
+  const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null)
 
   async function load() {
     try {
@@ -293,6 +295,22 @@ export function PlaylistsPage() {
                     >
                       Export playlist
                     </button>
+                    <button
+                      type="button"
+                      className="menu-link"
+                      onClick={() => {
+                        closePlaylistMenus()
+                        setShareTarget({
+                          resourceType: 'playlist',
+                          resourceId: playlist.id,
+                          resourceSource: 'helix',
+                          title: playlist.name,
+                          artUrl: playlist.cover_url || '',
+                        })
+                      }}
+                    >
+                      Share playlist
+                    </button>
                     {capabilities?.features.subsonic_import ? (
                       <button
                         type="button"
@@ -407,6 +425,8 @@ export function PlaylistsPage() {
           </form>
         </div>
       ) : null}
+
+      <ShareLinkModal target={shareTarget} onClose={() => setShareTarget(null)} />
 
       <PlaylistImportModal
         open={Boolean(importTarget)}

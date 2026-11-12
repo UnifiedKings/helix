@@ -6,6 +6,7 @@ import { Artwork } from '../components/Artwork'
 import { ArtistLink } from '../components/ArtistLink'
 import { AlbumLink } from '../components/AlbumLink'
 import { PlaylistImportModal } from '../components/PlaylistImportModal'
+import { ShareLinkModal, type ShareTarget } from '../components/ShareLinkModal'
 import type { usePlayer } from '../hooks/usePlayer'
 import '../styles/playlist-detail-actions.css'
 
@@ -89,6 +90,7 @@ export function PlaylistEditPage() {
   const [subsonicQueuedTrackIds, setSubsonicQueuedTrackIds] = useState<Set<string>>(new Set())
   const [subsonicAvailability, setSubsonicAvailability] = useState<Record<string, boolean>>({})
   const [subsonicCheckingTrackIds, setSubsonicCheckingTrackIds] = useState<Set<string>>(new Set())
+  const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null)
 
   const playlist = detail?.playlist
   const isSystemPlaylist = Boolean(playlist?.system_key)
@@ -242,6 +244,22 @@ export function PlaylistEditPage() {
   function queueTrack(track: PlaylistTrack) {
     setOpenTrackMenuId('')
     player.run(() => api.queueSong(track))
+  }
+
+  function shareTrack(track: PlaylistTrack) {
+    setOpenTrackMenuId('')
+    const subsonicId = track.subsonic_song_id || ''
+    const ytVideoId = track.yt_video_id || ''
+    setShareTarget({
+      resourceType: 'track',
+      resourceId: subsonicId || ytVideoId,
+      resourceSource: subsonicId ? 'subsonic' : 'ytmusic',
+      title: track.title,
+      artist: track.artist,
+      album: track.album || '',
+      durationMs: track.duration_ms || 0,
+      artUrl: trackArtwork(track),
+    })
   }
 
   function trackIsInSubsonic(track: PlaylistTrack) {
@@ -464,6 +482,10 @@ export function PlaylistEditPage() {
                           <span className="playlist-track-menu-icon" aria-hidden="true">+</span>
                           <span>Add to queue</span>
                         </button>
+                        <button type="button" role="menuitem" onClick={() => shareTrack(track)}>
+                          <span className="playlist-track-menu-icon" aria-hidden="true">↗</span>
+                          <span>Share track</span>
+                        </button>
                         {capabilities?.features.subsonic_import && !trackIsInSubsonic(track) ? (
                           subsonicCheckingTrackIds.has(track.id) ? (
                             <button type="button" role="menuitem" disabled>
@@ -541,6 +563,8 @@ export function PlaylistEditPage() {
           </div>
         </aside>
       </section>
+
+      <ShareLinkModal target={shareTarget} onClose={() => setShareTarget(null)} />
 
       <PlaylistImportModal
         open={importOpen}
