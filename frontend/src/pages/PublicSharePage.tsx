@@ -14,6 +14,24 @@ function formatTime(seconds: number) {
   return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`
 }
 
+function PreviousIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14M18 6l-9 6 9 6Z" /></svg>
+}
+function NextIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M6 6.5 15 12 6 17.5V6.5Z" /></svg>
+}
+function PlayIcon({ playing }: { playing: boolean }) {
+  return playing
+    ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
+    : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5-11-6.5Z" /></svg>
+}
+function VolumeIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6l-5 4H4Z" fill="currentColor" stroke="none" /><path d="M16 9a5 5 0 0 1 0 6M19 6a9 9 0 0 1 0 12" /></svg>
+}
+function ExpandIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M4 15v5h5M20 15v5h-5" /></svg>
+}
+
 export function PublicSharePage() {
   const { token = '' } = useParams()
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -35,6 +53,7 @@ export function PublicSharePage() {
     const controller = new AbortController()
     setMedia(null)
     setError('')
+    playIntent.current = false
     fetch(`/api/public/shares/${encodeURIComponent(token)}`, { signal: controller.signal, cache: 'no-store' })
       .then(async response => {
         if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || 'Share unavailable')
@@ -126,33 +145,42 @@ export function PublicSharePage() {
     setActiveId(tracks.find(track => track.playable)?.queueId ?? null)
   }
 
+  function togglePlayback() {
+    const element = audioRef.current
+    if (!element || !active?.playable) return
+    if (element.paused) {
+      playIntent.current = true
+      void element.play().catch(() => { playIntent.current = false; setPlaying(false) })
+    } else {
+      playIntent.current = false
+      element.pause()
+    }
+  }
+
   if (error) return <main className="public-share-shell"><section className="public-share-error"><h1>Share unavailable</h1><p>{error}</p></section></main>
   if (!media) return <main className="public-share-shell"><p className="public-share-loading">Loading shared music…</p></main>
 
   return (
     <main className={`helix-share-shell ${bigPicture ? 'helix-share-big-picture' : ''}`}>
-      <audio
-        ref={audioRef}
-        onPlay={() => setPlaying(true)}
-        onPause={() => setPlaying(false)}
+      <audio ref={audioRef}
+        onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)}
         onTimeUpdate={event => setElapsed(event.currentTarget.currentTime)}
         onLoadedMetadata={event => setDuration(event.currentTarget.duration || 0)}
         onEnded={() => {
           if (repeat && audioRef.current) {
             audioRef.current.currentTime = 0
             void audioRef.current.play()
-          } else {
-            step(1)
-          }
-        }}
-      />
+          } else if (queue.length > 1) step(1)
+          else { playIntent.current = false; setPlaying(false) }
+        }} />
       <header className="helix-share-header">
-        <div className="helix-share-brand"><img src="/helix-logo.png" alt="" /><strong>Helix</strong><span>Shared music</span></div>
+        <div className="helix-share-brand">
+          <span className="sidebar-brand-logo" aria-hidden="true" />
+          <strong>Helix</strong><span>Shared music</span>
+        </div>
         <div className="helix-share-header-actions">
           <button type="button" onClick={() => void navigator.clipboard.writeText(window.location.href)}>Copy link</button>
-          <button type="button" onClick={() => setBigPicture(value => !value)}>
-            {bigPicture ? 'Exit Big Picture' : 'Big Picture'}
-          </button>
+          <button type="button" onClick={() => setBigPicture(value => !value)}>{bigPicture ? 'Exit Big Picture' : 'Big Picture'}</button>
         </div>
       </header>
 
@@ -170,7 +198,7 @@ export function PublicSharePage() {
       ) : (
         <section className="helix-share-center" aria-label="Shared queue">
           <div className="helix-share-queue-heading">
-            <div><span className="helix-share-overline">SHARED {media.type.toUpperCase()}</span><h1>Queue</h1><p>{media.title} · {queue.length} tracks</p></div>
+            <div><span className="helix-share-overline">SHARED {media.type.toUpperCase()}</span><h1>Queue</h1><p>{media.title} · {queue.length} {queue.length === 1 ? 'track' : 'tracks'}</p></div>
             <div className="helix-share-queue-actions">
               <button type="button" onClick={shuffle} disabled={queue.length < 2}>Shuffle</button>
               <button type="button" aria-pressed={repeat} onClick={() => setRepeat(value => !value)}>Repeat {repeat ? 'on' : 'off'}</button>
@@ -180,8 +208,7 @@ export function PublicSharePage() {
           <div className="helix-share-queue-list">
             {queue.map((item, index) => (
               <div key={item.queueId} className={`helix-share-queue-row queue-row queue-row-redesign ${item.queueId === activeId ? 'active' : ''}`}
-                draggable onDragStart={() => setDragId(item.queueId)}
-                onDragOver={event => event.preventDefault()}
+                draggable onDragStart={() => setDragId(item.queueId)} onDragOver={event => event.preventDefault()}
                 onDrop={event => { event.preventDefault(); if (dragId !== null) move(dragId, item.queueId); setDragId(null) }}
                 onDragEnd={() => setDragId(null)}>
                 <span className="queue-drag-handle" aria-label="Drag to reorder">⁝⁝</span>
@@ -202,22 +229,20 @@ export function PublicSharePage() {
         </section>
       )}
 
-      <footer className="helix-share-playbar" aria-label="Music player">
-        <div className="helix-share-now">
-          <Artwork src={active?.art_url || media.art_url || ''} alt="" size="sm" />
-          <div><strong>{active?.title || 'Nothing playing'}</strong><span>{active?.artist || ''}</span></div>
+      <footer className="helix-share-playbar playback-bar playback-style-helix" aria-label="Music player">
+        <div className="now-playing">
+          <Artwork src={active?.art_url || media.art_url || ''} alt={active?.title || 'No track'} />
+          <div className="now-playing-info">
+            <div className="eyebrow">Now Playing</div>
+            <div className="title">{active?.title || 'Nothing selected'}</div>
+            <div className="muted now-playing-meta">{active?.artist || ''}{active?.album ? ` • ${active.album}` : ''}</div>
+          </div>
         </div>
-        <div className="helix-share-playback">
-          <div className="helix-share-transport">
-            <button type="button" aria-label="Previous track" onClick={() => step(-1)}>⏮</button>
-            <button type="button" className="helix-share-play" aria-label={playing ? 'Pause' : 'Play'} disabled={!active}
-              onClick={() => {
-                const element = audioRef.current
-                if (!element) return
-                if (element.paused) { playIntent.current = true; void element.play().catch(() => setPlaying(false)) }
-                else { playIntent.current = false; element.pause() }
-              }}>{playing ? 'Ⅱ' : '▶'}</button>
-            <button type="button" aria-label="Next track" onClick={() => step(1)}>⏭</button>
+        <div className="transport-stack">
+          <div className="transport">
+            <button className="icon-button transport-side transport-previous" type="button" aria-label="Previous track" onClick={() => step(-1)} disabled={!active}><PreviousIcon /></button>
+            <button className="primary transport-main" type="button" aria-label={playing ? 'Pause' : 'Play'} disabled={!active} onClick={togglePlayback}><PlayIcon playing={playing} /></button>
+            <button className="icon-button transport-side transport-next" type="button" aria-label="Next track" onClick={() => step(1)} disabled={!active}><NextIcon /></button>
           </div>
           <div className="helix-share-seek">
             <span>{formatTime(elapsed)}</span>
@@ -227,9 +252,9 @@ export function PublicSharePage() {
           </div>
         </div>
         <div className="helix-share-extra">
-          <label aria-label="Volume">♫ <input type="range" aria-label="Volume" min={0} max={1} step="0.01" value={volume}
+          <label aria-label="Volume"><VolumeIcon /><input type="range" aria-label="Volume" min={0} max={1} step="0.01" value={volume}
             onChange={event => { const value = Number(event.target.value); setVolume(value); if (audioRef.current) audioRef.current.volume = value }} /></label>
-          <button type="button" onClick={() => setBigPicture(value => !value)} aria-label={bigPicture ? 'Exit Big Picture' : 'Big Picture'}>⛶</button>
+          <button type="button" onClick={() => setBigPicture(value => !value)} aria-label={bigPicture ? 'Exit Big Picture' : 'Big Picture'}><ExpandIcon /></button>
         </div>
       </footer>
     </main>
