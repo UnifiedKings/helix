@@ -6,15 +6,7 @@ import os
 import sys
 from pathlib import Path
 
-# Album imports already contain duplicate/partial-album detection in
-# routers.subsonic_add, but that protection was opt-in and defaulted off.
-# Make duplicate prevention the normal Helix behavior while preserving an
-# explicit HELIX_SUBSONIC_ADD_SKIP_EXISTING_ALBUM_TRACKS=false override.
 os.environ.setdefault("HELIX_SUBSONIC_ADD_SKIP_EXISTING_ALBUM_TRACKS", "true")
-
-# Navidrome/Subsonic album search behavior varies enough that a single
-# "<album> <artist>" search can miss an album that is already present.
-# Install the broader album candidate resolver before requests are handled.
 from .album_duplicate_guard import install_album_duplicate_guard
 install_album_duplicate_guard()
 
@@ -22,8 +14,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
-from starlette.responses import FileResponse
+from starlette.responses import Response, FileResponse
 
 from .db import SessionLocal, db_watchdog_loop, init_db
 from .routers.admin import router as admin_router
@@ -51,6 +42,7 @@ from .routers.ytmusic import router as ytmusic_router
 from .routers.user_settings import router as user_settings_router
 from .routers.realtime import router as realtime_router
 from .routers.quality_upgrades import router as quality_upgrades_router
+from .routers.shares import router as shares_router
 
 logging.basicConfig(
     level=getattr(logging, os.getenv("HELIX_LOG_LEVEL", "INFO").upper(), logging.INFO),
@@ -133,33 +125,26 @@ app.add_middleware(
 
 @app.on_event("startup")
 def _startup():
-    # quality_models is imported by the quality router above before init_db(),
-    # so its tables are included in Base.metadata.create_all().
     init_db()
-
     from .realtime import HUB
     try:
         HUB.bind_loop()
     except RuntimeError:
         pass
-
     try:
         asyncio.get_event_loop().create_task(db_watchdog_loop())
     except Exception:
         logging.getLogger(__name__).exception("Failed to start db watchdog")
-
     try:
         from .lobby_cleanup import lobby_cleanup_loop
         asyncio.get_event_loop().create_task(lobby_cleanup_loop())
     except Exception:
         logging.getLogger(__name__).exception("Failed to start lobby cleanup loop")
-
     try:
         from .lobby_station import lobby_station_monitor_loop
         asyncio.get_event_loop().create_task(lobby_station_monitor_loop())
     except Exception:
         logging.getLogger(__name__).exception("Failed to start lobby station monitor")
-
     try:
         from .quality_upgrade_service import quality_upgrade_worker_loop
         asyncio.get_event_loop().create_task(quality_upgrade_worker_loop())
@@ -211,7 +196,7 @@ app.include_router(quality_upgrades_router)
 app.include_router(realtime_router)
 app.include_router(user_settings_router)
 app.include_router(lyrics_router)
-
+app.include_router(shares_router)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
 

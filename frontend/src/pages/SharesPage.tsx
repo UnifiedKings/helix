@@ -1,150 +1,177 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { api } from '../api/client'
-import type { Playlist, SearchAlbum, SearchSong } from '../api/types'
+import type { Playlist, SearchAlbum, SearchMode, SearchSong } from '../api/types'
+import { Artwork } from '../components/Artwork'
 import '../styles/shares.css'
+import '../styles/shares-management.css'
 
+type Kind = 'track' | 'album' | 'playlist'
+type Candidate = {
+  type: Kind
+  id: string
+  source: 'subsonic' | 'ytmusic' | 'helix'
+  title: string
+  artist: string
+  album: string
+  art: string
+  duration_ms: number
+}
 type Share = {
   token: string
-  resource_type: string
-  resource_id: string
-  resource_source?: string
   title: string
   artist?: string
-  album?: string
   art_url?: string
-  created_at: string
+  resource_type: string
   expires_at?: string | null
   expired: boolean
   url: string
 }
-
 type Config = { expiration_days: number[]; default_expiration_days: number }
 
-type Candidate = {
-  type: 'track' | 'album' | 'playlist'
-  id: string
-  source: 'subsonic' | 'ytmusic' | 'helix'
-  title: string
-  subtitle: string
-  artist?: string
-  album?: string
-  duration_ms?: number
-  art?: string
-}
+const modes: { id: SearchMode; label: string }[] = [
+  { id: 'hybrid', label: 'All' },
+  { id: 'subsonic', label: 'Library' },
+  { id: 'ytmusic', label: 'YTMusic' },
+]
 
-async function json<T>(path: string, options: RequestInit = {}): Promise<T> {
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(path, {
-    credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
     ...options,
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
   })
   const body = await response.json().catch(() => null)
-  if (!response.ok) throw new Error(body?.detail || 'Request failed')
+  if (!response.ok) throw new Error(body?.detail || `Request failed (${response.status})`)
   return body as T
 }
 
-function songCandidate(song: SearchSong): Candidate | null {
-  const subsonicId = song.subsonic_song_id || ''
-  const ytVideoId = song.yt_video_id || song.video_id || song.videoId || ''
-  const id = subsonicId || ytVideoId
+function fromSong(song: SearchSong): Candidate | null {
+  const library = Boolean(song.subsonic_song_id)
+  const id = library ? song.subsonic_song_id : (song.yt_video_id || song.video_id || song.videoId)
   if (!id) return null
   return {
-    type: 'track',
-    id,
-    source: subsonicId ? 'subsonic' : 'ytmusic',
-    title: song.title,
-    subtitle: `${song.artist}${song.album ? ` · ${song.album}` : ''}`,
-    artist: song.artist,
-    album: song.album || '',
-    duration_ms: song.duration_ms ?? (song.duration_seconds ? song.duration_seconds * 1000 : 0),
+    type: 'track', id, source: library ? 'subsonic' : 'ytmusic',
+    title: song.title, artist: song.artist, album: song.album || '',
     art: song.art_url || song.thumbnail_url || '',
+    duration_ms: song.duration_ms || (song.duration_seconds || 0) * 1000,
   }
 }
 
-function albumCandidate(album: SearchAlbum): Candidate | null {
-  const subsonicId = album.subsonic_album_id || (album.source === 'subsonic' ? album.browse_id : '') || ''
-  const ytBrowseId = album.yt_browse_id || album.browse_id || album.browseId || ''
-  const id = subsonicId || ytBrowseId
+function fromAlbum(album: SearchAlbum): Candidate | null {
+  const library = album.source === 'subsonic' || Boolean(album.subsonic_album_id)
+  const id = library
+    ? (album.subsonic_album_id || album.browse_id)
+    : (album.yt_browse_id || album.browse_id || album.browseId)
   if (!id) return null
   return {
-    type: 'album',
-    id,
-    source: subsonicId ? 'subsonic' : 'ytmusic',
-    title: album.title,
-    subtitle: album.artist || '',
-    artist: album.artist || '',
-    art: album.art_url || album.thumbnail_url || '',
+    type: 'album', id, source: library ? 'subsonic' : 'ytmusic',
+    title: album.title, artist: album.artist || '', album: '',
+    art: album.art_url || album.thumbnail_url || '', duration_ms: 0,
   }
+}
+
+function urlFor(share: Share) {
+  return new URL(share.url, window.location.origin).toString()
 }
 
 export function SharesPage() {
-  const [shares, setShares] = useState<Share[]>([])
-  const [config, setConfig] = useState<Config>({ expiration_days: [1, 7, 30, 365, 0], default_expiration_days: 30 })
-  const [kind, setKind] = useState<'track' | 'album' | 'playlist'>('track')
+  const [kind, setKind] = useState<Kind>('track')
+  const [mode, setMode] = useState<SearchMode>('hybrid')
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<Candidate[]>([])
   const [playlists, setPlaylists] = useState<Playlist[]>([])
-  const [candidate, setCandidate] = useState<Candidate | null>(null)
+  const [shares, setShares] = useState<Share[]>([])
+  const [selected, setSelected] = useState<Candidate | null>(null)
+  const [config, setConfig] = useState<Config>({ expiration_days: [1, 7, 30, 365, 0], default_expiration_days: 30 })
   const [days, setDays] = useState(30)
-  const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const [newUrl, setNewUrl] = useState('')
+  const [searched, setSearched] = useState(false)
+  const searchSequence = useRef(0)
 
-  const load = () => json<Share[]>('/api/shares').then(setShares).catch((err) => setError(err.message))
+  async function loadShares() {
+    setShares(await request<Share[]>('/api/shares'))
+  }
 
   useEffect(() => {
-    load()
-    json<Config>('/api/shares/config')
-      .then((next) => {
-        setConfig(next)
-        setDays(next.default_expiration_days)
-      })
-      .catch(() => {})
-    api.playlists().then(setPlaylists).catch(() => {})
+    void loadShares().catch(err => setError(String(err.message)))
+    void request<Config>('/api/shares/config').then(next => {
+      setConfig(next)
+      setDays(next.default_expiration_days)
+    }).catch(() => {})
+    void api.playlists().then(setPlaylists).catch(() => {})
   }, [])
 
-  async function search(event: FormEvent) {
-    event.preventDefault()
-    if (!query.trim()) return
+  async function runSearch(nextMode: SearchMode, nextKind: Kind, nextQuery: string) {
+    const term = nextQuery.trim()
+    if (!term || nextKind === 'playlist') return
+    const sequence = ++searchSequence.current
     setBusy(true)
     setError('')
+    setSelected(null)
+    setNewUrl('')
     try {
-      // Hybrid search is intentional: shares can point at either an existing
-      // Subsonic item or a Helix/YTMusic discovery result.
-      const response = await api.search(query.trim(), 'hybrid')
-      if (kind === 'track') {
-        setResults((response.songs || []).map(songCandidate).filter((item): item is Candidate => Boolean(item)))
-      } else {
-        setResults((response.albums || []).map(albumCandidate).filter((item): item is Candidate => Boolean(item)))
-      }
+      const response = await api.search(term, nextMode)
+      if (sequence !== searchSequence.current) return
+      setResults(nextKind === 'track'
+        ? response.songs.map(fromSong).filter((item): item is Candidate => item !== null)
+        : response.albums.map(fromAlbum).filter((item): item is Candidate => item !== null))
+      setSearched(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Search failed')
+      if (sequence === searchSequence.current) setError(err instanceof Error ? err.message : 'Search failed')
     } finally {
-      setBusy(false)
+      if (sequence === searchSequence.current) setBusy(false)
     }
   }
 
-  async function create() {
-    if (!candidate) return
+  function submitSearch(event: FormEvent) {
+    event.preventDefault()
+    void runSearch(mode, kind, query)
+  }
+
+  function changeKind(next: Kind) {
+    searchSequence.current++
+    setKind(next)
+    setSelected(null)
+    setNewUrl('')
+    setResults([])
+    setSearched(false)
+    setBusy(false)
+  }
+
+  function changeMode(next: SearchMode) {
+    setMode(next)
+    setResults([])
+    setSelected(null)
+    setSearched(false)
+    if (query.trim()) void runSearch(next, kind, query)
+  }
+
+  async function createShare() {
+    if (!selected || busy) return
     setBusy(true)
     setError('')
     try {
-      const share = await json<Share>('/api/shares', {
+      const share = await request<Share>('/api/shares', {
         method: 'POST',
         body: JSON.stringify({
-          resource_type: candidate.type,
-          resource_id: candidate.id,
-          resource_source: candidate.source,
+          resource_type: selected.type,
+          resource_id: selected.id,
+          resource_source: selected.source,
+          title: selected.title,
+          artist: selected.artist,
+          album: selected.album,
+          art_url: selected.art,
+          duration_ms: selected.duration_ms,
           expiration_days: days,
-          title: candidate.title,
-          artist: candidate.artist || '',
-          album: candidate.album || '',
-          duration_ms: candidate.duration_ms || 0,
-          art_url: candidate.art || '',
         }),
       })
-      await navigator.clipboard?.writeText(`${window.location.origin}${share.url}`).catch(() => {})
-      setCandidate(null)
-      load()
+      const url = urlFor(share)
+      setNewUrl(url)
+      setSelected(null)
+      await loadShares()
+      try { await navigator.clipboard.writeText(url) } catch { /* URL remains visible */ }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create share')
     } finally {
@@ -152,137 +179,144 @@ export function SharesPage() {
     }
   }
 
-  async function remove(token: string) {
-    if (!confirm('Revoke this share link? The music itself will not be changed.')) return
-    await json(`/api/shares/${encodeURIComponent(token)}`, { method: 'DELETE' })
-    load()
+  async function revoke(share: Share) {
+    if (!window.confirm(`Revoke the link for "${share.title}"?`)) return
+    try {
+      await request(`/api/shares/${encodeURIComponent(share.token)}`, { method: 'DELETE' })
+      await loadShares()
+      if (newUrl === urlFor(share)) setNewUrl('')
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not revoke link')
+    }
   }
 
-  function copy(share: Share) {
-    void navigator.clipboard.writeText(`${window.location.origin}${share.url}`)
+  async function copy(url: string) {
+    try { await navigator.clipboard.writeText(url) }
+    catch { setError('Could not copy the link. Please copy it manually.') }
   }
 
   const candidates: Candidate[] = kind === 'playlist'
-    ? playlists.map((playlist) => ({
-        type: 'playlist',
-        id: playlist.id,
-        source: 'helix',
-        title: playlist.name,
-        subtitle: `${playlist.track_count ?? 0} tracks`,
-        art: playlist.cover_url,
+    ? playlists.map(playlist => ({
+        type: 'playlist', id: playlist.id, source: 'helix',
+        title: playlist.name, artist: `${playlist.track_count || 0} tracks`,
+        album: '', art: playlist.cover_url || '', duration_ms: 0,
       }))
     : results
 
   return (
-    <div className="page-stack shares-page">
-      <header>
-        <span className="eyebrow">Read-only public playback</span>
+    <div className="page-stack shares-page shares-management">
+      <header className="shares-management-header">
         <h1>Shares</h1>
-        <p className="muted">
-          Create revocable links for tracks and albums from Helix search, plus live Helix playlists.
-          Public listeners can play, seek, and control their own volume without changing your library.
-        </p>
+        <p className="muted">Create links for music and manage access to your shared collections.</p>
       </header>
 
-      {error ? <div className="error-banner">{error}</div> : null}
+      {error && <div className="error-banner" role="alert">{error}</div>}
 
       <section className="share-create-card">
-        <div className="share-tabs">
-          {(['track', 'album', 'playlist'] as const).map((type) => (
-            <button
-              key={type}
-              className={kind === type ? 'active' : ''}
-              onClick={() => {
-                setKind(type)
-                setResults([])
-                setCandidate(null)
-              }}
-            >
-              {type[0].toUpperCase() + type.slice(1)}
-            </button>
+        <h2>Create a share</h2>
+        <div className="share-tabs" role="group" aria-label="Music type">
+          {(['track', 'album', 'playlist'] as const).map(item => (
+            <button type="button" key={item} className={kind === item ? 'active' : ''}
+              onClick={() => changeKind(item)}>{item[0].toUpperCase() + item.slice(1)}</button>
           ))}
         </div>
 
-        {kind !== 'playlist' ? (
-          <form onSubmit={search} className="share-search">
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder={`Search Helix ${kind}s…`}
-            />
-            <button className="primary" disabled={busy}>Search</button>
-          </form>
-        ) : null}
+        {kind !== 'playlist' && (
+          <>
+            <form className="share-search" onSubmit={submitSearch}>
+              <input aria-label="Search music" value={query} onChange={event => setQuery(event.target.value)}
+                placeholder={`Search ${kind === 'track' ? 'tracks' : 'albums'}…`} />
+              <button type="submit" className="primary" disabled={busy || !query.trim()}>
+                {busy ? 'Searching…' : 'Search'}
+              </button>
+            </form>
+            <div className="search-tabs share-search-modes" role="group" aria-label="Search source">
+              {modes.map(item => (
+                <button type="button" key={item.id}
+                  className={`tab-button ${mode === item.id ? 'active' : ''}`}
+                  aria-pressed={mode === item.id}
+                  onClick={() => changeMode(item.id)}>{item.label}</button>
+              ))}
+            </div>
+          </>
+        )}
 
-        <div className="share-candidates">
-          {candidates.map((item) => (
-            <button
-              key={`${item.type}-${item.source}-${item.id}`}
-              onClick={() => setCandidate(item)}
-              className={candidate?.id === item.id && candidate?.source === item.source ? 'selected' : ''}
-            >
-              {item.art ? <img src={item.art} alt="" /> : <span className="share-art-placeholder" />}
-              <div>
-                <strong>{item.title}</strong>
-                <span>{item.subtitle}</span>
-                {item.type !== 'playlist' ? <small>{item.source === 'subsonic' ? 'Subsonic' : 'Helix discovery'}</small> : null}
-              </div>
+        <div className="share-results-heading">
+          <strong>{kind === 'playlist' ? 'Your playlists' : 'Search results'}</strong>
+          <span>{candidates.length ? `${candidates.length} available` : ''}</span>
+        </div>
+        <div className="share-candidates" aria-label="Choose music to share">
+          {candidates.map(item => (
+            <button type="button" key={`${item.type}:${item.source}:${item.id}`}
+              className={selected?.id === item.id && selected?.source === item.source ? 'selected' : ''}
+              onClick={() => { setSelected(item); setNewUrl('') }}>
+              <Artwork src={item.art} alt="" size="sm" />
+              <span className="share-candidate-info">
+                <strong title={item.title}>{item.title}</strong>
+                <small title={`${item.artist}${item.album ? ` · ${item.album}` : ''}`}>
+                  {item.artist}{item.album ? ` · ${item.album}` : ''}
+                </small>
+              </span>
+              <span className="share-candidate-source">{item.source === 'subsonic' ? 'Library' : item.source === 'ytmusic' ? 'YTMusic' : 'Playlist'}</span>
+              <span className="share-candidate-action">{selected?.id === item.id && selected?.source === item.source ? '✓' : '+'}</span>
             </button>
           ))}
+          {!candidates.length && (
+            <p className="muted share-empty">
+              {kind === 'playlist' ? 'No playlists found.' : busy ? 'Searching…' : searched ? 'No results found.' : 'Search to find music to share.'}
+            </p>
+          )}
         </div>
 
-        {candidate ? (
+        {selected && (
           <div className="share-create-footer">
-            <div>
-              <strong>Share {candidate.title}</strong>
-              <label>
-                Expires
-                <select value={days} onChange={(event) => setDays(Number(event.target.value))}>
-                  {config.expiration_days.map((value) => (
-                    <option key={value} value={value}>
-                      {value === 0 ? 'Never' : value === 1 ? '1 day' : `${value} days`}
-                    </option>
+            <div className="share-selection">
+              <strong title={selected.title}>Selected: {selected.title}</strong>
+              <label>Expires
+                <select value={days} onChange={event => setDays(Number(event.target.value))}>
+                  {config.expiration_days.map(value => (
+                    <option value={value} key={value}>{value === 0 ? 'Never' : value === 1 ? '1 day' : `${value} days`}</option>
                   ))}
                 </select>
               </label>
             </div>
-            <button className="primary" onClick={create} disabled={busy}>Create &amp; copy link</button>
+            <button type="button" className="primary" disabled={busy} onClick={() => void createShare()}>
+              {busy ? 'Creating…' : 'Create & copy link'}
+            </button>
           </div>
-        ) : null}
+        )}
+        {newUrl && (
+          <div className="share-created-link">
+            <strong>New share link</strong>
+            <div className="share-created-link-row">
+              <input readOnly value={newUrl} aria-label="New share URL" onFocus={event => event.currentTarget.select()} />
+              <button type="button" onClick={() => void copy(newUrl)}>Copy</button>
+              <a href={newUrl} target="_blank" rel="noopener noreferrer">Open</a>
+            </div>
+          </div>
+        )}
       </section>
 
-      <section>
-        <h2>Existing shares</h2>
+      <section className="share-existing-section">
+        <h2>Your share links</h2>
         <div className="share-list">
-          {shares.length ? shares.map((share) => (
+          {shares.map(share => (
             <article key={share.token} className={share.expired ? 'expired' : ''}>
               <div className="share-list-main">
-                {share.art_url ? (
-                  <img className="share-list-art" src={share.art_url} alt="" />
-                ) : (
-                  <span className="share-list-art share-art-placeholder" aria-hidden="true" />
-                )}
+                <Artwork src={share.art_url || ''} alt="" size="sm" />
                 <div className="share-list-copy">
-                  <span className="eyebrow">
-                    {share.resource_type}{share.resource_source && share.resource_source !== 'helix' ? ` · ${share.resource_source}` : ''}
-                  </span>
-                  <strong>{share.title}</strong>
-                  {share.artist ? <span className="share-list-artist">{share.artist}</span> : null}
-                  <small>
-                    {share.expired
-                      ? 'Expired'
-                      : share.expires_at
-                        ? `Expires ${new Date(share.expires_at).toLocaleString()}`
-                        : 'Never expires'}
-                  </small>
+                  <strong title={share.title}>{share.title}</strong>
+                  <small>{share.resource_type} · {share.expired ? 'Expired' : share.expires_at ? `Expires ${new Date(share.expires_at).toLocaleDateString()}` : 'Never expires'}</small>
                 </div>
               </div>
               <div className="share-list-actions">
-                <button onClick={() => copy(share)} disabled={share.expired}>Copy link</button>
-                <button className="danger" onClick={() => void remove(share.token)}>Revoke</button>
+                <button type="button" disabled={share.expired} onClick={() => void copy(urlFor(share))}>Copy</button>
+                <a href={urlFor(share)} target="_blank" rel="noopener noreferrer">Open</a>
+                <button type="button" className="danger" onClick={() => void revoke(share)}>Revoke</button>
               </div>
             </article>
-          )) : <p className="muted">No share links yet.</p>}
+          ))}
+          {!shares.length && <p className="muted">No share links yet.</p>}
         </div>
       </section>
     </div>

@@ -20,28 +20,16 @@ import { AdminSettingsPage } from './pages/AdminSettingsPage'
 import { SetupPage } from './pages/SetupPage'
 import { StationsPage } from './pages/StationsPage'
 import { QualityUpgradesPage } from './pages/QualityUpgradesPage'
+import { SharesPage } from './pages/SharesPage'
+import { PublicSharePage } from './pages/PublicSharePage'
 import { installPersistentApiCache, subscribePersistentCache } from './api/persistentCache'
 
 installPersistentApiCache()
 
-function CacheRefreshBoundary({
-  prefixes,
-  children,
-}: {
-  prefixes: string[]
-  children: ReactElement
-}) {
+function CacheRefreshBoundary({ prefixes, children }: { prefixes: string[]; children: ReactElement }) {
   const [revision, setRevision] = useState(0)
   const prefixKey = prefixes.join('|')
-
-  useEffect(() => (
-    subscribePersistentCache(prefixes, () => {
-      setRevision((current) => current + 1)
-    })
-  ), [prefixKey])
-
-  // Only remount the current route page. Layout, queue, playbar, player state,
-  // and navigation remain mounted and unaffected.
+  useEffect(() => subscribePersistentCache(prefixes, () => setRevision(current => current + 1)), [prefixKey])
   return <div key={revision} style={{ display: 'contents' }}>{children}</div>
 }
 
@@ -55,6 +43,8 @@ export function App() {
           <Route path="/setup" element={<SetupPage />} />
           <Route path="/join/:inviteCode?" element={<JoinLobbyPage />} />
           <Route path="/lobby/:lobbyId" element={<LobbyPage />} />
+          <Route path="/share/:token" element={<PublicSharePage />} />
+          <Route path="/share-player/:token" element={<PublicSharePage />} />
           <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
             <Route index element={<HomePage />} />
             <Route path="big-picture" element={<BigPicturePage />} />
@@ -65,6 +55,7 @@ export function App() {
             <Route path="artists/:browseId" element={<ArtistDetailPage />} />
             <Route path="albums/:browseId" element={<AlbumDetailPage />} />
             <Route path="history" element={<CacheRefreshBoundary prefixes={['history:recent', 'stations:']}><HistoryPage /></CacheRefreshBoundary>} />
+            <Route path="shares" element={<SharesPage />} />
             <Route path="lobbies" element={<LobbiesPage />} />
             <Route path="quality-upgrades" element={<QualityUpgradesPage />} />
             <Route path="settings" element={<CacheRefreshBoundary prefixes={['user-settings']}><UserSettingsPage /></CacheRefreshBoundary>} />
