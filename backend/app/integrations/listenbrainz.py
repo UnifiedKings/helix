@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-import os
+import logging
 import time
 import random
 import socket
@@ -12,6 +12,12 @@ import json
 import httpx
 
 from ..cache import TTLCache
+
+LOG = logging.getLogger("helix.listenbrainz")
+
+# Warn once per process when a scrobble/now-playing is attempted without a token,
+# so a misconfigured server isn't silently quiet.
+_NO_TOKEN_WARNED = False
 
 
 # Simple in-memory TTL cache
@@ -32,11 +38,6 @@ def _cache_set(key: str, value):
     _lb_cache_expiry[key] = time.time() + LB_CACHE_TTL
 
 
-async def _lb_get(session: aiohttp.ClientSession, url: str, params=None):
-    async with session.get(url, params=params) as resp:
-        if resp.status != 200:
-            raise RuntimeError(f"ListenBrainz API error {resp.status}")
-        return await resp.json()
 def _now_s() -> float:
     return time.time()
 
@@ -132,7 +133,7 @@ class ListenBrainzClient:
         if require_auth and not self._token:
             raise RuntimeError(
                 "ListenBrainz auth token is required for this endpoint. "
-                "Set LISTENBRAINZ_TOKEN in the environment."
+                "Set a ListenBrainz token in Admin Settings."
             )
 
         await self._throttle()
@@ -175,22 +176,172 @@ class ListenBrainzClient:
             raise last_exc
         return {}
 
+    async def post_json(
+        self,
+        path: str,
+        json_body: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        # Scrobble/now-playing submission: without a token there is nothing to do.
+        if not self._token:
+            global _NO_TOKEN_WARNED
+            if not _NO_TOKEN_WARNED:
+                _NO_TOKEN_WARNED = True
+                LOG.warning(
+                    "ListenBrainz submit skipped (scrobble/now-playing): no token configured. "
+                    "Set a ListenBrainz token in Admin Settings."
+                )
+            return {}
+
+        await self._throttle()
+        url = f"{LB_BASE}{path}"
+        headers = {"Content-Type": "application/json"}
+
+        last_exc: Optional[Exception] = None
+        for attempt in range(self._max_retries + 1):
+            try:
+                r = await self._client.post(url, json=json_body, headers=headers)
+
+                if r.status_code in (429, 503):
+                    wait_s = self._compute_backoff_seconds(r)
+                    if attempt < self._max_retries:
+                        await asyncio.sleep(wait_s)
+                        continue
+
+                if 400 <= r.status_code:
+                    snip = _safe_snip(r.content)
+                    raise httpx.HTTPStatusError(
+                        f"ListenBrainz {r.status_code} for {path} body='{snip}'",
+                        request=r.request,
+                        response=r,
+                    )
+
+                return r.json() if r.content else {}
+
+            except Exception as e:
+                last_exc = e
+                if attempt < self._max_retries:
+                    await asyncio.sleep(0.4 * (attempt + 1))
+                    continue
+                break
+
+        if last_exc:
+            raise last_exc
+        return {}
+
 
 _lb_client: Optional[ListenBrainzClient] = None
 
+_LB_USER_AGENT = "Helix/0.0.18 (contact@aidanbrennan.dev)"
 
-def _client() -> ListenBrainzClient:
+
+def _client_for_token(token: str) -> ListenBrainzClient:
+    token = str(token or "").strip()
     global _lb_client
-    if _lb_client is None:
-        token = os.getenv("LISTENBRAINZ_TOKEN", "").strip()
-        _lb_client = ListenBrainzClient(
-            user_agent="Helix/0.0.18 (contact@aidanbrennan.dev)",
-            token=token,
-            min_interval_ms=250,
-            timeout_s=20,
-            max_retries=2,
-        )
+    if _lb_client is not None and _lb_client._token == token:
+        return _lb_client
+
+    old = _lb_client
+    _lb_client = ListenBrainzClient(
+        user_agent=_LB_USER_AGENT,
+        token=token,
+        min_interval_ms=250,
+        timeout_s=20,
+        max_retries=2,
+    )
+    if old is not None:
+        try:
+            asyncio.get_running_loop().create_task(old.close())
+        except RuntimeError:
+            pass
     return _lb_client
+
+
+def _track_metadata(
+    track_name: str,
+    artist_name: str,
+    release_name: str = "",
+    duration_ms: int = 0,
+    recording_mbid: str = "",
+    artist_mbid: str = "",
+) -> Dict[str, Any]:
+    meta: Dict[str, Any] = {
+        "track_name": track_name,
+        "artist_name": artist_name,
+    }
+    if release_name:
+        meta["release_name"] = release_name
+    additional: Dict[str, Any] = {
+        "media_player": "Helix",
+        "submission_client": "helix",
+    }
+    if duration_ms > 0:
+        additional["duration_ms"] = int(duration_ms)
+    if recording_mbid:
+        additional["recording_mbid"] = recording_mbid
+    if artist_mbid:
+        additional["artist_mbids"] = [artist_mbid]
+    meta["additional_info"] = additional
+    return meta
+
+
+async def submit_listen(
+    *,
+    token: str,
+    listened_at: float,
+    track_name: str,
+    artist_name: str,
+    release_name: str = "",
+    duration_ms: int = 0,
+    recording_mbid: str = "",
+    artist_mbid: str = "",
+) -> None:
+    """Submit a single scrobble to ListenBrainz.
+
+    Best-effort: silently no-ops when no token is configured or the track has no
+    title/artist, so playback is never affected by scrobbling.
+    """
+    token = (token or "").strip()
+    if not (track_name and artist_name) or not token:
+        return
+    body = {
+        "listen_type": "single",
+        "payload": [
+            {
+                "listened_at": int(listened_at),
+                "track_metadata": _track_metadata(
+                    track_name, artist_name, release_name, duration_ms, recording_mbid, artist_mbid
+                ),
+            }
+        ],
+    }
+    await _client_for_token(token).post_json("/1/submit-listens", body)
+
+
+async def submit_now_playing(
+    *,
+    token: str,
+    track_name: str,
+    artist_name: str,
+    release_name: str = "",
+    duration_ms: int = 0,
+    recording_mbid: str = "",
+    artist_mbid: str = "",
+) -> None:
+    """Send the currently playing track to ListenBrainz (playing_now)."""
+    token = (token or "").strip()
+    if not (track_name and artist_name) or not token:
+        return
+    body = {
+        "listen_type": "playing_now",
+        "payload": [
+            {
+                "track_metadata": _track_metadata(
+                    track_name, artist_name, release_name, duration_ms, recording_mbid, artist_mbid
+                )
+            }
+        ],
+    }
+    await _client_for_token(token).post_json("/1/submit-listens", body)
 
 
 # Cache raw LB radio responses; these are large but reduce upstream calls a lot.
@@ -204,6 +355,7 @@ def _cache_key(prefix: str, seed: str, mode: str, pop_begin: int, pop_end: int, 
 async def lb_radio_for_artist(
     seed_artist_mbid: str,
     *,
+    token: str = "",
     mode: str = "medium",
     max_similar_artists: int = 200,
     max_recordings_per_artist: int = 50,
@@ -232,7 +384,7 @@ async def lb_radio_for_artist(
     }
 
     # LB Radio requires auth now. :contentReference[oaicite:9]{index=9}
-    data = await _client().get_json(f"/1/lb-radio/artist/{seed}", params=params, require_auth=True)
+    data = await _client_for_token(token).get_json(f"/1/lb-radio/artist/{seed}", params=params, require_auth=True)
     _lb_radio_cache.set(key, data, ttl_seconds=cache_ttl_s)
     return data
 
@@ -240,6 +392,7 @@ async def lb_radio_for_artist(
 async def lb_radio_for_tags(
     tags: List[str],
     *,
+    token: str = "",
     operator: str = "OR",
     count: int = 250,
     pop_begin: int = 0,
@@ -271,7 +424,7 @@ async def lb_radio_for_tags(
     }
 
     # Treat tags radio as requiring auth too to match current LB Radio policy. :contentReference[oaicite:10]{index=10}
-    data = await _client().get_json("/1/lb-radio/tags", params=params, require_auth=True)
+    data = await _client_for_token(token).get_json("/1/lb-radio/tags", params=params, require_auth=True)
     _lb_radio_cache.set(key, data, ttl_seconds=cache_ttl_s)
     return data
 

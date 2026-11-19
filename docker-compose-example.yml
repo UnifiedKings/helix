@@ -23,6 +23,8 @@ services:
       - ./custom_stations:/data/plugins/stations
 
     environment:
+      # Optional server-wide ListenBrainz token used as a fallback for users
+      # without their own token in personal settings.
       LISTENBRAINZ_TOKEN: "${LISTENBRAINZ_TOKEN:-}"
 
       SUBSONIC_BASE_URL: "${SUBSONIC_BASE_URL:-}"
@@ -70,3 +72,5 @@ services:
       HELIX_YTDLP_CHANNEL: "${HELIX_YTDLP_CHANNEL:-stable}"
       # Make this false if you are using helix over an http connection
       HELIX_COOKIE_SECURE: "${HELIX_COOKIE_SECURE:-true}"
+      # Shared token for the Navidrome plugin to call Helix recommendations endpoint
+      HELIX_RECOMMENDATIONS_TOKEN: ${HELIX_RECOMMENDATIONS_TOKEN}
