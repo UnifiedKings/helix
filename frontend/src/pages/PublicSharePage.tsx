@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Artwork } from '../components/Artwork'
+import { PlaybackBarSurface } from '../components/PlaybackBarSurface'
 import '../styles/shares.css'
 import '../styles/public-share-shell.css'
 
@@ -12,24 +13,6 @@ function formatTime(seconds: number) {
   if (!Number.isFinite(seconds)) return '0:00'
   const value = Math.max(0, Math.floor(seconds))
   return `${Math.floor(value / 60)}:${String(value % 60).padStart(2, '0')}`
-}
-
-function PreviousIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14M18 6l-9 6 9 6Z" /></svg>
-}
-function NextIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14M6 6.5 15 12 6 17.5V6.5Z" /></svg>
-}
-function PlayIcon({ playing }: { playing: boolean }) {
-  return playing
-    ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14" /></svg>
-    : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5-11-6.5Z" /></svg>
-}
-function VolumeIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4h4l5 4V6l-5 4H4Z" fill="currentColor" stroke="none" /><path d="M16 9a5 5 0 0 1 0 6M19 6a9 9 0 0 1 0 12" /></svg>
-}
-function ExpandIcon() {
-  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4H4v5M15 4h5v5M4 15v5h5M20 15v5h-5" /></svg>
 }
 
 export function PublicSharePage() {
@@ -229,34 +212,48 @@ export function PublicSharePage() {
         </section>
       )}
 
-      <footer className="helix-share-playbar playback-bar playback-style-helix" aria-label="Music player">
-        <div className="now-playing">
-          <Artwork src={active?.art_url || media.art_url || ''} alt={active?.title || 'No track'} />
-          <div className="now-playing-info">
-            <div className="eyebrow">Now Playing</div>
-            <div className="title">{active?.title || 'Nothing selected'}</div>
-            <div className="muted now-playing-meta">{active?.artist || ''}{active?.album ? ` • ${active.album}` : ''}</div>
+      <PlaybackBarSurface
+        className="helix-share-playbar"
+        anonymous
+        artwork={active?.art_url || media.art_url || ''}
+        title={active?.title}
+        artist={active?.artist}
+        album={active?.album}
+        hasTrack={Boolean(active?.playable)}
+        playing={playing}
+        repeatTrack={repeat}
+        onPrevious={() => step(-1)}
+        onNext={() => step(1)}
+        onTogglePlayback={togglePlayback}
+        onToggleRepeat={() => setRepeat(value => !value)}
+        audioControls={
+          <div className="audio-player">
+            <div className="scrub-row">
+              <span>{formatTime(elapsed)}</span>
+              <input className="scrub-input" type="range" aria-label="Playback position"
+                min={0} max={duration || 0} step="0.1"
+                disabled={!active?.playable || !duration}
+                value={Math.min(elapsed, duration || 0)}
+                onChange={event => {
+                  const value = Number(event.target.value)
+                  if (audioRef.current) audioRef.current.currentTime = value
+                  setElapsed(value)
+                }} />
+              <span>{formatTime(duration)}</span>
+            </div>
+            <div className="volume-row">
+              <span>Volume</span>
+              <input className="volume-input" type="range" aria-label="Volume"
+                min={0} max={1} step="0.01" value={volume}
+                onChange={event => {
+                  const value = Number(event.target.value)
+                  setVolume(value)
+                  if (audioRef.current) audioRef.current.volume = value
+                }} />
+            </div>
           </div>
-        </div>
-        <div className="transport-stack">
-          <div className="transport">
-            <button className="icon-button transport-side transport-previous" type="button" aria-label="Previous track" onClick={() => step(-1)} disabled={!active}><PreviousIcon /></button>
-            <button className="primary transport-main" type="button" aria-label={playing ? 'Pause' : 'Play'} disabled={!active} onClick={togglePlayback}><PlayIcon playing={playing} /></button>
-            <button className="icon-button transport-side transport-next" type="button" aria-label="Next track" onClick={() => step(1)} disabled={!active}><NextIcon /></button>
-          </div>
-          <div className="helix-share-seek">
-            <span>{formatTime(elapsed)}</span>
-            <input type="range" aria-label="Seek" min={0} max={duration || 0} step="0.1" value={Math.min(elapsed, duration || 0)}
-              onChange={event => { const value = Number(event.target.value); if (audioRef.current) audioRef.current.currentTime = value; setElapsed(value) }} />
-            <span>{formatTime(duration)}</span>
-          </div>
-        </div>
-        <div className="helix-share-extra">
-          <label aria-label="Volume"><VolumeIcon /><input type="range" aria-label="Volume" min={0} max={1} step="0.01" value={volume}
-            onChange={event => { const value = Number(event.target.value); setVolume(value); if (audioRef.current) audioRef.current.volume = value }} /></label>
-          <button type="button" onClick={() => setBigPicture(value => !value)} aria-label={bigPicture ? 'Exit Big Picture' : 'Big Picture'}><ExpandIcon /></button>
-        </div>
-      </footer>
+        }
+      />
     </main>
   )
 }

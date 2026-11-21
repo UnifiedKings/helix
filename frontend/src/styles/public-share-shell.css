@@ -30,23 +30,6 @@
 .helix-share-row-actions button { padding: 5px 9px; }
 .helix-share-row-actions button:disabled { opacity: .3; }
 .helix-share-empty { padding: 16px; }
-/* Normal playbar classes are intentionally used for matching styling. */
-.helix-share-shell > .helix-share-playbar.playback-bar { position: fixed; inset: auto 0 0; z-index: 10; min-height: 96px; height: auto; background: #18181b; border-top: 1px solid var(--share-edge); display: grid; grid-template-columns: minmax(180px,1fr) minmax(300px,1.5fr) minmax(160px,1fr); align-items: center; gap: 24px; padding: 12px clamp(16px,2.4vw,36px); box-shadow: 0 -12px 35px rgba(0,0,0,.22); }
-.helix-share-playbar .now-playing { min-width: 0; display: flex; align-items: center; gap: 12px; }
-.helix-share-playbar .now-playing-info { min-width: 0; }
-.helix-share-playbar .now-playing-info .title, .helix-share-playbar .now-playing-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.helix-share-playbar .transport-stack { min-width: 0; display: flex; flex-direction: column; gap: 8px; align-items: center; }
-.helix-share-playbar .transport { display: flex; align-items: center; justify-content: center; gap: 18px; }
-.helix-share-playbar .transport button, .helix-share-playbar .helix-share-extra button { display: inline-flex; align-items: center; justify-content: center; cursor: pointer; }
-.helix-share-playbar .transport .transport-main { border-radius: 50%; width: 38px; height: 38px; background: #eda336; color: #17120a; }
-.helix-share-playbar .transport svg, .helix-share-playbar .helix-share-extra svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
-.helix-share-playbar .transport button:disabled { opacity: .4; cursor: default; }
-.helix-share-seek { display: flex; width: 100%; align-items: center; gap: 10px; font-size: .72rem; color: #aaaab1; }
-.helix-share-seek input { flex: 1; min-width: 0; }
-.helix-share-extra { display: flex; justify-content: flex-end; align-items: center; gap: 16px; }
-.helix-share-extra label { display: flex; align-items: center; gap: 10px; }
-.helix-share-extra input { width: 100px; }
-.helix-share-playbar input[type=range] { padding: 0; height: 16px; border: 0; background: transparent; accent-color: #efa532; cursor: pointer; }
 .helix-share-big-picture { background: radial-gradient(ellipse at 55% 30%,#2c241b,#101012 65%); }
 .helix-share-big-content { width: min(1200px,calc(100% - 64px)); min-height: calc(100dvh - 190px); margin: auto; display: flex; align-items: center; justify-content: center; gap: clamp(24px,5vw,90px); }
 .helix-share-big-art { width: min(40vw,440px); flex: 0 0 auto; }
@@ -55,144 +38,28 @@
 .helix-share-big-info h1 { font-size: clamp(2.4rem,5vw,5.2rem); line-height: 1.05; margin: 12px 0; overflow-wrap: anywhere; }
 .helix-share-big-info p { font-size: 1.3rem; color: #ccc; }
 .helix-share-big-info > span:last-of-type { display: block; color: #999; margin-bottom: 28px; }
-@media(max-width:850px) { .helix-share-shell > .helix-share-playbar.playback-bar { grid-template-columns: minmax(0,1fr) auto; gap: 12px; min-height: 135px; } .helix-share-playbar .transport-stack { grid-column: 1 / -1; grid-row: 2; } .helix-share-extra { grid-column: 2; grid-row: 1; } .helix-share-shell { padding-bottom: 155px; } .helix-share-big-content { flex-direction: column; padding: 36px 0; text-align: center; } .helix-share-big-art { width: min(60vw,320px); } }
-@media(max-width:550px) { .helix-share-center { width: calc(100% - 24px); margin-top: 20px; } .helix-share-queue-heading { align-items: flex-start; flex-direction: column; } .helix-share-header { padding: 0 12px; } .helix-share-brand > span:last-child { display: none; } .helix-share-queue-row { gap: 8px; padding: 8px 4px; } .helix-share-row-actions button { padding: 4px 5px; } .helix-share-queue-row .queue-duration { display: none; } .helix-share-extra label { display: none; } }
 
-/* Public playback layout: isolate sizing from the authenticated playbar's
-   global flex/grid rules while retaining its theme, icons and button styles. */
+/* Position the existing Helix playbar without redefining its internal layout. */
 .helix-share-shell > .helix-share-playbar.playback-bar {
-  display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(360px, 1.55fr) minmax(170px, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-  column-gap: clamp(18px, 2vw, 36px);
-  row-gap: 0;
-  min-height: 112px;
-  height: auto;
-  padding: 14px clamp(18px, 2vw, 36px);
-  align-items: center;
-}
-.helix-share-playbar .now-playing {
-  grid-column: 1;
-  grid-row: 1;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
+  position: fixed;
+  inset: auto 0 0;
+  z-index: 10;
   width: 100%;
-  min-width: 0;
-  max-width: none;
-  gap: 12px;
-  padding: 0;
-  margin: 0;
 }
-.helix-share-playbar .now-playing > :first-child {
-  flex: 0 0 58px;
-  width: 58px;
-  height: 58px;
-}
-.helix-share-playbar .now-playing-info {
-  display: flex;
-  flex: 1 1 0;
-  flex-direction: column;
-  justify-content: center;
-  align-items: flex-start;
-  width: auto;
-  min-width: 0;
-  max-width: 100%;
-  margin: 0;
-  padding: 0;
-}
-.helix-share-playbar .now-playing-info .eyebrow,
-.helix-share-playbar .now-playing-info .title,
-.helix-share-playbar .now-playing-meta {
-  max-width: 100%;
-  text-align: left;
-  line-height: 1.35;
-}
-.helix-share-playbar .transport-stack {
-  grid-column: 2;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: stretch;
-  width: 100%;
-  min-width: 0;
-  max-width: none;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-}
-.helix-share-playbar .transport {
-  display: flex;
-  flex: 0 0 auto;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  min-height: 38px;
-  margin: 0;
-  padding: 0;
-  gap: 18px;
-}
-.helix-share-playbar .helix-share-seek {
-  display: flex;
-  flex: 0 0 auto;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
-  height: 18px;
-  margin: 0;
-  padding: 0;
-  gap: 10px;
-}
-.helix-share-playbar .helix-share-seek input[type='range'] {
-  flex: 1 1 0;
-  width: 100%;
-  min-width: 0;
-  margin: 0;
-}
-.helix-share-playbar .helix-share-extra {
-  grid-column: 3;
-  grid-row: 1;
-  display: flex;
-  justify-content: flex-end;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
-  gap: 14px;
-  margin: 0;
-  padding: 0;
-}
-.helix-share-playbar .helix-share-extra label {
-  display: flex;
-  flex: 0 1 auto;
-  align-items: center;
-  min-width: 0;
-  gap: 8px;
-}
-.helix-share-playbar .helix-share-extra label input[type='range'] {
-  width: clamp(65px, 7vw, 115px);
-  min-width: 55px;
-  margin: 0;
-}
-.helix-share-playbar .helix-share-extra > button { flex: 0 0 auto; }
 
-@media (max-width: 900px) {
-  .helix-share-shell > .helix-share-playbar.playback-bar {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
-    row-gap: 10px;
-    min-height: 142px;
-    padding: 12px 18px;
-  }
-  .helix-share-playbar .now-playing { grid-column: 1; grid-row: 1; }
-  .helix-share-playbar .helix-share-extra { grid-column: 2; grid-row: 1; }
-  .helix-share-playbar .transport-stack { grid-column: 1 / -1; grid-row: 2; }
-  .helix-share-shell { padding-bottom: 160px; }
+/* The shared player doesn't have an account. No account-specific buttons are rendered. */
+.helix-share-playbar .rating-controls { display: none; }
+
+@media (max-width: 850px) {
+  .helix-share-big-content { flex-direction: column; padding: 36px 0; text-align: center; }
+  .helix-share-big-art { width: min(60vw, 320px); }
 }
 @media (max-width: 550px) {
-  .helix-share-shell > .helix-share-playbar.playback-bar { padding: 10px 12px; column-gap: 8px; }
-  .helix-share-playbar .now-playing > :first-child { width: 44px; height: 44px; flex-basis: 44px; }
-  .helix-share-playbar .helix-share-extra label { display: none; }
-  .helix-share-playbar .transport-stack { gap: 7px; }
+  .helix-share-center { width: calc(100% - 24px); margin-top: 20px; }
+  .helix-share-queue-heading { align-items: flex-start; flex-direction: column; }
+  .helix-share-header { padding: 0 12px; }
+  .helix-share-brand > span:last-child { display: none; }
+  .helix-share-queue-row { gap: 8px; padding: 8px 4px; }
+  .helix-share-row-actions button { padding: 4px 5px; }
+  .helix-share-queue-row .queue-duration { display: none; }
 }

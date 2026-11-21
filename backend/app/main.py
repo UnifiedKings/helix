@@ -43,6 +43,7 @@ from .routers.user_settings import router as user_settings_router
 from .routers.realtime import router as realtime_router
 from .routers.quality_upgrades import router as quality_upgrades_router
 from .routers.shares import router as shares_router
+from .routers.shares_liked_support import router as liked_shares_router, install as install_liked_shares
 
 logging.basicConfig(
     level=getattr(logging, os.getenv("HELIX_LOG_LEVEL", "INFO").upper(), logging.INFO),
@@ -196,6 +197,8 @@ app.include_router(quality_upgrades_router)
 app.include_router(realtime_router)
 app.include_router(user_settings_router)
 app.include_router(lyrics_router)
+install_liked_shares()
+app.include_router(liked_shares_router)
 app.include_router(shares_router)
 
 STATIC_DIR = Path(__file__).resolve().parent.parent / "static"

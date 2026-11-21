@@ -3,14 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import type { AudioIntent, PlayerState, UserSettings, UserSettingsPayload } from '../api/types'
 import type { AudioRunMode } from '../hooks/usePlayer'
-import { Artwork } from './Artwork'
-import { ArtistLink } from './ArtistLink'
-import { AlbumLink } from './AlbumLink'
 import { AudioPlayer } from './AudioPlayer'
+import { PlaybackBarSurface } from './PlaybackBarSurface'
 
 type PlaybarStyle = 'helix' | 'ytmusic' | 'spotify' | 'pandora'
 type SkipDirection = 'previous' | 'next'
-
 type UserSettingsWithPlaybar = UserSettings & { playback_bar_style?: PlaybarStyle }
 
 type Props = {
@@ -22,53 +19,14 @@ type Props = {
 }
 
 function IconThumbDown() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h9.2c1.1 0 2 .72 2.3 1.78l1.2 4.3c.12.42.18.85.18 1.28V12c0 1.1-.9 2-2 2h-4.6l.74 3.5c.13.62-.06 1.27-.51 1.72L12.4 20.33 6.9 14.8V5.1C6.9 3.94 5.96 3 4.8 3H4v11h2.9" /></svg>
-  )
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h9.2c1.1 0 2 .72 2.3 1.78l1.2 4.3c.12.42.18.85.18 1.28V12c0 1.1-.9 2-2 2h-4.6l.74 3.5c.13.62-.06 1.27-.51 1.72L12.4 20.33 6.9 14.8V5.1C6.9 3.94 5.96 3 4.8 3H4v11h2.9" /></svg>
 }
-
 function IconThumbUp() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true"><g transform="translate(24 0) scale(-1 1)"><path d="M17 21H7.8c-1.1 0-2-.72-2.3-1.78l-1.2-4.3a4.7 4.7 0 0 1-.18-1.28V12c0-1.1.9-2 2-2h4.6l-.74-3.5c-.13-.62.06-1.27.51-1.72L11.6 3.67l5.5 5.53v9.7c0 1.16.94 2.1 2.1 2.1h.8V10h-2.9" /></g></svg>
-  )
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><g transform="translate(24 0) scale(-1 1)"><path d="M17 21H7.8c-1.1 0-2-.72-2.3-1.78l-1.2-4.3a4.7 4.7 0 0 1-.18-1.28V12c0-1.1.9-2 2-2h4.6l-.74-3.5c-.13-.62.06-1.27.51-1.72L11.6 3.67l5.5 5.53v9.7c0 1.16.94 2.1 2.1 2.1h.8V10h-2.9" /></g></svg>
 }
-
-function IconRepeat() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 2l4 4-4 4" /><path d="M3 11V9a3 3 0 0 1 3-3h15" /><path d="M7 22l-4-4 4-4" /><path d="M21 13v2a3 3 0 0 1-3 3H3" /></svg>
-  )
-}
-
-function IconPrevious() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5v14" /><path d="M19 6.5 9 12l10 5.5V6.5Z" /></svg>
-  )
-}
-
-function IconNext() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 5v14" /><path d="M5 6.5 15 12 5 17.5V6.5Z" /></svg>
-  )
-}
-
-function IconPlay() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5-11-6.5Z" /></svg>
-  )
-}
-
-function IconPause() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14" /><path d="M16 5v14" /></svg>
-  )
-}
-
 function IconLyrics() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h10" /><path d="M5 9h10" /><path d="M5 13h7" /><path d="M17 12v6.5a2.5 2.5 0 1 1-2-2.45V8l4-1" /></svg>
-  )
+  return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h10" /><path d="M5 9h10" /><path d="M5 13h7" /><path d="M17 12v6.5a2.5 2.5 0 1 1-2-2.45V8l4-1" /></svg>
 }
-
 function isPlaybarStyle(value: unknown): value is PlaybarStyle {
   return value === 'helix' || value === 'ytmusic' || value === 'spotify' || value === 'pandora'
 }
@@ -91,8 +49,7 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
 
   useEffect(() => {
     let cancelled = false
-
-    void api.userSettings().then((payload) => {
+    void api.userSettings().then(payload => {
       const style = (payload.settings as UserSettingsWithPlaybar).playback_bar_style
       if (!cancelled && isPlaybarStyle(style)) setPlaybarStyle(style)
     }).catch(() => undefined)
@@ -103,7 +60,6 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
       if (isPlaybarStyle(next)) setPlaybarStyle(next)
     }
     window.addEventListener('helix-user-settings-updated', listener)
-
     return () => {
       cancelled = true
       window.removeEventListener('helix-user-settings-updated', listener)
@@ -112,33 +68,26 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
 
   useEffect(() => {
     let cancelled = false
-
     async function loadRatingState() {
       if (!now) {
         setLiked(false)
         setDisliked(false)
         return
       }
-
       try {
-        const [likeState, dislikeState] = await Promise.all([
-          api.isLiked(now),
-          api.isDisliked(now),
-        ])
+        const [likeState, dislikeState] = await Promise.all([api.isLiked(now), api.isDisliked(now)])
         if (cancelled) return
         setLiked(Boolean(likeState.liked))
         setDisliked(Boolean(dislikeState.disliked))
       } catch {
-        if (cancelled) return
-        setLiked(false)
-        setDisliked(false)
+        if (!cancelled) {
+          setLiked(false)
+          setDisliked(false)
+        }
       }
     }
-
     void loadRatingState()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [trackIdentity])
 
   useEffect(() => {
@@ -151,7 +100,6 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
 
   useEffect(() => {
     if (playbarStyle !== 'ytmusic') return
-
     const syncProgress = () => {
       const bar = barRef.current
       if (!bar) return
@@ -159,11 +107,9 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
       const value = Number(input?.value ?? 0)
       const max = Number(input?.max ?? 0)
       const percent = max > 0 && Number.isFinite(value)
-        ? Math.max(0, Math.min(100, (value / max) * 100))
-        : 0
+        ? Math.max(0, Math.min(100, (value / max) * 100)) : 0
       bar.style.setProperty('--helix-scrub-progress', `${percent}%`)
     }
-
     syncProgress()
     const timer = window.setInterval(syncProgress, 100)
     return () => {
@@ -181,8 +127,7 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
     const rect = bar.getBoundingClientRect()
     if (rect.width <= 0) return
     const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width))
-    const nextValue = ratio * max
-    input.value = String(nextValue)
+    input.value = String(ratio * max)
     input.dispatchEvent(new Event('input', { bubbles: true }))
     input.dispatchEvent(new Event('change', { bubbles: true }))
     bar.style.setProperty('--helix-scrub-progress', `${ratio * 100}%`)
@@ -229,108 +174,55 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
     }
   }
 
-  return (
-    <footer ref={barRef} className={`playback-bar playback-style-${playbarStyle}`} data-playbar-style={playbarStyle} data-skip-direction={skipDirection ?? undefined}>
-      <div className="now-playing">
-        <Artwork src={now?.art_url} alt={now?.title ?? 'No track'} />
-        <div className="now-playing-info">
-          <div className="eyebrow">Now Playing</div>
-          <div className="title">{now?.title ?? 'Nothing selected'}</div>
-          <div className="muted now-playing-meta">{now ? <><ArtistLink artist={now.artist} />{now.album ? <><span className="now-playing-meta-separator" aria-hidden="true">•</span><AlbumLink album={now.album} artist={now.artist} source={now.source} /></> : null}</> : 'Search, queue, or start a station'}</div>
-        </div>
-        <div className="rating-controls" aria-label="Track controls">
-          <button className="icon-button rating-button rating-dislike" aria-label="Dislike current track" title="Dislike" onClick={toggleDislike} disabled={!hasTrack || ratingBusy} data-active={disliked}>
-            <IconThumbDown />
-          </button>
-          <button className="icon-button rating-button rating-like" aria-label="Like current track" title="Like" onClick={toggleLike} disabled={!hasTrack || ratingBusy} data-active={liked}>
-            <IconThumbUp />
-          </button>
-          <button className="icon-button lyrics-launch" type="button" aria-label="Open lyrics" title="Lyrics" onClick={() => navigate('/big-picture?view=lyrics')} disabled={!hasTrack}>
-            <IconLyrics />
-          </button>
-        </div>
-      </div>
+  const ratingControls = (
+    <div className="rating-controls" aria-label="Track controls">
+      <button className="icon-button rating-button rating-dislike" aria-label="Dislike current track" title="Dislike" onClick={toggleDislike} disabled={!hasTrack || ratingBusy} data-active={disliked}><IconThumbDown /></button>
+      <button className="icon-button rating-button rating-like" aria-label="Like current track" title="Like" onClick={toggleLike} disabled={!hasTrack || ratingBusy} data-active={liked}><IconThumbUp /></button>
+      <button className="icon-button lyrics-launch" type="button" aria-label="Open lyrics" title="Lyrics" onClick={() => navigate('/big-picture?view=lyrics')} disabled={!hasTrack}><IconLyrics /></button>
+    </div>
+  )
 
-      <div className="transport-stack">
-        <div className="transport">
-          <button className="icon-button transport-side transport-previous" aria-label="Previous track" title="Previous" onClick={() => runDirectionalSkip('previous', api.previous)} disabled={!player}>
-            <IconPrevious />
-          </button>
-          {localPlaying ? (
-            <button className="primary transport-main" aria-label="Pause" title="Pause" onClick={() => run(api.pause, 'pause')} disabled={!hasTrack}>
-              <IconPause />
-            </button>
-          ) : (
-            <button className="primary transport-main" aria-label="Play" title="Play" onClick={() => run(api.resume, 'play')} disabled={!hasTrack}>
-              <IconPlay />
-            </button>
-          )}
-          <button className="icon-button transport-side transport-next" aria-label="Next track" title="Next" onClick={() => runDirectionalSkip('next', api.next)} disabled={!player}>
-            <IconNext />
-          </button>
-          <button
-            className="icon-button transport-extra transport-repeat"
-            type="button"
-            title={repeatTrack ? 'Repeat track on' : 'Repeat track off'}
-            aria-label={repeatTrack ? 'Disable track repeat' : 'Enable track repeat'}
-            aria-pressed={repeatTrack}
-            data-active={repeatTrack}
-            onClick={() => setRepeatTrack((enabled) => !enabled)}
-            disabled={!hasTrack}
-          >
-            <IconRepeat />
-          </button>
-        </div>
-      </div>
-
-      <AudioPlayer
-        player={player}
-        audioIntent={audioIntent}
-        onStateChange={setPlayer}
-        repeatTrack={repeatTrack}
-        onLocalPlayingChange={setLocalPlaying}
-        onError={setError}
-      />
-      <div
-        className="ytmusic-seek-hitbox"
-        aria-hidden="true"
-        onPointerDown={(event) => {
-          if (playbarStyle !== 'ytmusic') return
-          event.currentTarget.setPointerCapture(event.pointerId)
+  const seekHitbox = (
+    <div className="ytmusic-seek-hitbox" aria-hidden="true"
+      onPointerDown={event => {
+        if (playbarStyle !== 'ytmusic') return
+        event.currentTarget.setPointerCapture(event.pointerId)
+        updateYtMusicSeek(event.clientX)
+      }}
+      onPointerMove={event => {
+        if (playbarStyle !== 'ytmusic') return
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) updateYtMusicSeek(event.clientX)
+      }}
+      onPointerUp={event => {
+        if (playbarStyle !== 'ytmusic') return
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
           updateYtMusicSeek(event.clientX)
-        }}
-        onPointerMove={(event) => {
-          if (playbarStyle !== 'ytmusic') return
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) updateYtMusicSeek(event.clientX)
-        }}
-        onPointerUp={(event) => {
-          if (playbarStyle !== 'ytmusic') return
-          if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-            updateYtMusicSeek(event.clientX)
-            event.currentTarget.releasePointerCapture(event.pointerId)
-          }
-        }}
-      />
-      <div className="ytmusic-utility-repeat">
-        <button
-          className="icon-button transport-extra ytmusic-repeat-button"
-          type="button"
-          title={repeatTrack ? 'Repeat track on' : 'Repeat track off'}
-          aria-label={repeatTrack ? 'Disable track repeat' : 'Enable track repeat'}
-          aria-pressed={repeatTrack}
-          data-active={repeatTrack}
-          onPointerDown={(event) => event.stopPropagation()}
-          onPointerUp={(event) => event.stopPropagation()}
-          onMouseDown={(event) => event.stopPropagation()}
-          onClick={(event) => {
-            event.stopPropagation()
-            setRepeatTrack((enabled) => !enabled)
-          }}
-          disabled={!hasTrack}
-        >
-          <IconRepeat />
-        </button>
-      </div>
-    </footer>
+          event.currentTarget.releasePointerCapture(event.pointerId)
+        }
+      }}
+    />
+  )
+
+  return (
+    <PlaybackBarSurface
+      barRef={barRef}
+      artwork={now?.art_url}
+      title={now?.title}
+      artist={now?.artist}
+      album={now?.album}
+      source={now?.source}
+      hasTrack={hasTrack}
+      playing={localPlaying}
+      repeatTrack={repeatTrack}
+      onPrevious={() => runDirectionalSkip('previous', api.previous)}
+      onNext={() => runDirectionalSkip('next', api.next)}
+      onTogglePlayback={() => void run(localPlaying ? api.pause : api.resume, localPlaying ? 'pause' : 'play')}
+      onToggleRepeat={() => setRepeatTrack(value => !value)}
+      ratingControls={ratingControls}
+      playbarStyle={playbarStyle}
+      skipDirection={skipDirection}
+      seekHitbox={seekHitbox}
+      audioControls={<AudioPlayer player={player} audioIntent={audioIntent} onStateChange={setPlayer} repeatTrack={repeatTrack} onLocalPlayingChange={setLocalPlaying} onError={setError} />}
+    />
   )
 }
