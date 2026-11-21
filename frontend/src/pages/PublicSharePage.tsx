@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { useParams } from 'react-router-dom'
 import { Artwork } from '../components/Artwork'
 import { PlaybackBarSurface } from '../components/PlaybackBarSurface'
 import '../styles/shares.css'
 import '../styles/public-share-shell.css'
+import '../styles/public-share-drag.css'
 
 type SharedTrack = { id: string; title: string; artist: string; album: string; duration_ms: number; playable: boolean; art_url: string }
 type SharedMedia = { type: 'track' | 'album' | 'playlist'; title: string; artist: string; art_url: string; tracks: SharedTrack[] }
@@ -30,6 +31,8 @@ export function PublicSharePage() {
   const [repeat, setRepeat] = useState(false)
   const [error, setError] = useState('')
   const [dragId, setDragId] = useState<number | null>(null)
+  const dragRef = useRef<{ id: number; pointerId: number; startX: number; startY: number; started: boolean; original: QueuedTrack[] } | null>(null)
+  const suppressClickRef = useRef(false)
   const [bigPicture, setBigPicture] = useState(false)
 
   useEffect(() => {
@@ -37,6 +40,8 @@ export function PublicSharePage() {
     setMedia(null)
     setError('')
     playIntent.current = false
+    dragRef.current = null
+    setDragId(null)
     fetch(`/api/public/shares/${encodeURIComponent(token)}`, { signal: controller.signal, cache: 'no-store' })
       .then(async response => {
         if (!response.ok) throw new Error((await response.json().catch(() => null))?.detail || 'Share unavailable')
@@ -109,6 +114,45 @@ export function PublicSharePage() {
       return next
     })
   }
+
+  function startDrag(event: ReactPointerEvent<HTMLDivElement>, id: number) {
+    if (event.button !== 0 || dragRef.current) return
+    if (event.target instanceof Element && event.target.closest('.helix-share-row-actions')) return
+    dragRef.current = { id, pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, started: false, original: queue }
+  }
+
+  useEffect(() => {
+    function onMove(event: PointerEvent) {
+      const drag = dragRef.current
+      if (!drag || drag.pointerId !== event.pointerId) return
+      if (!drag.started) {
+        if (Math.hypot(event.clientX - drag.startX, event.clientY - drag.startY) < 5) return
+        drag.started = true
+        suppressClickRef.current = true
+        setDragId(drag.id)
+      }
+      const row = document.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>('[data-shared-queue-id]')
+      if (!row) return
+      const target = Number(row.dataset.sharedQueueId)
+      if (Number.isFinite(target) && target !== drag.id) move(drag.id, target)
+    }
+    function finish(event: PointerEvent) {
+      const drag = dragRef.current
+      if (!drag || drag.pointerId !== event.pointerId) return
+      if (event.type === 'pointercancel' && drag.started) setQueue(drag.original)
+      if (drag.started) window.setTimeout(() => { suppressClickRef.current = false }, 0)
+      dragRef.current = null
+      setDragId(null)
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', finish)
+    window.addEventListener('pointercancel', finish)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', finish)
+      window.removeEventListener('pointercancel', finish)
+    }
+  })
 
   function shuffle() {
     setQueue(current => {
@@ -189,21 +233,30 @@ export function PublicSharePage() {
             </div>
           </div>
           <div className="helix-share-queue-list">
-            {queue.map((item, index) => (
-              <div key={item.queueId} className={`helix-share-queue-row queue-row queue-row-redesign ${item.queueId === activeId ? 'active' : ''}`}
-                draggable onDragStart={() => setDragId(item.queueId)} onDragOver={event => event.preventDefault()}
-                onDrop={event => { event.preventDefault(); if (dragId !== null) move(dragId, item.queueId); setDragId(null) }}
-                onDragEnd={() => setDragId(null)}>
-                <span className="queue-drag-handle" aria-label="Drag to reorder">⁝⁝</span>
+            {queue.map(item => (
+              <div key={item.queueId} data-shared-queue-id={item.queueId} className={`helix-share-queue-row queue-row queue-row-redesign ${item.queueId === activeId ? 'active' : ''} ${item.queueId === dragId ? 'is-dragging' : ''}`}
+                onPointerDown={event => startDrag(event, item.queueId)}
+                onClickCapture={event => {
+                  if (!suppressClickRef.current) return
+                  suppressClickRef.current = false
+                  event.preventDefault()
+                  event.stopPropagation()
+                }}>
+                <span className="queue-drag-handle" role="button" tabIndex={0} aria-label={`Drag ${item.title} to reorder`} title="Drag to reorder"
+                  onKeyDown={event => {
+                    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return
+                    event.preventDefault()
+                    const index = queue.findIndex(track => track.queueId === item.queueId)
+                    const neighbor = queue[index + (event.key === 'ArrowUp' ? -1 : 1)]
+                    if (neighbor) move(item.queueId, neighbor.queueId)
+                  }}>⁝⁝</span>
                 <button type="button" className="queue-main" disabled={!item.playable} onClick={() => select(item.queueId)}>
                   <Artwork src={item.art_url} alt="" size="sm" />
                   <span><strong>{item.title}</strong><span className="muted">{item.artist}{!item.playable ? ' · Unavailable' : ''}</span></span>
                 </button>
                 <span className="queue-duration">{formatTime(item.duration_ms / 1000)}</span>
                 <div className="helix-share-row-actions">
-                  <button type="button" disabled={index === 0} onClick={() => move(item.queueId, queue[index - 1].queueId)} aria-label={`Move ${item.title} up`}>↑</button>
-                  <button type="button" disabled={index === queue.length - 1} onClick={() => move(item.queueId, queue[index + 1].queueId)} aria-label={`Move ${item.title} down`}>↓</button>
-                  <button type="button" className="queue-remove-icon" onClick={() => remove(item.queueId)} aria-label={`Remove ${item.title}`}>×</button>
+                  <button type="button" className="queue-remove-icon" onClick={() => remove(item.queueId)} aria-label={`Remove ${item.title}`}><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8" /></svg></button>
                 </div>
               </div>
             ))}

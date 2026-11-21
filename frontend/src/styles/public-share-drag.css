@@ -1,0 +1,47 @@
+/* Entire track row can be dragged; remove remains an independent button. */
+.helix-share-queue-row { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; }
+.helix-share-queue-row.is-dragging { cursor: grabbing; }
+.helix-share-queue-row .queue-main { cursor: inherit; }
+.helix-share-queue-row .queue-main img { -webkit-user-drag: none; }
+.helix-share-queue-row .queue-drag-handle {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  align-self: center;
+  height: 28px;
+  line-height: 1;
+  text-align: center;
+  min-width: 20px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.helix-share-queue-row .queue-drag-handle:active { cursor: grabbing; }
+.helix-share-queue-row .queue-drag-handle:focus-visible {
+  outline: 2px solid #5088dc;
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.helix-share-queue-row.is-dragging {
+  background: rgba(80,136,220,.17);
+  box-shadow: inset 3px 0 #5088dc;
+}
+.helix-share-queue-row .queue-main > .artwork {
+  border-radius: 4px;
+}
+.helix-share-row-actions { margin-left: 2px; }
+
+.helix-share-row-actions .queue-remove-icon {
+  width: 28px;
+  height: 28px;
+  padding: 0 !important;
+  display: grid;
+  place-items: center;
+  line-height: 1;
+  text-align: center;
+  cursor: pointer;
+}
+
+/* Center the remove icon geometrically, independent of font glyph metrics. */
+.helix-share-row-actions .queue-remove-icon svg { display: block; flex: none; }
