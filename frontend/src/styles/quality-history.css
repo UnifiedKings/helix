@@ -1,0 +1,7 @@
+/* Helix user theme & font are authoritative. Avoid bright hardcoded colors. */
+.qp-page .qp-history-filter { min-width: 140px; max-width: 200px; font: inherit; font-size: .82rem; background: var(--surface-2,var(--panel-2,#202024)); color: var(--text,inherit); border: 1px solid var(--border,#333); border-radius: 5px; padding: 8px 10px; }
+.qp-page .qp-legacy-label,.qp-page .qp-managed-label { font-size: .72rem; line-height: 1.3; padding-top: 2px; }
+.qp-page .qp-legacy-label { color: var(--muted,var(--text-muted,#a1a1aa)); }
+.qp-page .qp-managed-label { color: var(--accent,#4e85d5); }
+.qp-page .qp-queue-toolbar { flex-wrap: wrap; }
+@media(max-width:600px) { .qp-page .qp-history-filter { max-width:none; width:100%; } }

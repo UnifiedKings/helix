@@ -42,6 +42,11 @@ from .routers.ytmusic import router as ytmusic_router
 from .routers.user_settings import router as user_settings_router
 from .routers.realtime import router as realtime_router
 from .routers.quality_upgrades import router as quality_upgrades_router
+from .routers.quality_profiles import router as quality_profiles_router
+from .routers.quality_search_limits import router as quality_search_limits_router
+from .routers.quality_bad_files import router as quality_bad_files_router
+from .routers.quality_history import router as quality_history_router
+from .routers.quality_rejected_sources import router as quality_rejected_sources_router
 from .routers.shares import router as shares_router
 from .routers.shares_liked_support import router as liked_shares_router, install as install_liked_shares
 
@@ -127,6 +132,26 @@ app.add_middleware(
 @app.on_event("startup")
 def _startup():
     init_db()
+    from .quality_bad_files import QualityBadFile
+    from .quality_source_registry import initialize_rejections
+    initialize_rejections()
+    from .db import Base, engine
+    Base.metadata.create_all(bind=engine, tables=[QualityBadFile.__table__])
+    from sqlalchemy import text
+    with engine.begin() as conn:
+        conn.execute(text("""CREATE TRIGGER IF NOT EXISTS quality_bad_files_job_cleanup
+            AFTER DELETE ON quality_upgrade_jobs
+            BEGIN DELETE FROM quality_bad_files WHERE job_id = OLD.id; END"""))
+    from .quality_search_budget import initialize_search_budget
+    initialize_search_budget()
+    # Phase 1: additive profile schema and legacy-settings snapshot. The
+    # upgrade worker intentionally continues using its existing policy.
+    from .quality_profile_store import initialize_profiles
+    db = SessionLocal()
+    try:
+        initialize_profiles(db)
+    finally:
+        db.close()
     from .realtime import HUB
     try:
         HUB.bind_loop()
@@ -147,7 +172,7 @@ def _startup():
     except Exception:
         logging.getLogger(__name__).exception("Failed to start lobby station monitor")
     try:
-        from .quality_upgrade_service import quality_upgrade_worker_loop
+        from .quality_search_worker import quality_upgrade_worker_loop
         asyncio.get_event_loop().create_task(quality_upgrade_worker_loop())
     except Exception:
         logging.getLogger(__name__).exception("Failed to start quality upgrade worker")
@@ -194,6 +219,11 @@ app.include_router(playlists_router)
 app.include_router(subsonic_router)
 app.include_router(subsonic_add_router)
 app.include_router(quality_upgrades_router)
+app.include_router(quality_profiles_router)
+app.include_router(quality_search_limits_router)
+app.include_router(quality_bad_files_router)
+app.include_router(quality_history_router)
+app.include_router(quality_rejected_sources_router)
 app.include_router(realtime_router)
 app.include_router(user_settings_router)
 app.include_router(lyrics_router)
