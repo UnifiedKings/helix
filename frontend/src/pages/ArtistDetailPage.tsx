@@ -18,8 +18,6 @@ function songPayload(song: SearchSong, artist: ArtistDetail): SearchSong {
   return { ...song, artist: song.artist || artist.name, source: song.source || 'ytmusic' }
 }
 
-
-
 function cleanArtistDescription(description?: string) {
   const raw = (description || '').trim()
   if (!raw) return ''
@@ -57,6 +55,9 @@ export function ArtistDetailPage() {
   const [status, setStatus] = useState('')
   const [queuedSubsonic, setQueuedSubsonic] = useState<Record<string, boolean>>({})
   const [activeModal, setActiveModal] = useState<ArtistModalKind>(null)
+  // A route parameter can change without React unmounting this component.
+  // Track which artist the data belongs to so stale content never masquerades as a loading page.
+  const [loadedBrowseId, setLoadedBrowseId] = useState<string | null>(null)
 
   async function queueSongForSubsonic(song: SearchSong, key: string) {
     if (queuedSubsonic[key]) return
@@ -72,8 +73,11 @@ export function ArtistDetailPage() {
 
   useEffect(() => {
     let cancelled = false
+    setError('')
+    setStatus('')
+    setActiveModal(null)
+
     async function load() {
-      setError('')
       try {
         const [artistRes, popularRes, albumRes, similarRes] = await Promise.all([
           api.artist(browseId),
@@ -86,9 +90,14 @@ export function ArtistDetailPage() {
           setPopular(popularRes)
           setAlbums(albumRes)
           setSimilar(similarRes)
+          setLoadedBrowseId(browseId)
         }
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not load artist')
+        if (!cancelled) {
+          setArtist(null)
+          setError(err instanceof Error ? err.message : 'Could not load artist')
+          setLoadedBrowseId(browseId)
+        }
       }
     }
     void load()
@@ -139,7 +148,22 @@ export function ArtistDetailPage() {
   const wikipediaUrl = artist?.wikipedia_url || artist?.description_source_url || ''
   const artistDescription = shortArtistDescription(artist?.description)
 
-  if (!artist && !error) return <div className="page-stack"><p className="muted">Loading artist…</p></div>
+  // Render the loading state on the *first* render after the URL changes,
+  // before the effect has even started fetching. This also covers same-route
+  // navigation from Similar Artists and the View All dialog.
+  if (loadedBrowseId !== browseId) {
+    return (
+      <div className="page-stack detail-page artist-detail-redesign">
+        <section className="artist-navigation-loading" role="status" aria-live="polite" aria-busy="true">
+          <span className="artist-navigation-spinner" aria-hidden="true" />
+          <div>
+            <strong>Loading artist…</strong>
+            <p>Fetching artist details, tracks, and releases.</p>
+          </div>
+        </section>
+      </div>
+    )
+  }
 
   return (
     <div className="page-stack detail-page artist-detail-redesign">

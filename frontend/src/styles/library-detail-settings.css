@@ -1516,3 +1516,43 @@
   height: 2.2rem;
   pointer-events: none;
 }
+
+/* Artist navigation: visible immediately when switching between artist routes. */
+.artist-navigation-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  min-height: 260px;
+  padding: 2rem;
+  color: var(--text);
+}
+
+.artist-navigation-loading strong {
+  display: block;
+  font-size: 1rem;
+}
+
+.artist-navigation-loading p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.artist-navigation-spinner {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border: 3px solid color-mix(in srgb, var(--accent) 20%, transparent);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: artist-navigation-spin 0.8s linear infinite;
+}
+
+@keyframes artist-navigation-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .artist-navigation-spinner { animation: none; border-style: dotted; }
+}
