@@ -18,6 +18,7 @@
 
 /* Keep the existing AudioPlayer mounted so entering Big Picture never interrupts
    the current browser audio stream. Only the visible playbar chrome disappears. */
+
 .app-shell-big-picture > .playback-bar {
   visibility: hidden !important;
   opacity: 0 !important;
@@ -62,8 +63,7 @@
   position: absolute;
   z-index: -3;
   inset: 0;
-  background:
-    radial-gradient(circle at 30% 46%, rgba(0, 0, 0, 0.08), transparent 24%),
+  background: radial-gradient(circle at 30% 46%, rgba(0, 0, 0, 0.08), transparent 24%),
     linear-gradient(90deg, rgba(3, 4, 5, 0.52) 0%, rgba(3, 4, 5, 0.34) 30%, rgba(3, 4, 5, 0.44) 58%, rgba(3, 4, 5, 0.70) 100%),
     linear-gradient(180deg, rgba(3, 4, 5, 0.48) 0%, rgba(3, 4, 5, 0.08) 28%, rgba(3, 4, 5, 0.40) 100%);
 }
@@ -73,8 +73,7 @@
   z-index: -2;
   inset: 0;
   pointer-events: none;
-  background:
-    radial-gradient(circle at 26% 47%, rgb(var(--big-picture-glow) / 0.10), transparent 16%),
+  background: radial-gradient(circle at 26% 47%, rgb(var(--big-picture-glow) / 0.10), transparent 16%),
     radial-gradient(circle at 29% 50%, rgb(var(--big-picture-glow) / 0.055), transparent 30%),
     radial-gradient(circle at 51% 90%, rgb(var(--big-picture-glow) / 0.05), transparent 18%);
   transition: background 500ms ease;
@@ -131,8 +130,7 @@
   inset: 2.5%;
   z-index: -1;
   border-radius: 20%;
-  background:
-    radial-gradient(circle at 50% 50%, rgb(var(--big-picture-glow) / 0.72) 0%, rgb(var(--big-picture-glow) / 0.46) 34%, rgb(var(--big-picture-glow) / 0.22) 56%, transparent 74%),
+  background: radial-gradient(circle at 50% 50%, rgb(var(--big-picture-glow) / 0.72) 0%, rgb(var(--big-picture-glow) / 0.46) 34%, rgb(var(--big-picture-glow) / 0.22) 56%, transparent 74%),
     radial-gradient(circle at 50% 50%, rgb(var(--big-picture-glow) / 0.34) 0%, rgb(var(--big-picture-glow) / 0.15) 52%, transparent 82%);
   filter: blur(34px);
   transform: scale(1.20);
@@ -160,8 +158,7 @@
   border: 1px solid rgba(255, 255, 255, 0.13);
   border-radius: 18px;
   background: rgba(0, 0, 0, 0.4);
-  box-shadow:
-    0 30px 78px rgba(0, 0, 0, 0.58),
+  box-shadow: 0 30px 78px rgba(0, 0, 0, 0.58),
     0 0 0 1px rgba(255, 255, 255, 0.03),
     0 0 34px rgb(var(--big-picture-glow) / 0.34),
     0 0 88px rgb(var(--big-picture-glow) / 0.20),
@@ -212,13 +209,30 @@
   animation: big-picture-bars 850ms ease-in-out infinite alternate;
 }
 
-.playing-bars i:nth-child(1) { height: 7px; }
-.playing-bars i:nth-child(2) { height: 14px; animation-delay: -280ms; }
-.playing-bars i:nth-child(3) { height: 10px; animation-delay: -520ms; }
+.playing-bars i:nth-child(1) {
+  height: 7px;
+}
+
+.playing-bars i:nth-child(2) {
+  height: 14px;
+  animation-delay: -280ms;
+}
+
+.playing-bars i:nth-child(3) {
+  height: 10px;
+  animation-delay: -520ms;
+}
 
 @keyframes big-picture-bars {
-  from { transform: scaleY(0.52); opacity: 0.62; }
-  to { transform: scaleY(1); opacity: 1; }
+  from {
+    transform: scaleY(0.52);
+    opacity: 0.62;
+  }
+
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
 }
 
 .big-picture-copy h1 {
@@ -307,7 +321,9 @@
   font-weight: 850;
 }
 
-button.big-picture-button { cursor: pointer; }
+button.big-picture-button {
+  cursor: pointer;
+}
 
 .big-picture-button:hover {
   border-color: rgba(255, 255, 255, 0.26);
@@ -321,7 +337,9 @@ button.big-picture-button { cursor: pointer; }
   box-shadow: 0 12px 34px var(--accent-shadow);
 }
 
-.big-picture-button.primary:hover { background: var(--accent-strong); }
+.big-picture-button.primary:hover {
+  background: var(--accent-strong);
+}
 
 .big-picture-subsonic {
   color: rgba(255, 255, 255, 0.76);
@@ -337,7 +355,9 @@ button.big-picture-button { cursor: pointer; }
   color: var(--accent-strong);
 }
 
-.big-picture-subsonic.queued > span { border-radius: 6px; }
+.big-picture-subsonic.queued > span {
+  border-radius: 6px;
+}
 
 .big-picture-playback-controls {
   position: absolute;
@@ -636,8 +656,9 @@ button.big-picture-button { cursor: pointer; }
   text-shadow: 0 0 20px color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
-.big-picture-transport button:active { transform: translateY(0); }
-
+.big-picture-transport button:active {
+  transform: translateY(0);
+}
 
 .big-picture-skip {
   width: 52px !important;
@@ -674,13 +695,19 @@ button.big-picture-button { cursor: pointer; }
   border-bottom: 8px solid transparent;
 }
 
-.big-picture-skip-previous .big-picture-skip-icon i { left: 2px; }
+.big-picture-skip-previous .big-picture-skip-icon i {
+  left: 2px;
+}
+
 .big-picture-skip-previous .big-picture-skip-icon b {
   left: 6px;
   border-right: 12px solid currentColor;
 }
 
-.big-picture-skip-next .big-picture-skip-icon i { right: 2px; }
+.big-picture-skip-next .big-picture-skip-icon i {
+  right: 2px;
+}
+
 .big-picture-skip-next .big-picture-skip-icon b {
   right: 6px;
   border-left: 12px solid currentColor;
@@ -698,8 +725,7 @@ button.big-picture-button { cursor: pointer; }
   border: 2px solid color-mix(in srgb, var(--accent-bright) 58%, transparent);
   background: rgba(8, 10, 14, 0.34);
   color: #f7f7f3;
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04),
     0 12px 26px rgba(0, 0, 0, 0.30),
     0 0 18px color-mix(in srgb, var(--accent) 42%, transparent),
     0 0 42px color-mix(in srgb, var(--accent) 22%, transparent);
@@ -709,8 +735,7 @@ button.big-picture-button { cursor: pointer; }
 
 .big-picture-transport .big-picture-play:hover {
   background: rgba(10, 13, 18, 0.46);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.05),
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.05),
     0 14px 28px rgba(0, 0, 0, 0.34),
     0 0 22px color-mix(in srgb, var(--accent) 52%, transparent),
     0 0 56px color-mix(in srgb, var(--accent) 30%, transparent);
@@ -751,8 +776,15 @@ button.big-picture-button { cursor: pointer; }
   font-size: 2.5rem;
 }
 
-.big-picture-empty h1 { margin: 0.35rem 0 0; font-size: clamp(2rem, 5vw, 4rem); }
-.big-picture-empty p { margin: 0 0 0.5rem; color: var(--muted); }
+.big-picture-empty h1 {
+  margin: 0.35rem 0 0;
+  font-size: clamp(2rem, 5vw, 4rem);
+}
+
+.big-picture-empty p {
+  margin: 0 0 0.5rem;
+  color: var(--muted);
+}
 
 .home-session-card > a.home-big-picture-action {
   position: absolute;
@@ -811,10 +843,15 @@ button.big-picture-button { cursor: pointer; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .playing-bars i { animation: none; }
+  .playing-bars i {
+    animation: none;
+  }
+
   .big-picture-art,
   .big-picture-art-glow,
-  .big-picture-ambient { transition: none; }
+  .big-picture-ambient {
+    transition: none;
+  }
 }
 
 @media (max-width: 980px) {
@@ -853,12 +890,17 @@ button.big-picture-button { cursor: pointer; }
     text-align: center;
   }
 
-  .big-picture-copy h1 { font-size: clamp(2.7rem, 9vw, 5.5rem); }
+  .big-picture-copy h1 {
+    font-size: clamp(2.7rem, 9vw, 5.5rem);
+  }
+
   .big-picture-meta,
-  .big-picture-actions { justify-content: center; }
+  .big-picture-actions {
+    justify-content: center;
+  }
+
   .big-picture-ambient {
-    background:
-      radial-gradient(circle at 50% 32%, rgb(var(--big-picture-glow) / 0.31), transparent 31%),
+    background: radial-gradient(circle at 50% 32%, rgb(var(--big-picture-glow) / 0.31), transparent 31%),
       radial-gradient(circle at 50% 38%, rgb(var(--big-picture-glow) / 0.12), transparent 55%);
   }
 }
@@ -893,16 +935,35 @@ button.big-picture-button { cursor: pointer; }
 }
 
 @media (max-width: 560px) {
-  .big-picture-page { padding-inline: 1rem; }
-  .big-picture-exit { top: 0.75rem; right: 0.75rem; }
-  .big-picture-art-wrap { width: min(82vw, 380px); }
-  .big-picture-copy h1 { font-size: clamp(2.35rem, 12vw, 4.2rem); }
-  .big-picture-actions { width: 100%; }
+  .big-picture-page {
+    padding-inline: 1rem;
+  }
+
+  .big-picture-exit {
+    top: 0.75rem;
+    right: 0.75rem;
+  }
+
+  .big-picture-art-wrap {
+    width: min(82vw, 380px);
+  }
+
+  .big-picture-copy h1 {
+    font-size: clamp(2.35rem, 12vw, 4.2rem);
+  }
+
+  .big-picture-actions {
+    width: 100%;
+  }
+
   .big-picture-button,
-  .big-picture-subsonic { flex: 1 1 auto; }
+  .big-picture-subsonic {
+    flex: 1 1 auto;
+  }
 }
 
 /* Big Picture queue drawer: hidden by default, with a persistent center-right handle. */
+
 .big-picture-queue-drawer {
   position: fixed;
   top: 0;
@@ -969,11 +1030,19 @@ button.big-picture-button { cursor: pointer; }
 }
 
 .big-picture-queue-handle-bars i:nth-child(1),
-.big-picture-queue-playing i:nth-child(1) { height: 6px; }
+.big-picture-queue-playing i:nth-child(1) {
+  height: 6px;
+}
+
 .big-picture-queue-handle-bars i:nth-child(2),
-.big-picture-queue-playing i:nth-child(2) { height: 12px; }
+.big-picture-queue-playing i:nth-child(2) {
+  height: 12px;
+}
+
 .big-picture-queue-handle-bars i:nth-child(3),
-.big-picture-queue-playing i:nth-child(3) { height: 8px; }
+.big-picture-queue-playing i:nth-child(3) {
+  height: 8px;
+}
 
 .big-picture-queue-handle-bars i {
   transform-origin: bottom;
@@ -983,8 +1052,13 @@ button.big-picture-button { cursor: pointer; }
   animation: big-picture-queue-bars 620ms ease-in-out infinite alternate;
 }
 
-.big-picture-queue-handle-bars.is-playing i:nth-child(2) { animation-delay: -210ms; }
-.big-picture-queue-handle-bars.is-playing i:nth-child(3) { animation-delay: -420ms; }
+.big-picture-queue-handle-bars.is-playing i:nth-child(2) {
+  animation-delay: -210ms;
+}
+
+.big-picture-queue-handle-bars.is-playing i:nth-child(3) {
+  animation-delay: -420ms;
+}
 
 .big-picture-queue-handle-bars.is-paused i {
   opacity: 0.55;
@@ -1171,8 +1245,13 @@ button.big-picture-button { cursor: pointer; }
   animation: big-picture-queue-bars 620ms ease-in-out infinite alternate;
 }
 
-.big-picture-queue-playing.is-playing i:nth-child(2) { animation-delay: -210ms; }
-.big-picture-queue-playing.is-playing i:nth-child(3) { animation-delay: -420ms; }
+.big-picture-queue-playing.is-playing i:nth-child(2) {
+  animation-delay: -210ms;
+}
+
+.big-picture-queue-playing.is-playing i:nth-child(3) {
+  animation-delay: -420ms;
+}
 
 .big-picture-queue-playing.is-paused i {
   opacity: 0.55;
@@ -1180,8 +1259,15 @@ button.big-picture-button { cursor: pointer; }
 }
 
 @keyframes big-picture-queue-bars {
-  from { transform: scaleY(0.42); opacity: 0.62; }
-  to { transform: scaleY(1); opacity: 1; }
+  from {
+    transform: scaleY(0.42);
+    opacity: 0.62;
+  }
+
+  to {
+    transform: scaleY(1);
+    opacity: 1;
+  }
 }
 
 .big-picture-queue-item.draggable {
@@ -1223,9 +1309,14 @@ button.big-picture-button { cursor: pointer; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .big-picture-queue-drawer { transition: none; }
+  .big-picture-queue-drawer {
+    transition: none;
+  }
+
   .big-picture-queue-playing.is-playing i,
-  .big-picture-queue-handle-bars.is-playing i { animation: none; }
+  .big-picture-queue-handle-bars.is-playing i {
+    animation: none;
+  }
 }
 
 @media (max-width: 620px) {
@@ -1241,6 +1332,7 @@ button.big-picture-button { cursor: pointer; }
 
 /* Keep the edge-drawer handle physically anchored while interacting with it.
    Global button hover/focus rules elsewhere in Helix must not shift this control. */
+
 .big-picture-queue-handle,
 .big-picture-queue-handle:hover,
 .big-picture-queue-handle:focus,
@@ -1250,6 +1342,7 @@ button.big-picture-button { cursor: pointer; }
 }
 
 /* Big Picture lyrics view */
+
 .big-picture-lyrics-control {
   grid-column: 1;
   justify-self: start;
@@ -1297,6 +1390,7 @@ button.big-picture-button { cursor: pointer; }
 /* Lyrics changes only the foreground content. Keep the exact same visual
    backdrop stack as normal Big Picture. These values intentionally mirror
    the base selectors above so later lyrics rules cannot dim it independently. */
+
 .big-picture-page.lyrics-view .big-picture-backdrop {
   inset: -1.25%;
   background-position: center;
@@ -1308,8 +1402,7 @@ button.big-picture-button { cursor: pointer; }
 
 .big-picture-page.lyrics-view .big-picture-shade {
   opacity: 1;
-  background:
-    radial-gradient(circle at 30% 46%, rgba(0, 0, 0, 0.08), transparent 24%),
+  background: radial-gradient(circle at 30% 46%, rgba(0, 0, 0, 0.08), transparent 24%),
     linear-gradient(90deg, rgba(3, 4, 5, 0.52) 0%, rgba(3, 4, 5, 0.34) 30%, rgba(3, 4, 5, 0.44) 58%, rgba(3, 4, 5, 0.70) 100%),
     linear-gradient(180deg, rgba(3, 4, 5, 0.48) 0%, rgba(3, 4, 5, 0.08) 28%, rgba(3, 4, 5, 0.40) 100%);
   pointer-events: none;
@@ -1412,8 +1505,14 @@ button.big-picture-button { cursor: pointer; }
   scrollbar-color: rgba(255,255,255,0.18) transparent;
 }
 
-.big-picture-lyrics-body::-webkit-scrollbar { width: 8px; }
-.big-picture-lyrics-body::-webkit-scrollbar-track { background: transparent; }
+.big-picture-lyrics-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.big-picture-lyrics-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
 .big-picture-lyrics-body::-webkit-scrollbar-thumb {
   border-radius: 999px;
   background: rgba(255,255,255,0.14);
@@ -1458,8 +1557,7 @@ button.big-picture-button { cursor: pointer; }
 .big-picture-lyric-line[data-active="true"] {
   color: #fff;
   transform: translateX(0.18rem);
-  text-shadow:
-    0 0 20px color-mix(in srgb, var(--accent) 15%, transparent),
+  text-shadow: 0 0 20px color-mix(in srgb, var(--accent) 15%, transparent),
     0 3px 24px rgba(0,0,0,0.35);
 }
 
@@ -1511,7 +1609,9 @@ button.big-picture-button { cursor: pointer; }
   color: rgba(255,255,255,0.66);
 }
 
-.big-picture-lyrics-break { height: 1.1rem; }
+.big-picture-lyrics-break {
+  height: 1.1rem;
+}
 
 .big-picture-lyrics-state {
   min-height: 60vh;
@@ -1522,7 +1622,9 @@ button.big-picture-button { cursor: pointer; }
   font-weight: 700;
 }
 
-.big-picture-lyrics-state.error { color: color-mix(in srgb, var(--danger) 82%, white); }
+.big-picture-lyrics-state.error {
+  color: color-mix(in srgb, var(--danger) 82%, white);
+}
 
 .big-picture-lyrics-source {
   width: min(1040px, 100%);
@@ -1537,17 +1639,28 @@ button.big-picture-button { cursor: pointer; }
   .big-picture-lyrics-stage {
     padding: 5.4rem 1.1rem 1.5rem;
   }
+
   .big-picture-lyrics-header {
     align-items: flex-start;
     gap: 1rem;
   }
-  .big-picture-lyrics-synced { padding-block: 4.5rem 6rem; }
-  .big-picture-lyric-line { font-size: clamp(1.65rem, 8vw, 2.7rem); }
+
+  .big-picture-lyrics-synced {
+    padding-block: 4.5rem 6rem;
+  }
+
+  .big-picture-lyric-line {
+    font-size: clamp(1.65rem, 8vw, 2.7rem);
+  }
+
   .big-picture-lyrics-plain button,
-  .big-picture-lyrics-plain p { font-size: clamp(1.3rem, 6vw, 2rem); }
+  .big-picture-lyrics-plain p {
+    font-size: clamp(1.3rem, 6vw, 2rem);
+  }
 }
 
 /* Lyrics is a content view only: transport and queue remain fully available. */
+
 .big-picture-page.lyrics-view .big-picture-playback-controls {
   z-index: 24;
 }
@@ -1564,5 +1677,4 @@ button.big-picture-button { cursor: pointer; }
   .big-picture-lyrics-stage {
     bottom: 11.25rem;
   }
-
 }

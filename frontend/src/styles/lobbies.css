@@ -866,6 +866,7 @@
 }
 
 /* 2026 lobby visual refresh: music-room hierarchy, reduced dashboard chrome. */
+
 .lobby-dashboard-main {
 }
 
@@ -1245,6 +1246,7 @@
 }
 
 /* Lobby concept fidelity pass: match the approved owner-control composition. */
+
 .lobby-dashboard-main {
   gap: 0.85rem;
   padding: 1.15rem 1.35rem 1.5rem;
@@ -1473,6 +1475,7 @@
 }
 
 /* Lobby fidelity follow-up: heading/action alignment */
+
 .lobby-now-dashboard-card .section-heading {
   display: flex;
   flex-direction: column;
@@ -1507,6 +1510,7 @@
 }
 
 /* Owner lobby header: align the live UI with the approved compact control-bar concept. */
+
 .lobby-dashboard-shell.owner .lobby-dashboard-hero {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: end;
@@ -1575,6 +1579,7 @@
 }
 
 /* Lobby fidelity follow-up: compact guest settings */
+
 .lobby-permissions-card {
   display: block;
   min-height: 0;
@@ -1594,6 +1599,7 @@
 }
 
 /* Keep the owner panel readable without turning every setting into a paragraph. */
+
 .lobby-permissions-card .lobby-setting-block > div:first-child > span,
 .lobby-permissions-card .permission-row > span:first-child > span {
 }
@@ -1613,6 +1619,7 @@
 }
 
 /* Treat the permission switches as a compact settings list, like the concept. */
+
 .lobby-permissions-card .permission-row {
   grid-template-columns: minmax(0, 1fr) auto;
   border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
@@ -1640,11 +1647,13 @@
 
 @media (min-width: 1321px) {
   /* The right column is intentionally terse at desktop sizes. */
+
   .lobby-permissions-card .permission-row > span:first-child > span {
   }
 }
 
 /* Guest settings concept-fidelity pass */
+
 .lobby-permissions-card {
   padding: 1rem 1.1rem 1.05rem;
 }
@@ -1762,6 +1771,7 @@
 }
 
 /* Guest settings queue-limit arrows to match concept art */
+
 .lobby-permissions-card .lobby-queue-limit-control {
   grid-template-columns: auto auto;
   align-items: center;
@@ -1827,6 +1837,7 @@
 }
 
 /* Queue-limit stepper polish: precise centering, no hover border jump */
+
 .lobby-permissions-card .lobby-queue-limit-stepper {
   align-items: stretch;
 }
@@ -1868,6 +1879,7 @@
 }
 
 /* Guest permission toggle polish: solid amber track with centered thumb */
+
 .lobby-permissions-card .toggle-pill {
   box-shadow: none;
 }
@@ -1884,6 +1896,7 @@
 }
 
 /* Final toggle geometry fix: pin the thumb to the track instead of translating it. */
+
 .lobby-permissions-card .toggle-pill {
   position: relative;
   display: block;
@@ -1924,8 +1937,8 @@
   transform: translateY(-50%);
 }
 
-
 /* Deep toggle fix: isolate the thumb from generic nested-span typography. */
+
 .lobby-permissions-card .permission-row .toggle-pill {
   position: relative;
   display: inline-block;
@@ -1980,6 +1993,7 @@
 }
 
 /* Lobby station / autoplay cleanup */
+
 .lobby-dashboard-shell .lobby-station-card {
   padding: 1rem 1.05rem 0.95rem;
   border-radius: 10px;
@@ -2112,7 +2126,6 @@
   }
 }
 
-
 /* ========================================================================
    USER PALETTE AUDIT
    ------------------------------------------------------------------------
@@ -2131,6 +2144,7 @@
 }
 
 /* Panels / containers */
+
 .lobby-control-card,
 .lobby-now-dashboard-card,
 .lobby-queue-dashboard-card,
@@ -2153,6 +2167,7 @@
 }
 
 /* Secondary controls should follow the user's control/surface palette. */
+
 .lobby-dashboard-shell input:not([type="range"]):not([type="checkbox"]),
 .lobby-dashboard-shell select,
 .lobby-dashboard-shell textarea,
@@ -2167,6 +2182,7 @@
 }
 
 /* Owner header / status */
+
 .lobby-dashboard-shell .eyebrow,
 .lobby-dashboard-shell .lobby-station-card .eyebrow,
 .queue-added-by,
@@ -2188,6 +2204,7 @@
 }
 
 /* Queue management: remove the old baked-in amber/green queue colors. */
+
 .lobby-queue-table-row {
   background: color-mix(in srgb, var(--surface-soft) 68%, transparent);
   border-color: var(--border-soft);
@@ -2213,8 +2230,7 @@
 .lobby-queue-table-row.drag-over {
   background: color-mix(in srgb, var(--good) 9%, var(--surface));
   border-color: color-mix(in srgb, var(--good) 62%, transparent);
-  box-shadow:
-    inset 0 2px 0 var(--good),
+  box-shadow: inset 0 2px 0 var(--good),
     0 0 0 1px color-mix(in srgb, var(--good) 16%, transparent);
 }
 
@@ -2235,6 +2251,7 @@
 }
 
 /* Add Music */
+
 .lobby-add-tabs button {
   color: var(--muted);
   border-color: var(--border-soft);
@@ -2248,6 +2265,7 @@
 }
 
 /* Members */
+
 .member-avatar {
   color: var(--accent-contrast);
   background: var(--accent);
@@ -2258,6 +2276,7 @@
 }
 
 /* Guest settings */
+
 .lobby-permissions-card .toggle-pill,
 .toggle-pill {
   background: var(--surface-raised);
@@ -2299,6 +2318,7 @@
 }
 
 /* Primary lobby playback actions */
+
 .lobby-inline-controls .round-control:not(:disabled),
 .lobby-dashboard-shell .lobby-station-play-button {
   color: var(--accent-contrast);
@@ -2316,6 +2336,7 @@
    The old lobby mini-player intentionally mixed accent -> blue. With a
    user-controlled palette that looks accidental, so playback progress is now
    one solid selected primary color. */
+
 .lobby-mini-progress progress {
   background: var(--surface-raised);
 }
@@ -2339,12 +2360,14 @@
 }
 
 /* Lobby's standalone bottom player should obey the user's player color too. */
+
 .lobby-mini-player {
   background: color-mix(in srgb, var(--player-bg) 96%, transparent);
   border-top-color: var(--border-soft);
 }
 
 /* Autoplay station section */
+
 .lobby-dashboard-shell .lobby-station-card {
   background: var(--surface);
 }
@@ -2363,6 +2386,7 @@
 
 /* Any remaining legacy "active" lobby accents should derive from the selected
    primary rather than the old fixed amber. */
+
 .lobby-dashboard-shell :is(
   .active,
   [aria-selected="true"]
@@ -2748,6 +2772,7 @@
 }
 
 /* Five-letter lobby join codes and optional password protection. */
+
 .lobby-short-code,
 .lobby-code-chip strong {
   font-size: 1.15rem;

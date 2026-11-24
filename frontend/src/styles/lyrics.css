@@ -76,7 +76,7 @@
   border-radius: 10px;
 }
 
-.lyrics-tabs button[data-active='true'] {
+.lyrics-tabs button[data-active="true"] {
   color: var(--text);
   background: color-mix(in srgb, var(--accent) 16%, transparent);
   border-color: color-mix(in srgb, var(--accent) 34%, transparent);
@@ -126,11 +126,11 @@
   color: color-mix(in srgb, var(--text) 72%, transparent);
 }
 
-.lyrics-line[data-past='true'] {
+.lyrics-line[data-past="true"] {
   color: color-mix(in srgb, var(--text) 26%, transparent);
 }
 
-.lyrics-line[data-active='true'] {
+.lyrics-line[data-active="true"] {
   color: var(--accent);
   transform: translateX(0.35rem);
   font-size: clamp(1.35rem, 2.35vw, 2rem);
@@ -146,7 +146,7 @@
   line-height: 1;
 }
 
-.lyrics-start-line[data-active='true'] {
+.lyrics-start-line[data-active="true"] {
   font-size: 1.65rem;
 }
 
@@ -188,6 +188,7 @@
 }
 
 /* Keep the lyrics control proportional across the selectable playbar layouts. */
+
 .playback-style-ytmusic .lyrics-launch {
   width: 34px;
   min-width: 34px;

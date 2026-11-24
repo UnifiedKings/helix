@@ -1,7 +1,46 @@
-.qp-library-reconciliation { display:flex; flex-wrap:wrap; align-items:center; gap:12px 22px; margin-top:16px; padding:16px; border:1px solid var(--border); border-radius:6px; background:var(--panel); }
-.qp-library-reconciliation > div { flex:1 1 350px; min-width:0; }
-.qp-library-reconciliation p { color:var(--text-muted); font-size:.88rem; margin:6px 0 0; }
-.qp-library-reconciliation button { flex:0 0 auto; color:var(--text); background:var(--panel); border:1px solid var(--border); border-radius:5px; padding:10px 14px; cursor:pointer; }
-.qp-library-reconciliation button:hover:not(:disabled) { border-color:var(--accent); }
-.qp-library-reconciliation button:disabled { opacity:.6; cursor:default; }
-.qp-library-reconciliation .qp-reconcile-result { flex:1 0 100%; margin-top:2px; }
+.qp-library-reconciliation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 22px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+.qp-library-reconciliation > div {
+  flex: 1 1 350px;
+  min-width: 0;
+}
+
+.qp-library-reconciliation p {
+  color: var(--text-muted);
+  font-size: .88rem;
+  margin: 6px 0 0;
+}
+
+.qp-library-reconciliation button {
+  flex: 0 0 auto;
+  color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 10px 14px;
+  cursor: pointer;
+}
+
+.qp-library-reconciliation button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.qp-library-reconciliation button:disabled {
+  opacity: .6;
+  cursor: default;
+}
+
+.qp-library-reconciliation .qp-reconcile-result {
+  flex: 1 0 100%;
+  margin-top: 2px;
+}

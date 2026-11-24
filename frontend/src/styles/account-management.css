@@ -41,8 +41,7 @@
   overflow: hidden;
   border: 1px solid var(--accent-border);
   border-radius: 999px;
-  background:
-    radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--accent-bright) 35%, transparent), transparent 52%),
+  background: radial-gradient(circle at 35% 28%, color-mix(in srgb, var(--accent-bright) 35%, transparent), transparent 52%),
     color-mix(in srgb, var(--accent) 26%, var(--surface-raised));
   color: var(--accent-contrast);
   box-shadow: 0 10px 28px color-mix(in srgb, var(--accent) 20%, transparent);

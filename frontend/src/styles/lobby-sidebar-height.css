@@ -1,5 +1,6 @@
 /* Keep the lobby navigation flush with the fixed lobby player.
    Scoped to the lobby so the normal app shell remains unchanged. */
+
 .lobby-dashboard-shell.owner {
   --lobby-player-height: 96px;
 }
@@ -21,19 +22,23 @@
 }
 
 /* Lobby's existing responsive rules stack the sidebar at narrow widths. */
+
 @media (max-width: 980px) {
   .lobby-dashboard-shell.owner .lobby-dashboard-sidebar {
     position: relative;
     height: auto;
     max-height: none;
   }
+
   .lobby-dashboard-shell.owner .lobby-dashboard-sidebar > .app-sidebar {
     height: auto;
     max-height: none;
   }
 }
+
 /* Keep the lobby navigation rail flush with the fixed lobby player.
    Override the generic sidebar height rules, which target the main app shell. */
+
 .lobby-dashboard-shell.owner > .lobby-dashboard-sidebar {
   position: sticky !important;
   top: 0 !important;
@@ -57,6 +62,7 @@
 
 /* The lobby player is fixed even at compact widths: don't allow older
    mobile rules to turn the sidebar into a short, content-height block. */
+
 @media (max-width: 980px) {
   .lobby-dashboard-shell.owner > .lobby-dashboard-sidebar {
     position: sticky !important;

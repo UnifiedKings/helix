@@ -81,6 +81,7 @@
 }
 
 /* Generic searchable seed fields used by built-in and custom station providers. */
+
 .station-search-config-field {
   min-width: 0;
 }

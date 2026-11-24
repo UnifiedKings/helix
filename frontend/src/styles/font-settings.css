@@ -1,4 +1,5 @@
 /* Typography settings live preview. */
+
 .settings-font-control {
   width: min(100%, 360px);
   display: grid;
@@ -28,10 +29,10 @@
 /* The global typography compatibility layer uses !important so old component
    font declarations cannot win. Read the selected preview family from an
    inline custom property so the sample still shows the exact selected font. */
+
 #root .settings-font-preview {
   font-family: var(--settings-font-preview-family, var(--font-ui)) !important;
 }
-
 
 .settings-font-option + .settings-font-option {
   border-top: 1px solid var(--border-soft);
@@ -70,8 +71,8 @@
   color: var(--danger);
 }
 
-
 /* External Google Font stays inside the same right-side font control column. */
+
 .settings-font-control .settings-external-font-input {
   width: 100%;
 }

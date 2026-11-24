@@ -1078,6 +1078,7 @@ body {
 }
 
 /* Animated now-playing indicator in the queue. */
+
 .queue-playing-bars {
   width: 11px;
   height: 22px;
@@ -1110,29 +1111,54 @@ body {
   animation-duration: 0.83s;
 }
 
-.queue-playing-bars.is-paused > span:nth-child(1) { height: 5px; }
-.queue-playing-bars.is-paused > span:nth-child(2) { height: 10px; }
-.queue-playing-bars.is-paused > span:nth-child(3) { height: 7px; }
+.queue-playing-bars.is-paused > span:nth-child(1) {
+  height: 5px;
+}
+
+.queue-playing-bars.is-paused > span:nth-child(2) {
+  height: 10px;
+}
+
+.queue-playing-bars.is-paused > span:nth-child(3) {
+  height: 7px;
+}
 
 @keyframes queue-equalizer {
-  0% { height: 4px; }
-  45% { height: 16px; }
-  100% { height: 9px; }
+  0% {
+    height: 4px;
+  }
+
+  45% {
+    height: 16px;
+  }
+
+  100% {
+    height: 9px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .queue-playing-bars.is-playing > span {
     animation: none;
   }
-  .queue-playing-bars.is-playing > span:nth-child(1) { height: 5px; }
-  .queue-playing-bars.is-playing > span:nth-child(2) { height: 11px; }
-  .queue-playing-bars.is-playing > span:nth-child(3) { height: 7px; }
-}
 
+  .queue-playing-bars.is-playing > span:nth-child(1) {
+    height: 5px;
+  }
+
+  .queue-playing-bars.is-playing > span:nth-child(2) {
+    height: 11px;
+  }
+
+  .queue-playing-bars.is-playing > span:nth-child(3) {
+    height: 7px;
+  }
+}
 
 /* Filled amber controls always use light foreground text.
    This keeps theme contrast consistent across pages and prevents browser/default
    button text colors from showing up as black on the amber surface. */
+
 button.primary,
 .station-floating-play,
 .transport-main {
@@ -1148,6 +1174,7 @@ button.primary svg,
 
 /* Queue footer placement only: preserve the existing queue visuals while
    keeping the song/time summary at the bottom of the panel. */
+
 .queue-panel-redesign {
   display: flex;
   flex-direction: column;
@@ -1174,11 +1201,13 @@ button.primary svg,
 }
 
 /* Queue panel micro-polish: keep the existing look, only adjust spacing. */
+
 .queue-panel-redesign {
   border-radius: 10px;
 }
 
 /* Give the animated now-playing bars a little more room from the panel edge. */
+
 .queue-row-redesign {
   grid-template-columns: 16px minmax(0, 1fr) auto auto;
 }
@@ -1188,6 +1217,7 @@ button.primary svg,
 }
 
 /* Keep the footer labels comfortably inside the queue border. */
+
 .queue-panel-redesign .queue-summary {
   padding-left: 0.65rem !important;
   padding-right: 0.65rem !important;
@@ -1195,14 +1225,15 @@ button.primary svg,
 }
 
 /* Keep the horizontal inset, but sit the summary closer to the bottom edge. */
+
 .queue-panel-redesign .queue-summary {
   padding-left: 1.15rem !important;
   padding-right: 1.15rem !important;
   padding-bottom: 0.16rem !important;
 }
 
-
 /* Queue summary geometry */
+
 .queue-panel-redesign .queue-summary {
   box-sizing: border-box;
   width: auto;
@@ -1219,6 +1250,7 @@ button.primary svg,
 }
 
 /* Playback repeat state */
+
 .transport-extra[data-active="true"] {
   color: var(--accent-bright);
   background: var(--accent-soft);
@@ -1231,7 +1263,6 @@ button.primary svg,
   background: var(--accent);
 }
 
-
 /* ========================================================================
    PLAYBACK TRANSPORT — BALANCED CENTER
    ------------------------------------------------------------------------
@@ -1243,8 +1274,7 @@ button.primary svg,
 
 @media (min-width: 1101px) {
   .playback-bar {
-    grid-template-columns:
-      minmax(350px, 1fr)
+    grid-template-columns: minmax(350px, 1fr)
       minmax(500px, 610px)
       minmax(350px, 1fr);
   }
@@ -1309,6 +1339,7 @@ button.primary svg,
 }
 
 /* Repeat-one active state. */
+
 .transport-extra[data-active="true"] {
   color: var(--accent-bright);
   background: var(--accent-soft);
@@ -1320,7 +1351,6 @@ button.primary svg,
   color: var(--accent-contrast);
   background: var(--accent);
 }
-
 
 /* ========================================================================
    QUEUE ACTION POLISH
@@ -1365,6 +1395,7 @@ button.primary svg,
 }
 
 /* Clear stays secondary to playback controls, but is now unmistakably clickable. */
+
 .queue-panel-redesign .queue-clear-placeholder {
   min-height: 30px;
   padding: 0.34rem 0.68rem;
@@ -1447,6 +1478,7 @@ button.primary svg,
 }
 
 /* Queue reordering: the entire upcoming-track card is the drag surface. */
+
 .queue-panel-redesign .queue-row-redesign.queue-row-draggable {
   cursor: grab;
   user-select: none;

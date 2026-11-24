@@ -1,45 +1,255 @@
 /* Public sharing reuses the normal Helix playbar's structure and class names.
    Its controls use local browser playback rather than authenticated APIs. */
-.helix-share-shell { --share-edge: rgba(255,255,255,.1); background: #0c0c0e; color: #f5f5f6; min-height: 100dvh; padding-bottom: 116px; box-sizing: border-box; }
-.helix-share-shell * { box-sizing: border-box; }
-.helix-share-header { height: 54px; padding: 0 clamp(16px,3vw,48px); border-bottom: 1px solid var(--share-edge); display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.helix-share-brand { display: flex; align-items: center; gap: 10px; }
-.helix-share-brand .sidebar-brand-logo { display: block; flex: 0 0 28px; width: 28px; height: 28px; }
-.helix-share-brand strong { color: #f5f5f6; font-size: 1.1rem; }
-.helix-share-brand > span:last-child { color: #92929b; font-size: .85rem; margin-left: 12px; }
-.helix-share-header-actions { display: flex; gap: 8px; }
-.helix-share-header button, .helix-share-queue-actions button, .helix-share-row-actions button, .helix-share-big-info button { background: #222226; color: inherit; border: 1px solid var(--share-edge); border-radius: 9px; padding: 9px 12px; cursor: pointer; }
-.helix-share-header button:hover, .helix-share-queue-actions button:hover, .helix-share-row-actions button:hover { background: #303035; }
-.helix-share-center { width: min(1100px, calc(100% - 48px)); margin: 36px auto 0; }
-.helix-share-queue-heading { display: flex; justify-content: space-between; align-items: flex-end; gap: 18px; margin-bottom: 18px; }
-.helix-share-overline { font-size: .7rem; font-weight: 800; letter-spacing: .12em; color: #efa532; }
-.helix-share-queue-heading h1 { font-size: clamp(2rem,4vw,3.2rem); margin: 4px 0 2px; line-height: 1.15; }
-.helix-share-queue-heading p { color: #a5a5ae; margin: 0; }
-.helix-share-queue-actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.helix-share-queue-list { border: 1px solid var(--share-edge); border-radius: 14px; background: #161619; padding: 6px; min-height: 0; }
-.helix-share-queue-row { display: flex; align-items: center; gap: 14px; padding: 10px 12px; min-width: 0; border-radius: 9px; min-height: 64px; }
-.helix-share-queue-row + .helix-share-queue-row { border-top: 1px solid rgba(255,255,255,.045); }
-.helix-share-queue-row.active { background: rgba(239,165,50,.09); }
-.helix-share-queue-row .queue-drag-handle { flex: 0 0 20px; cursor: grab; color: #92929b; }
-.helix-share-queue-row .queue-main { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1; text-align: left; border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0; }
-.helix-share-queue-row .queue-main > span:last-child { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.helix-share-queue-row .queue-main strong, .helix-share-queue-row .queue-main .muted { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.helix-share-queue-row .queue-main .muted { font-size: .82rem; color: #9c9ca4; }
-.helix-share-queue-row .queue-duration { width: 54px; text-align: right; color: #aaaab1; font-size: .85rem; }
-.helix-share-row-actions { display: flex; align-items: center; gap: 4px; }
-.helix-share-row-actions button { padding: 5px 9px; }
-.helix-share-row-actions button:disabled { opacity: .3; }
-.helix-share-empty { padding: 16px; }
-.helix-share-big-picture { background: radial-gradient(ellipse at 55% 30%,#2c241b,#101012 65%); }
-.helix-share-big-content { width: min(1200px,calc(100% - 64px)); min-height: calc(100dvh - 190px); margin: auto; display: flex; align-items: center; justify-content: center; gap: clamp(24px,5vw,90px); }
-.helix-share-big-art { width: min(40vw,440px); flex: 0 0 auto; }
-.helix-share-big-art img { width: 100%; height: auto; border-radius: 16px; box-shadow: 0 22px 80px rgba(0,0,0,.5); }
-.helix-share-big-info { min-width: 0; flex: 1; }
-.helix-share-big-info h1 { font-size: clamp(2.4rem,5vw,5.2rem); line-height: 1.05; margin: 12px 0; overflow-wrap: anywhere; }
-.helix-share-big-info p { font-size: 1.3rem; color: #ccc; }
-.helix-share-big-info > span:last-of-type { display: block; color: #999; margin-bottom: 28px; }
+
+.helix-share-shell {
+  --share-edge: rgba(255,255,255,.1);
+  background: #0c0c0e;
+  color: #f5f5f6;
+  min-height: 100dvh;
+  padding-bottom: 116px;
+  box-sizing: border-box;
+}
+
+.helix-share-shell * {
+  box-sizing: border-box;
+}
+
+.helix-share-header {
+  height: 54px;
+  padding: 0 clamp(16px,3vw,48px);
+  border-bottom: 1px solid var(--share-edge);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.helix-share-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.helix-share-brand .sidebar-brand-logo {
+  display: block;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 28px;
+}
+
+.helix-share-brand strong {
+  color: #f5f5f6;
+  font-size: 1.1rem;
+}
+
+.helix-share-brand > span:last-child {
+  color: #92929b;
+  font-size: .85rem;
+  margin-left: 12px;
+}
+
+.helix-share-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.helix-share-header button,
+.helix-share-queue-actions button,
+.helix-share-row-actions button,
+.helix-share-big-info button {
+  background: #222226;
+  color: inherit;
+  border: 1px solid var(--share-edge);
+  border-radius: 9px;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+
+.helix-share-header button:hover,
+.helix-share-queue-actions button:hover,
+.helix-share-row-actions button:hover {
+  background: #303035;
+}
+
+.helix-share-center {
+  width: min(1100px, calc(100% - 48px));
+  margin: 36px auto 0;
+}
+
+.helix-share-queue-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.helix-share-overline {
+  font-size: .7rem;
+  font-weight: 800;
+  letter-spacing: .12em;
+  color: #efa532;
+}
+
+.helix-share-queue-heading h1 {
+  font-size: clamp(2rem,4vw,3.2rem);
+  margin: 4px 0 2px;
+  line-height: 1.15;
+}
+
+.helix-share-queue-heading p {
+  color: #a5a5ae;
+  margin: 0;
+}
+
+.helix-share-queue-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.helix-share-queue-list {
+  border: 1px solid var(--share-edge);
+  border-radius: 14px;
+  background: #161619;
+  padding: 6px;
+  min-height: 0;
+}
+
+.helix-share-queue-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 12px;
+  min-width: 0;
+  border-radius: 9px;
+  min-height: 64px;
+}
+
+.helix-share-queue-row + .helix-share-queue-row {
+  border-top: 1px solid rgba(255,255,255,.045);
+}
+
+.helix-share-queue-row.active {
+  background: rgba(239,165,50,.09);
+}
+
+.helix-share-queue-row .queue-drag-handle {
+  flex: 0 0 20px;
+  cursor: grab;
+  color: #92929b;
+}
+
+.helix-share-queue-row .queue-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+  text-align: left;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+
+.helix-share-queue-row .queue-main > span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.helix-share-queue-row .queue-main strong,
+.helix-share-queue-row .queue-main .muted {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.helix-share-queue-row .queue-main .muted {
+  font-size: .82rem;
+  color: #9c9ca4;
+}
+
+.helix-share-queue-row .queue-duration {
+  width: 54px;
+  text-align: right;
+  color: #aaaab1;
+  font-size: .85rem;
+}
+
+.helix-share-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.helix-share-row-actions button {
+  padding: 5px 9px;
+}
+
+.helix-share-row-actions button:disabled {
+  opacity: .3;
+}
+
+.helix-share-empty {
+  padding: 16px;
+}
+
+.helix-share-big-picture {
+  background: radial-gradient(ellipse at 55% 30%,#2c241b,#101012 65%);
+}
+
+.helix-share-big-content {
+  width: min(1200px,calc(100% - 64px));
+  min-height: calc(100dvh - 190px);
+  margin: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(24px,5vw,90px);
+}
+
+.helix-share-big-art {
+  width: min(40vw,440px);
+  flex: 0 0 auto;
+}
+
+.helix-share-big-art img {
+  width: 100%;
+  height: auto;
+  border-radius: 16px;
+  box-shadow: 0 22px 80px rgba(0,0,0,.5);
+}
+
+.helix-share-big-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.helix-share-big-info h1 {
+  font-size: clamp(2.4rem,5vw,5.2rem);
+  line-height: 1.05;
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+
+.helix-share-big-info p {
+  font-size: 1.3rem;
+  color: #ccc;
+}
+
+.helix-share-big-info > span:last-of-type {
+  display: block;
+  color: #999;
+  margin-bottom: 28px;
+}
 
 /* Position the existing Helix playbar without redefining its internal layout. */
+
 .helix-share-shell > .helix-share-playbar.playback-bar {
   position: fixed;
   inset: auto 0 0;
@@ -48,18 +258,52 @@
 }
 
 /* The shared player doesn't have an account. No account-specific buttons are rendered. */
-.helix-share-playbar .rating-controls { display: none; }
+
+.helix-share-playbar .rating-controls {
+  display: none;
+}
 
 @media (max-width: 850px) {
-  .helix-share-big-content { flex-direction: column; padding: 36px 0; text-align: center; }
-  .helix-share-big-art { width: min(60vw, 320px); }
+  .helix-share-big-content {
+    flex-direction: column;
+    padding: 36px 0;
+    text-align: center;
+  }
+
+  .helix-share-big-art {
+    width: min(60vw, 320px);
+  }
 }
+
 @media (max-width: 550px) {
-  .helix-share-center { width: calc(100% - 24px); margin-top: 20px; }
-  .helix-share-queue-heading { align-items: flex-start; flex-direction: column; }
-  .helix-share-header { padding: 0 12px; }
-  .helix-share-brand > span:last-child { display: none; }
-  .helix-share-queue-row { gap: 8px; padding: 8px 4px; }
-  .helix-share-row-actions button { padding: 4px 5px; }
-  .helix-share-queue-row .queue-duration { display: none; }
+  .helix-share-center {
+    width: calc(100% - 24px);
+    margin-top: 20px;
+  }
+
+  .helix-share-queue-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .helix-share-header {
+    padding: 0 12px;
+  }
+
+  .helix-share-brand > span:last-child {
+    display: none;
+  }
+
+  .helix-share-queue-row {
+    gap: 8px;
+    padding: 8px 4px;
+  }
+
+  .helix-share-row-actions button {
+    padding: 4px 5px;
+  }
+
+  .helix-share-queue-row .queue-duration {
+    display: none;
+  }
 }

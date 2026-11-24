@@ -357,9 +357,9 @@
   }
 }
 
-
 /* Themeable Helix brand mark. The PNG is used as a mask so the exact user-selected
    logo color can be applied without image filters or alternate assets. */
+
 .sidebar-brand-logo {
   display: block;
   flex: 0 0 auto;
@@ -379,6 +379,7 @@
 }
 
 /* Keep Helix's side columns pinned while the center content scrolls. */
+
 @media (min-width: 1081px) {
   .app-sidebar {
     position: fixed !important;
@@ -417,6 +418,7 @@
 }
 
 /* Pinned sidebar: extend to the actual top edge of the playbar. */
+
 @media (min-width: 1081px) {
   .app-sidebar {
     padding-bottom: 0;

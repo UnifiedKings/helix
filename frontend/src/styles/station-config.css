@@ -266,6 +266,7 @@
 }
 
 /* Schema-driven station tuning: flatter, provider-agnostic layout. */
+
 .station-tune-modal {
   width: min(1120px, calc(100vw - 3rem));
 }
@@ -353,7 +354,7 @@
 }
 
 .station-config-tabs button::after {
-  content: '';
+  content: "";
   position: absolute;
   left: 1rem;
   right: 1rem;
@@ -457,6 +458,7 @@
 
 /* Tune modal polish: keep the footer outside the scrolling form content and
    tighten the flatter two-column layout without changing provider-driven UI. */
+
 .station-tune-modal .station-modal-body {
   overflow: hidden;
   padding-bottom: 0;

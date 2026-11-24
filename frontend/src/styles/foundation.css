@@ -19,7 +19,10 @@ body {
   min-height: 100vh;
 }
 
-button, input, select, textarea {
+button,
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -49,7 +52,8 @@ button.ghost {
   background: transparent;
 }
 
-button.danger, .danger {
+button.danger,
+.danger {
   color: var(--danger);
 }
 
@@ -72,7 +76,10 @@ a {
   text-decoration: none;
 }
 
-h1, h2, h3, p {
+h1,
+h2,
+h3,
+p {
   margin-top: 0;
 }
 
@@ -128,7 +135,8 @@ nav a {
   font-weight: 700;
 }
 
-nav a.active, nav a:hover {
+nav a.active,
+nav a:hover {
   background: color-mix(in srgb, var(--text) 8%, transparent);
   color: var(--text);
 }
@@ -138,7 +146,10 @@ nav a.active, nav a:hover {
   margin: 0 auto;
 }
 
-.content-card, .queue-panel, .panel, .login-card {
+.content-card,
+.queue-panel,
+.panel,
+.login-card {
   background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
   border: 1px solid var(--border-soft);
   border-radius: 28px;
@@ -195,7 +206,8 @@ nav a.active, nav a:hover {
   text-decoration: underline;
 }
 
-.search-form, .inline-form {
+.search-form,
+.inline-form {
   display: flex;
   gap: 0.75rem;
   align-items: center;
@@ -244,7 +256,8 @@ nav a.active, nav a:hover {
   background: color-mix(in srgb, var(--text) 6.5%, transparent);
 }
 
-.media-title, .title {
+.media-title,
+.title {
   font-weight: 900;
 }
 
@@ -252,7 +265,8 @@ nav a.active, nav a:hover {
   min-width: 0;
 }
 
-.media-body .media-title, .media-body .muted {
+.media-body .media-title,
+.media-body .muted {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -383,7 +397,8 @@ nav a.active, nav a:hover {
   min-width: 0;
 }
 
-.now-playing .title, .now-playing .muted {
+.now-playing .title,
+.now-playing .muted {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -420,7 +435,8 @@ nav a.active, nav a:hover {
   display: contents;
 }
 
-.scrub-row, .volume-row {
+.scrub-row,
+.volume-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 0.55rem;
@@ -434,7 +450,8 @@ nav a.active, nav a:hover {
   align-self: center;
 }
 
-.scrub-input, .volume-input {
+.scrub-input,
+.volume-input {
   padding: 0;
   height: 4px;
   border: 0;
@@ -552,7 +569,8 @@ nav a.active, nav a:hover {
     grid-template-columns: 1fr;
   }
 
-  .search-form, .inline-form {
+  .search-form,
+  .inline-form {
     flex-direction: column;
     align-items: stretch;
   }

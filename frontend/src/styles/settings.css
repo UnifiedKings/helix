@@ -12,10 +12,29 @@
   padding: 0.25rem 0 1.15rem;
   border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
 }
-.settings-page-header h1 { margin: .2rem 0 .3rem; font-size: clamp(2rem, 4vw, 3.2rem); }
-.settings-page-header p { margin: 0; color: var(--muted); max-width: 58ch; }
-.settings-page-actions { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; }
-.settings-page-actions button { min-height: 40px; border-radius: 8px; }
+
+.settings-page-header h1 {
+  margin: .2rem 0 .3rem;
+  font-size: clamp(2rem, 4vw, 3.2rem);
+}
+
+.settings-page-header p {
+  margin: 0;
+  color: var(--muted);
+  max-width: 58ch;
+}
+
+.settings-page-actions {
+  display: flex;
+  gap: .6rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.settings-page-actions button {
+  min-height: 40px;
+  border-radius: 8px;
+}
 
 .settings-layout {
   display: grid;
@@ -30,6 +49,7 @@
   position: sticky;
   top: 1rem;
 }
+
 .settings-section-nav button {
   width: 100%;
   min-height: 40px;
@@ -42,17 +62,38 @@
   font-weight: 600;
   box-shadow: none;
 }
-.settings-section-nav button:hover { background: color-mix(in srgb, var(--text) 3.5%, transparent); color: var(--text); box-shadow: none; }
+
+.settings-section-nav button:hover {
+  background: color-mix(in srgb, var(--text) 3.5%, transparent);
+  color: var(--text);
+  box-shadow: none;
+}
+
 .settings-section-nav button.active {
   background: var(--accent-soft);
   color: var(--accent-bright);
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.settings-section-content { min-width: 0; display: grid; gap: 1rem; }
-.settings-section-heading { padding-bottom: .7rem; }
-.settings-section-heading h2 { margin: 0 0 .28rem; font-size: 1.35rem; }
-.settings-section-heading p { margin: 0; color: var(--muted); }
+.settings-section-content {
+  min-width: 0;
+  display: grid;
+  gap: 1rem;
+}
+
+.settings-section-heading {
+  padding-bottom: .7rem;
+}
+
+.settings-section-heading h2 {
+  margin: 0 0 .28rem;
+  font-size: 1.35rem;
+}
+
+.settings-section-heading p {
+  margin: 0;
+  color: var(--muted);
+}
 
 .settings-card {
   border: 1px solid color-mix(in srgb, var(--text) 7.5%, transparent);
@@ -60,6 +101,7 @@
   background: color-mix(in srgb, var(--surface) 52%, transparent);
   overflow: hidden;
 }
+
 .settings-control-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(150px, auto);
@@ -69,14 +111,35 @@
   padding: .9rem 1rem;
   border-bottom: 1px solid color-mix(in srgb, var(--text) 6.5%, transparent);
 }
-.settings-control-row:last-child { border-bottom: 0; }
-.settings-control-row > div:first-child { min-width: 0; display: grid; gap: .2rem; }
-.settings-control-row strong { font-size: .94rem; }
-.settings-control-row span { color: var(--muted); font-size: .78rem; line-height: 1.35; }
+
+.settings-control-row:last-child {
+  border-bottom: 0;
+}
+
+.settings-control-row > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: .2rem;
+}
+
+.settings-control-row strong {
+  font-size: .94rem;
+}
+
+.settings-control-row span {
+  color: var(--muted);
+  font-size: .78rem;
+  line-height: 1.35;
+}
+
 .settings-control-row input[type="text"],
 .settings-control-row input[type="password"],
 .settings-control-row input[type="number"],
-.settings-control-row select { width: min(320px, 100%); min-height: 38px; border-radius: 7px; }
+.settings-control-row select {
+  width: min(320px, 100%);
+  min-height: 38px;
+  border-radius: 7px;
+}
 
 .settings-toggle {
   position: relative;
@@ -88,8 +151,16 @@
   background: color-mix(in srgb, var(--text) 12%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 8%, transparent);
 }
-.settings-toggle:hover { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent); }
-.settings-toggle.on { background: var(--accent); box-shadow: none; }
+
+.settings-toggle:hover {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 12%, transparent);
+}
+
+.settings-toggle.on {
+  background: var(--accent);
+  box-shadow: none;
+}
+
 .settings-toggle-thumb {
   position: absolute;
   top: 4px;
@@ -100,13 +171,39 @@
   background: var(--text);
   transition: left .16s ease;
 }
-.settings-toggle.on .settings-toggle-thumb { left: 22px; }
 
-.settings-color-control { display: flex; align-items: center; gap: .55rem; }
-.settings-color-control input[type="color"] { width: 44px; height: 36px; padding: 2px; border-radius: 7px; }
-.settings-color-control code { color: var(--muted); }
-.settings-range-control { display: grid; grid-template-columns: minmax(150px, 220px) 48px; gap: .7rem; align-items: center; }
-.settings-range-control output { text-align: right; font-variant-numeric: tabular-nums; }
+.settings-toggle.on .settings-toggle-thumb {
+  left: 22px;
+}
+
+.settings-color-control {
+  display: flex;
+  align-items: center;
+  gap: .55rem;
+}
+
+.settings-color-control input[type="color"] {
+  width: 44px;
+  height: 36px;
+  padding: 2px;
+  border-radius: 7px;
+}
+
+.settings-color-control code {
+  color: var(--muted);
+}
+
+.settings-range-control {
+  display: grid;
+  grid-template-columns: minmax(150px, 220px) 48px;
+  gap: .7rem;
+  align-items: center;
+}
+
+.settings-range-control output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
 
 .settings-number-stepper {
   display: grid;
@@ -118,15 +215,57 @@
   border-radius: 8px;
   background: color-mix(in srgb, var(--bg) 80%, transparent);
 }
-.settings-number-stepper button { border: 0; border-radius: 0; padding: 0; background: transparent; box-shadow: none; font-size: 1.05rem; }
-.settings-number-stepper button:hover { background: color-mix(in srgb, var(--text) 5%, transparent); box-shadow: none; }
-.settings-number-stepper output { display: grid; place-items: center; border-inline: 1px solid color-mix(in srgb, var(--text) 7%, transparent); font-weight: 700; font-variant-numeric: tabular-nums; }
-.settings-note { margin: 0; padding: .75rem 1rem; color: var(--muted); font-size: .76rem; border-top: 1px solid color-mix(in srgb, var(--text) 5.5%, transparent); }
-.settings-note code { color: var(--text); }
 
-.settings-css-card { padding: 1rem; overflow: visible; }
-.settings-css-card > label { display: grid; gap: .2rem; margin-bottom: .7rem; }
-.settings-css-card > label span { color: var(--muted); font-size: .8rem; }
+.settings-number-stepper button {
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 1.05rem;
+}
+
+.settings-number-stepper button:hover {
+  background: color-mix(in srgb, var(--text) 5%, transparent);
+  box-shadow: none;
+}
+
+.settings-number-stepper output {
+  display: grid;
+  place-items: center;
+  border-inline: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-note {
+  margin: 0;
+  padding: .75rem 1rem;
+  color: var(--muted);
+  font-size: .76rem;
+  border-top: 1px solid color-mix(in srgb, var(--text) 5.5%, transparent);
+}
+
+.settings-note code {
+  color: var(--text);
+}
+
+.settings-css-card {
+  padding: 1rem;
+  overflow: visible;
+}
+
+.settings-css-card > label {
+  display: grid;
+  gap: .2rem;
+  margin-bottom: .7rem;
+}
+
+.settings-css-card > label span {
+  color: var(--muted);
+  font-size: .8rem;
+}
+
 .settings-css-card textarea {
   width: 100%;
   min-height: 360px;
@@ -136,45 +275,185 @@
   font: 13px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   tab-size: 2;
 }
-.settings-css-footer { display: flex; justify-content: space-between; align-items: center; gap: .8rem; padding-top: .65rem; color: var(--muted); font-size: .75rem; }
-.settings-css-footer button { border: 0; background: transparent; box-shadow: none; padding: .3rem 0; color: var(--muted); }
-.settings-css-footer button:hover { color: var(--text); box-shadow: none; }
 
-.admin-status-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); border-block: 1px solid color-mix(in srgb, var(--text) 7%, transparent); }
-.admin-status-grid > div { display: grid; gap: .25rem; padding: 1rem; border-right: 1px solid color-mix(in srgb, var(--text) 7%, transparent); }
-.admin-status-grid > div:last-child { border-right: 0; }
-.admin-status-grid span { color: var(--muted); font-size: .74rem; text-transform: uppercase; letter-spacing: .06em; }
-.admin-status-grid strong { font-size: 1rem; }
-.status-ok { color: var(--good); }
-.settings-diagnostics { margin-top: .8rem; border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent); padding-top: .7rem; }
-.settings-diagnostics summary { cursor: pointer; color: var(--muted); }
-.settings-diagnostics pre { max-height: 320px; overflow: auto; padding: .8rem; border-radius: 7px; background: var(--bg); font-size: .72rem; }
+.settings-css-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: .8rem;
+  padding-top: .65rem;
+  color: var(--muted);
+  font-size: .75rem;
+}
 
-.admin-create-user { display: grid; grid-template-columns: 1fr 1fr 150px auto; gap: .55rem; margin-bottom: 1rem; }
-.admin-create-user > * { min-height: 40px; border-radius: 7px; }
-.admin-settings-user-list { border-top: 1px solid color-mix(in srgb, var(--text) 7.5%, transparent); }
-.admin-settings-user-list > div { display: grid; grid-template-columns: minmax(0,1fr) 170px 90px; gap: .65rem; align-items: center; padding: .75rem 0; border-bottom: 1px solid color-mix(in srgb, var(--text) 6.5%, transparent); }
-.admin-settings-user-list span { display: grid; gap: .12rem; }
-.admin-settings-user-list small { color: var(--muted); }
-.settings-obsolete-note { margin-top: 1rem; padding: .85rem 1rem; border-left: 3px solid var(--accent); background: var(--accent-soft); }
-.settings-obsolete-note p { color: var(--muted); margin: .35rem 0 .55rem; }
-.settings-obsolete-note code { display: block; white-space: normal; overflow-wrap: anywhere; color: var(--text); font-size: .74rem; }
+.settings-css-footer button {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: .3rem 0;
+  color: var(--muted);
+}
+
+.settings-css-footer button:hover {
+  color: var(--text);
+  box-shadow: none;
+}
+
+.admin-status-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  border-block: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.admin-status-grid > div {
+  display: grid;
+  gap: .25rem;
+  padding: 1rem;
+  border-right: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.admin-status-grid > div:last-child {
+  border-right: 0;
+}
+
+.admin-status-grid span {
+  color: var(--muted);
+  font-size: .74rem;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+
+.admin-status-grid strong {
+  font-size: 1rem;
+}
+
+.status-ok {
+  color: var(--good);
+}
+
+.settings-diagnostics {
+  margin-top: .8rem;
+  border-top: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  padding-top: .7rem;
+}
+
+.settings-diagnostics summary {
+  cursor: pointer;
+  color: var(--muted);
+}
+
+.settings-diagnostics pre {
+  max-height: 320px;
+  overflow: auto;
+  padding: .8rem;
+  border-radius: 7px;
+  background: var(--bg);
+  font-size: .72rem;
+}
+
+.admin-create-user {
+  display: grid;
+  grid-template-columns: 1fr 1fr 150px auto;
+  gap: .55rem;
+  margin-bottom: 1rem;
+}
+
+.admin-create-user > * {
+  min-height: 40px;
+  border-radius: 7px;
+}
+
+.admin-settings-user-list {
+  border-top: 1px solid color-mix(in srgb, var(--text) 7.5%, transparent);
+}
+
+.admin-settings-user-list > div {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) 170px 90px;
+  gap: .65rem;
+  align-items: center;
+  padding: .75rem 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 6.5%, transparent);
+}
+
+.admin-settings-user-list span {
+  display: grid;
+  gap: .12rem;
+}
+
+.admin-settings-user-list small {
+  color: var(--muted);
+}
+
+.settings-obsolete-note {
+  margin-top: 1rem;
+  padding: .85rem 1rem;
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
+}
+
+.settings-obsolete-note p {
+  color: var(--muted);
+  margin: .35rem 0 .55rem;
+}
+
+.settings-obsolete-note code {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: .74rem;
+}
 
 @media (max-width: 900px) {
-  .settings-page-header { align-items: flex-start; flex-direction: column; }
-  .settings-layout { grid-template-columns: 1fr; gap: 1rem; }
-  .settings-section-nav { position: static; grid-template-columns: repeat(2, minmax(0,1fr)); }
-  .admin-create-user { grid-template-columns: 1fr 1fr; }
-}
-@media (max-width: 620px) {
-  .settings-control-row { grid-template-columns: 1fr; gap: .7rem; }
-  .settings-control-row > :last-child { justify-self: start; }
-  .settings-section-nav { grid-template-columns: 1fr; }
-  .admin-status-grid { grid-template-columns: 1fr; }
-  .admin-status-grid > div { border-right: 0; border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent); }
-  .admin-settings-user-list > div, .admin-create-user { grid-template-columns: 1fr; }
+  .settings-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .settings-layout {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .settings-section-nav {
+    position: static;
+    grid-template-columns: repeat(2, minmax(0,1fr));
+  }
+
+  .admin-create-user {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
+@media (max-width: 620px) {
+  .settings-control-row {
+    grid-template-columns: 1fr;
+    gap: .7rem;
+  }
+
+  .settings-control-row > :last-child {
+    justify-self: start;
+  }
+
+  .settings-section-nav {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-status-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-status-grid > div {
+    border-right: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--text) 7%, transparent);
+  }
+
+  .admin-settings-user-list > div,
+  .admin-create-user {
+    grid-template-columns: 1fr;
+  }
+}
 
 .admin-user-permission-toggle,
 .admin-user-permission-fixed {
@@ -443,6 +722,7 @@
 }
 
 /* Use the user's palette for Settings itself rather than old literal colors. */
+
 .settings-page-header,
 .settings-card,
 .settings-control-row,
@@ -520,7 +800,6 @@
     grid-template-columns: 1fr;
   }
 }
-
 
 /* ========================================================================
    ADMIN USERS — CURRENT LAYOUT OVERRIDE
@@ -603,8 +882,7 @@
 @media (max-width: 1100px) {
   .admin-settings-user-list > div {
     grid-template-columns: minmax(0, 1fr) 170px;
-    grid-template-areas:
-      "identity role"
+    grid-template-areas: "identity role"
       "permission action";
   }
 
@@ -629,8 +907,7 @@
 @media (max-width: 620px) {
   .admin-settings-user-list > div {
     grid-template-columns: 1fr;
-    grid-template-areas:
-      "identity"
+    grid-template-areas: "identity"
       "role"
       "permission"
       "action";

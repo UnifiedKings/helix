@@ -15,6 +15,7 @@
 }
 
 /* Keep the selected state visually clean on hover too. */
+
 .playback-bar .rating-button[data-active="true"]:hover:not(:disabled) {
   background: transparent !important;
   border-color: transparent !important;
@@ -23,6 +24,7 @@
 
 /* The thumb glyph itself carries the selected state, so alternate layouts
    should not add their own active button surface. */
+
 .playback-bar.playback-style-ytmusic .rating-button[data-active="true"],
 .playback-bar.playback-style-spotify .rating-button[data-active="true"],
 .playback-bar.playback-style-pandora .rating-button[data-active="true"] {

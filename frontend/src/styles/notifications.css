@@ -63,14 +63,17 @@
     opacity: 0;
     transform: translateY(18px) scale(.98);
   }
+
   14% {
     opacity: 1;
     transform: translateY(0) scale(1);
   }
+
   76% {
     opacity: 1;
     transform: translateY(-5px) scale(1);
   }
+
   100% {
     opacity: 0;
     transform: translateY(-20px) scale(.985);
@@ -83,8 +86,15 @@
   }
 
   @keyframes import-toast-fade {
-    0%, 100% { opacity: 0; }
-    10%, 85% { opacity: 1; }
+    0%,
+    100% {
+      opacity: 0;
+    }
+
+    10%,
+    85% {
+      opacity: 1;
+    }
   }
 }
 

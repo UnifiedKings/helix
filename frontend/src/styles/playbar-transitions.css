@@ -28,11 +28,13 @@
     transform: translateY(7px) scaleY(0.96);
     filter: blur(1.2px);
   }
+
   65% {
     opacity: 1;
     transform: translateY(-1px) scaleY(1.008);
     filter: blur(0);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0) scaleY(1);
@@ -46,11 +48,13 @@
     transform: translateY(5px) scaleX(0.985);
     filter: blur(1px);
   }
+
   65% {
     opacity: 1;
     transform: translateY(-1px) scaleX(1.004);
     filter: blur(0);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0) scaleX(1);
@@ -64,11 +68,13 @@
     transform: translateY(6px) scale(0.992);
     filter: blur(1px);
   }
+
   68% {
     opacity: 1;
     transform: translateY(-1px) scale(1.002);
     filter: blur(0);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -82,11 +88,13 @@
     transform: translateY(6px) scaleY(0.94);
     filter: blur(1px);
   }
+
   65% {
     opacity: 1;
     transform: translateY(-1px) scaleY(1.008);
     filter: blur(0);
   }
+
   100% {
     opacity: 1;
     transform: translateY(0) scaleY(1);

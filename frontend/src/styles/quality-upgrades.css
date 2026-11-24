@@ -444,6 +444,7 @@
 }
 
 /* Quality upgrade audit/detail panel. */
+
 .quality-audit-backdrop {
   position: fixed;
   inset: 0;
@@ -472,8 +473,14 @@
   border-bottom: 1px solid var(--border-soft);
 }
 
-.quality-audit-header h2 { margin: .15rem 0 .25rem; }
-.quality-audit-header p { margin: 0; color: var(--muted); }
+.quality-audit-header h2 {
+  margin: .15rem 0 .25rem;
+}
+
+.quality-audit-header p {
+  margin: 0;
+  color: var(--muted);
+}
 
 .quality-audit-summary {
   display: grid;
@@ -491,23 +498,66 @@
   padding: .75rem .85rem;
   border-bottom: 1px solid var(--border-soft);
 }
-.quality-audit-summary > div:last-child { border-bottom: 0; }
-.quality-audit-summary span { color: var(--muted); font-size: .76rem; }
-.quality-audit-summary strong { min-width: 0; overflow-wrap: anywhere; font-size: .82rem; }
 
-.quality-audit-events { display: grid; gap: 0; border-top: 1px solid var(--border-soft); }
-.quality-audit-event { display: grid; grid-template-columns: 140px minmax(0, 1fr); gap: .25rem .8rem; padding: .8rem 0; border-bottom: 1px solid var(--border-soft); }
-.quality-audit-event time { color: var(--faint); font-size: .72rem; }
-.quality-audit-event strong { font-size: .82rem; text-transform: capitalize; }
-.quality-audit-event p { grid-column: 2; margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.4; }
-
-@media (max-width: 620px) {
-  .quality-audit-event { grid-template-columns: 1fr; }
-  .quality-audit-event p { grid-column: 1; }
+.quality-audit-summary > div:last-child {
+  border-bottom: 0;
 }
 
+.quality-audit-summary span {
+  color: var(--muted);
+  font-size: .76rem;
+}
+
+.quality-audit-summary strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: .82rem;
+}
+
+.quality-audit-events {
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--border-soft);
+}
+
+.quality-audit-event {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: .25rem .8rem;
+  padding: .8rem 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.quality-audit-event time {
+  color: var(--faint);
+  font-size: .72rem;
+}
+
+.quality-audit-event strong {
+  font-size: .82rem;
+  text-transform: capitalize;
+}
+
+.quality-audit-event p {
+  grid-column: 2;
+  margin: 0;
+  color: var(--muted);
+  font-size: .78rem;
+  line-height: 1.4;
+}
+
+@media (max-width: 620px) {
+  .quality-audit-event {
+    grid-template-columns: 1fr;
+  }
+
+  .quality-audit-event p {
+    grid-column: 1;
+  }
+}
 
 /* Compact icon actions for Quality Upgrades. */
+
 .quality-actions-v2 {
   align-items: center;
   gap: 7px;
@@ -537,8 +587,7 @@
   color: var(--muted);
   box-shadow: none;
   cursor: pointer;
-  transition:
-    color 120ms ease,
+  transition: color 120ms ease,
     border-color 120ms ease,
     background 120ms ease,
     transform 120ms ease;

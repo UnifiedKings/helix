@@ -10,8 +10,7 @@
   padding: clamp(1.35rem, 2.4vw, 2.2rem);
   border: 1px solid var(--border-soft);
   border-radius: 28px;
-  background:
-    radial-gradient(circle at 20% 0%, var(--accent-soft), transparent 32%),
+  background: radial-gradient(circle at 20% 0%, var(--accent-soft), transparent 32%),
     radial-gradient(circle at 92% 10%, color-mix(in srgb, var(--good) 8%, transparent), transparent 30%),
     var(--surface);
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.24);
@@ -150,8 +149,7 @@
   padding: 1rem;
   border: 1px solid var(--border-soft);
   border-radius: 26px;
-  background:
-    radial-gradient(circle at 30% 0%, var(--accent-soft), transparent 38%),
+  background: radial-gradient(circle at 30% 0%, var(--accent-soft), transparent 38%),
     var(--surface);
 }
 
@@ -532,7 +530,6 @@
   }
 }
 
-
 /* ========================================================================
    USER PALETTE AUDIT
    Search was one of the oldest amber-specific pages. Keep this block last so
@@ -600,6 +597,7 @@
 }
 
 /* Main Songs / Albums / Artists section tabs. */
+
 .search-result-tabs,
 .search-results-tabs {
   border-color: var(--border-soft);
@@ -623,6 +621,7 @@
 }
 
 /* Some revisions use buttons directly rather than .tab-button. */
+
 .search-result-tabs button.active,
 .search-results-tabs button.active,
 .search-section-tabs button.active {
@@ -674,8 +673,8 @@
   border-color: var(--border);
 }
 
-
 /* Search shape + spacing refinement */
+
 .search-command {
   border-radius: 10px;
 }
@@ -703,6 +702,7 @@
 
 /* Artist/detail album cards: keep all actions inside the card and make the
    action row read more like a deliberate control strip. */
+
 .detail-page .search-album-strip {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
 }
@@ -751,9 +751,9 @@
   height: 42px;
 }
 
-
 /* Search song metadata: keep artist hover affordance outside the ellipsis clip.
    Album text gets its own truncation box so the artist bubble can render fully. */
+
 .song-title-cell > .song-meta-line {
   display: flex;
   align-items: center;
@@ -779,9 +779,9 @@
   margin: 0;
 }
 
-
 /* Search artist-link hover: override the broad `.song-title-cell span` clipping
    rule for the interactive artist span itself. */
+
 .song-title-cell > .song-meta-line .artist-inline-link {
   display: inline-flex !important;
   align-items: center !important;

@@ -1,5 +1,6 @@
 /* History page — page-scoped visual system. The application shell, queue, and
    playback bar are intentionally untouched by this file. */
+
 .history-page-v2 {
   width: min(100%, 1380px);
   margin: 0 auto;
@@ -59,15 +60,33 @@
 
 /* Keep the filter area deliberately two-tiered on desktop so none of the
    controls get squeezed into an unreadable single row. */
-.history-filter-toolbar > :nth-child(1) { grid-column: span 5; }
-.history-filter-toolbar > :nth-child(2) { grid-column: span 3; }
-.history-filter-toolbar > :nth-child(3) { grid-column: span 4; }
+
+.history-filter-toolbar > :nth-child(1) {
+  grid-column: span 5;
+}
+
+.history-filter-toolbar > :nth-child(2) {
+  grid-column: span 3;
+}
+
+.history-filter-toolbar > :nth-child(3) {
+  grid-column: span 4;
+}
+
 .history-filter-toolbar > :nth-child(4),
 .history-filter-toolbar > :nth-child(5),
-.history-filter-toolbar > :nth-child(6) { grid-column: span 2; }
+.history-filter-toolbar > :nth-child(6) {
+  grid-column: span 2;
+}
+
 .history-filter-toolbar > :nth-child(7),
-.history-filter-toolbar > :nth-child(8) { grid-column: span 2; }
-.history-filter-toolbar > :nth-child(9) { grid-column: span 2; }
+.history-filter-toolbar > :nth-child(8) {
+  grid-column: span 2;
+}
+
+.history-filter-toolbar > :nth-child(9) {
+  grid-column: span 2;
+}
 
 .history-field {
   display: flex;
@@ -383,15 +402,21 @@
 
   .history-table-row {
     grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "track actions"
+    grid-template-areas: "track actions"
       "meta meta";
     row-gap: .45rem;
     padding: .7rem .25rem;
   }
 
-  .history-track-cell { grid-area: track; }
-  .history-row-actions-v2 { grid-area: actions; align-self: center; }
+  .history-track-cell {
+    grid-area: track;
+  }
+
+  .history-row-actions-v2 {
+    grid-area: actions;
+    align-self: center;
+  }
+
   .history-source-badge,
   .history-result-cell,
   .history-duration-cell,
@@ -406,7 +431,7 @@
   }
 
   .history-table-row::after {
-    content: '';
+    content: "";
   }
 
   .history-source-badge,
@@ -438,8 +463,7 @@
 
   .history-table-row {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-areas:
-      "track"
+    grid-template-areas: "track"
       "actions";
   }
 

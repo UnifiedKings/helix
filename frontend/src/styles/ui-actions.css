@@ -445,6 +445,7 @@
 /* Artist names are navigational anywhere they are presented as metadata.
    Keep the hover treatment inside the existing text line so parent metadata
    elements can safely use overflow/ellipsis without clipping the bubble. */
+
 .artist-inline-link {
   display: inline-flex !important;
   align-items: center;
@@ -467,8 +468,7 @@
   overflow: visible !important;
   text-overflow: clip !important;
   white-space: nowrap;
-  transition:
-    color 120ms ease,
+  transition: color 120ms ease,
     background 120ms ease,
     box-shadow 120ms ease;
 }
@@ -483,8 +483,7 @@
 
 .artist-inline-link:focus-visible {
   outline: none;
-  box-shadow:
-    inset 0 0 0 1px var(--accent-border),
+  box-shadow: inset 0 0 0 1px var(--accent-border),
     inset 0 0 0 2px color-mix(in srgb, var(--accent) 16%, transparent);
 }
 
@@ -492,6 +491,7 @@
    shrink-wrapped width behavior. In compact metadata lines, fit-content can be
    squeezed down to only the ellipsis. Let the surrounding metadata container
    own truncation instead. */
+
 .album-inline-link {
   display: inline !important;
   width: auto !important;
@@ -505,6 +505,7 @@
 
 /* Station cover control: replace the browser-native file input chrome with a
    compact Helix control while keeping the real file input accessible. */
+
 .station-cover-editor-compact {
   grid-template-columns: 68px minmax(0, 1fr);
   gap: 0.8rem;
@@ -592,7 +593,6 @@
 .station-cover-file-name.has-file {
   color: var(--muted);
 }
-
 
 .station-cover-pending-actions {
   display: grid;

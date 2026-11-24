@@ -394,8 +394,8 @@ nav a.active {
   transform: translateY(0.28rem);
 }
 
-
 /* Keep long Now Playing album names readable instead of collapsing to only an ellipsis. */
+
 .playback-bar .now-playing-meta {
   display: flex;
   align-items: baseline;
@@ -430,6 +430,7 @@ nav a.active {
 
 /* Playbar metadata hardening: shared inline-link spacing is useful elsewhere,
    but the compact player needs a self-contained, non-overhanging line. */
+
 .playback-bar .now-playing-info {
   overflow: hidden;
 }

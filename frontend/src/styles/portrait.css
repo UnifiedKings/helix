@@ -1,5 +1,4 @@
-/*
- * Portrait layout corrections
+/* * Portrait layout corrections
  *
  * Width-only breakpoints are not enough for rotated desktop displays: a
  * portrait viewport can still be wide enough to select Helix's desktop queue
@@ -11,6 +10,7 @@
 
 @media (orientation: portrait) and (max-width: 1400px) {
   /* Use the full viewport for the page instead of reserving desktop columns. */
+
   .app-shell-with-sidebar,
   .lobby-dashboard-shell {
     grid-template-columns: minmax(0, 1fr) !important;
@@ -30,6 +30,7 @@
   }
 
   /* A portrait screen should never keep the fixed 360px queue rail. */
+
   .dashboard-grid {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr) !important;
@@ -50,6 +51,7 @@
 
   /* Return the queue to normal document flow and make it a full-width section.
      Keep its list bounded so a long queue does not take over the whole page. */
+
   .dashboard-grid > .queue-panel,
   .dashboard-grid > .queue-panel-redesign {
     position: relative !important;
@@ -85,6 +87,7 @@
   }
 
   /* Give the stations page its horizontal room back. */
+
   .stations-hero {
     overflow: hidden;
   }
@@ -108,6 +111,7 @@
 
   /* Compact portrait playbar. All four selectable playbar styles fall back to
      the same responsive geometry while retaining their theme/control styling. */
+
   .app-shell {
     padding-bottom: 164px !important;
   }
@@ -257,6 +261,7 @@
 
   /* Alternate styles use fixed utility positions on desktop. Pull them back
      into the transport row in portrait mode. */
+
   .playback-style-ytmusic .transport-extra,
   .playback-style-spotify .transport-extra,
   .playback-style-pandora .transport-extra {
@@ -281,6 +286,7 @@
 
 /* Phone/narrow portrait: one card per row and remove the volume slider from
    the crowded footer while keeping the mute/volume control available. */
+
 @media (orientation: portrait) and (max-width: 700px) {
   .dashboard-content-card {
     padding-left: 0.8rem !important;
@@ -354,7 +360,6 @@
   }
 }
 
-
 /* -------------------------------------------------------------------------
    Portrait width ownership v2
    The first portrait pass collapsed the desktop side columns correctly, but
@@ -408,6 +413,7 @@
 
   /* The content card should own a modest symmetric gutter, not a desktop
      content width. */
+
   .dashboard-content-card {
     padding-left: clamp(0.9rem, 2.4vw, 1.35rem) !important;
     padding-right: clamp(0.9rem, 2.4vw, 1.35rem) !important;
@@ -415,6 +421,7 @@
 
   /* Use the footer's width instead of leaving all controls packed against the
      left side. */
+
   .playback-bar,
   .playback-bar[data-playbar-style],
   .playback-bar.playback-style-helix,
@@ -426,8 +433,7 @@
     left: 0 !important;
     right: 0 !important;
     box-sizing: border-box;
-    grid-template-columns:
-      minmax(240px, 1fr)
+    grid-template-columns: minmax(240px, 1fr)
       minmax(220px, 0.9fr)
       minmax(170px, 0.65fr) !important;
     grid-template-rows: auto auto !important;
@@ -487,6 +493,7 @@
 
 /* Narrow portrait still uses the compact two-row footer from the original
    portrait pass. */
+
 @media (orientation: portrait) and (max-width: 700px) {
   .playback-bar,
   .playback-bar[data-playbar-style],

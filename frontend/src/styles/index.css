@@ -1,3 +1,11 @@
+/*
+ * Helix global stylesheet entry point.
+ *
+ * Keep this file import-only. Modules appear in their established cascade
+ * order; changing that order is a visual change and needs regression testing.
+ * Feature-level stylesheets used directly by a page remain separate.
+ */
+
 @import './tokens.css';
 @import './foundation.css';
 @import './shell-queue.css';
@@ -10,8 +18,6 @@
 @import './search-results-table.css';
 @import './history.css';
 @import './playlists.css';
-@import './playlist-polish.css';
-@import './playlist-menu-fix.css';
 @import './lobbies.css';
 @import './library-detail-settings.css';
 @import './settings.css';
@@ -20,40 +26,11 @@
 @import './big-picture.css';
 @import './playbar-styles.css';
 @import './playbar-transitions.css';
-@import './queue-full-bleed.css';
-@import './main-content-gutters.css';
+@import './shell-layout.css';
 @import './ui-actions.css';
 @import './theme-amber.css';
 @import './typography.css';
 @import './font-settings.css';
 @import './rating-icons.css';
-@import './station-tune-fix.css';
+@import './station-tune-layout.css';
 @import './responsive-shell.css';
-
-/* Big Picture is a true viewport overlay. Keeping the presentation fixed to
-   the viewport avoids inheriting any shell/playbar sizing and guarantees the
-   artwork/background layers reach the physical bottom edge of the screen. */
-.app-shell-big-picture {
-  height: 100vh;
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.app-shell-big-picture .app-main-area,
-.big-picture-route-shell {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.big-picture-page {
-  position: fixed;
-  inset: 0;
-  box-sizing: border-box;
-  width: 100vw;
-  width: 100dvw;
-  height: 100vh;
-  height: 100dvh;
-  min-height: 0;
-}

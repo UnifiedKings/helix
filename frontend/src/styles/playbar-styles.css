@@ -12,6 +12,7 @@
 }
 
 /* YouTube Music ---------------------------------------------------------- */
+
 .playback-bar.playback-style-ytmusic {
   min-height: 72px;
   grid-template-columns: minmax(360px, 0.9fr) minmax(520px, 1.4fr) minmax(180px, 0.7fr) !important;
@@ -27,6 +28,7 @@
 
 /* Guaranteed full-width YTMusic rail. This belongs to the footer instead of
    the browser range control so Firefox cannot make the top track disappear. */
+
 .playback-bar.playback-style-ytmusic::before {
   content: "";
   position: absolute;
@@ -53,6 +55,7 @@
 
 /* YT Music treats playback progress as the top edge of the entire player,
    not as a progress control inside the center column. */
+
 .playback-style-ytmusic .scrub-row {
   position: absolute !important;
   top: -7px !important;
@@ -87,6 +90,7 @@
 
 /* Draw the YT Music-style full-width line explicitly. Relying on the browser's
    native range styling made the track disappear in some themes/browsers. */
+
 .playback-style-ytmusic .scrub-input::-webkit-slider-runnable-track {
   height: 3px;
   border: 0;
@@ -110,6 +114,7 @@
 }
 
 /* The real YT Music bar does not have a large seek knob sitting on the line. */
+
 .playback-style-ytmusic .scrub-input::-webkit-slider-thumb {
   -webkit-appearance: none;
   width: 7px;
@@ -130,6 +135,7 @@
 
 /* Put elapsed / duration beside the left transport group, matching the
    compact timestamp placement in YT Music rather than the Spotify-style row. */
+
 .playback-style-ytmusic .scrub-row > span {
   display: block !important;
   position: fixed;
@@ -147,7 +153,7 @@
 }
 
 .playback-style-ytmusic .scrub-row > span:first-child::after {
-  content: ' /';
+  content: " /";
 }
 
 .playback-style-ytmusic .scrub-row > span:last-child {
@@ -189,6 +195,7 @@
 
 /* YT Music's play control is a larger bare play/pause glyph, not a filled
    circular button. */
+
 .playback-style-ytmusic .transport-main {
   width: 48px;
   height: 48px;
@@ -208,6 +215,7 @@
 
 /* Repeat is a right-side utility in the YT Music layout, next to volume rather
    than part of the left transport cluster. */
+
 .playback-style-ytmusic .transport-extra {
   position: fixed !important;
   right: 198px !important;
@@ -322,6 +330,7 @@
 }
 
 /* Spotify ---------------------------------------------------------------- */
+
 .playback-bar.playback-style-spotify {
   min-height: 94px;
   grid-template-columns: minmax(260px, 0.9fr) minmax(380px, 1.2fr) minmax(190px, 0.8fr);
@@ -446,6 +455,7 @@
 }
 
 /* Pandora ---------------------------------------------------------------- */
+
 .playback-bar.playback-style-pandora {
   min-height: 66px;
   grid-template-columns: 1fr minmax(320px, 430px) 1fr;
@@ -505,13 +515,22 @@
 /* Pandora's reference bar has feedback, replay, play, and skip clustered
    together. Helix does not have exactly the same command set, so repeat/play/
    next occupy that visual cluster and Previous is omitted in this layout. */
+
 .playback-style-pandora .transport-previous {
   display: none;
 }
 
-.playback-style-pandora .transport-repeat { order: 1; }
-.playback-style-pandora .transport-main { order: 2; }
-.playback-style-pandora .transport-next { order: 3; }
+.playback-style-pandora .transport-repeat {
+  order: 1;
+}
+
+.playback-style-pandora .transport-main {
+  order: 2;
+}
+
+.playback-style-pandora .transport-next {
+  order: 3;
+}
 
 .playback-style-pandora .transport-side,
 .playback-style-pandora .transport-extra,
@@ -585,6 +604,7 @@
 }
 
 /* Alternate layouts collapse back to the existing stacked mobile player. */
+
 @media (max-width: 1100px) {
   .playback-style-ytmusic,
   .playback-style-spotify,
@@ -662,6 +682,7 @@
 
 /* YT Music v6: make the full-width progress rail unmissable and keep the
    timestamp clear of transport controls. */
+
 .playback-style-ytmusic .scrub-row {
   top: 0 !important;
   height: 5px !important;
@@ -707,6 +728,7 @@
 
 /* Keep the compact YT Music time readout after the transport cluster instead
    of underneath/inside the next button. */
+
 .playback-style-ytmusic .scrub-row > span {
   bottom: 27px !important;
 }
@@ -724,55 +746,61 @@
 }
 
 /* Repeat belongs to the right utility group, immediately before volume. */
+
 .playback-style-ytmusic .transport-extra {
   right: 184px !important;
 }
 
-
 /* YTMusic v7 hardening: keep the seek hit target/progress above the rail. */
+
 .playback-style-ytmusic .scrub-input {
   z-index: 82 !important;
 }
+
 .playback-style-ytmusic .scrub-input::-moz-range-progress {
   background: var(--accent) !important;
   height: 3px !important;
 }
+
 .playback-style-ytmusic .scrub-input::-moz-range-track {
   background: transparent !important;
   height: 3px !important;
 }
 
-
 /* YTMusic v8: thin visual rail, forgiving seek target. */
+
 .playback-style-ytmusic .scrub-row,
 .playback-style-ytmusic .scrub-input {
   pointer-events: auto !important;
   touch-action: none;
 }
+
 .playback-style-ytmusic .scrub-input {
   cursor: pointer !important;
 }
+
 .playback-style-ytmusic .scrub-input::-moz-range-track,
 .playback-style-ytmusic .scrub-input::-moz-range-progress {
   height: 3px !important;
 }
 
-
 /* YTMusic v9: footer owns progress rendering; range is interaction-only. */
+
 .playback-style-ytmusic .scrub-input::-moz-range-track,
 .playback-style-ytmusic .scrub-input::-moz-range-progress,
 .playback-style-ytmusic .scrub-input::-webkit-slider-runnable-track {
   background: transparent !important;
 }
+
 .playback-style-ytmusic .scrub-input {
   z-index: 83 !important;
 }
-
 
 /* YTMusic v10 cleanup */
 
 /* The original Repeat button stays in the shared transport markup for every
    other playbar style. YTMusic uses its own right-side copy. */
+
 .playback-style-ytmusic .transport .transport-repeat {
   display: none !important;
 }
@@ -819,13 +847,16 @@
 }
 
 /* Put the compact time readout after Next. */
+
 .playback-style-ytmusic .scrub-row > span {
   bottom: 27px !important;
   pointer-events: none !important;
 }
+
 .playback-style-ytmusic .scrub-row > span:first-child {
   left: 202px !important;
 }
+
 .playback-style-ytmusic .scrub-row > span:last-child {
   left: 236px !important;
 }
@@ -833,6 +864,7 @@
 /* Keep the rail visually 3px, but make the actual range a forgiving full-width
    22px target centered on the top edge. Native range behavior handles click
    and drag seeking. */
+
 .playback-style-ytmusic .scrub-row {
   top: -10px !important;
   left: 0 !important;
@@ -860,6 +892,7 @@
 }
 
 /* Footer-owned visible rail/fill stay underneath the invisible native range. */
+
 .playback-bar.playback-style-ytmusic::before,
 .playback-bar.playback-style-ytmusic::after {
   top: 0 !important;
@@ -867,8 +900,8 @@
   pointer-events: none !important;
 }
 
-
 /* YTMusic v11 fixes */
+
 .playback-style-ytmusic .ytmusic-seek-hitbox {
   position: absolute;
   left: 0;
@@ -882,6 +915,7 @@
 
 /* The invisible hitbox handles seeking in YTMusic mode; keep the actual range
    from stealing pointer events while still letting AudioPlayer own the value. */
+
 .playback-style-ytmusic .scrub-input {
   pointer-events: none !important;
 }
@@ -931,8 +965,8 @@
   margin: 0 !important;
 }
 
-
 /* YTMusic v12 interaction polish */
+
 .playback-style-ytmusic .ytmusic-seek-hitbox {
   top: -12px !important;
   height: 26px !important;
@@ -940,6 +974,7 @@
 }
 
 /* Grow the rail on hover without changing the size of the hit target. */
+
 @media (hover: hover) and (pointer: fine) {
   .playback-bar.playback-style-ytmusic:has(.ytmusic-seek-hitbox:hover)::before,
   .playback-bar.playback-style-ytmusic:has(.ytmusic-seek-hitbox:hover)::after {
@@ -954,6 +989,7 @@
 
 /* Give Repeat more breathing room from the volume icon and make it its own
    top-level clickable utility above the seek overlay. */
+
 .playback-style-ytmusic .ytmusic-utility-repeat {
   right: 220px !important;
   z-index: 220 !important;
@@ -974,8 +1010,8 @@
   z-index: 210 !important;
 }
 
-
 /* YTMusic v13: focus on making Repeat reliably clickable. */
+
 .playback-style-ytmusic .ytmusic-seek-hitbox {
   right: 320px !important;
   z-index: 140 !important;
@@ -1008,9 +1044,9 @@
   z-index: 300 !important;
 }
 
-
 /* YTMusic v15: stop positioning Repeat with guessed viewport offsets.
    Repeat and Volume now occupy the SAME fixed right-side grid column. */
+
 .playback-bar.playback-style-ytmusic {
   grid-template-columns: 360px minmax(0, 1fr) 270px !important;
 }
@@ -1043,6 +1079,7 @@
 }
 
 /* Leave the entire right utility column out of the custom seek overlay. */
+
 .playback-style-ytmusic .ytmusic-seek-hitbox {
   right: 270px !important;
   z-index: 140 !important;
@@ -1078,6 +1115,7 @@
 }
 
 /* Repeat OFF vs ON must be visually unmistakable. */
+
 .playback-style-ytmusic .ytmusic-repeat-button[data-active="true"] {
   color: var(--accent-contrast) !important;
   background: var(--accent) !important;
@@ -1096,8 +1134,8 @@
   outline-offset: 2px;
 }
 
-
 /* YTMusic v16: real Repeat state toggle + utility spacing. */
+
 .playback-bar.playback-style-ytmusic {
   grid-template-columns: 360px minmax(0, 1fr) 300px !important;
 }
@@ -1114,11 +1152,13 @@
 }
 
 /* The right utility column is 300px now, so keep seeking out of it entirely. */
+
 .playback-style-ytmusic .ytmusic-seek-hitbox {
   right: 300px !important;
 }
 
 /* Final-cascade Repeat state. */
+
 .playback-style-ytmusic .ytmusic-repeat-button[data-active="false"] {
   color: var(--muted) !important;
   background: transparent !important;
@@ -1139,8 +1179,8 @@
   stroke: currentColor !important;
 }
 
-
 /* YTMusic v17: tighten metadata-to-rating spacing. */
+
 .playback-style-ytmusic .now-playing {
   width: auto !important;
   max-width: min(100%, 620px) !important;
@@ -1156,8 +1196,8 @@
   gap: 0 !important;
 }
 
-
 /* YTMusic v18: bring Repeat closer to the speaker/volume cluster. */
+
 .playback-bar.playback-style-ytmusic {
   grid-template-columns: 360px minmax(0, 1fr) 260px !important;
 }
@@ -1176,8 +1216,8 @@
   margin-left: 0 !important;
 }
 
-
 /* YTMusic v19: give the timestamp a little more breathing room from Next. */
+
 .playback-style-ytmusic .scrub-row > span:first-child {
   left: 216px !important;
 }
@@ -1186,8 +1226,8 @@
   left: 250px !important;
 }
 
-
 /* Spotify pass 1: match Spotify's compact left / centered transport / right utility structure. */
+
 .playback-bar.playback-style-spotify {
   min-height: 86px !important;
   grid-template-columns: minmax(260px, 1fr) minmax(520px, 660px) minmax(210px, 1fr) !important;
@@ -1199,6 +1239,7 @@
 
 /* Keep track info compact instead of allowing the left column to create a huge
    empty gap before Helix's feedback controls. */
+
 .playback-style-spotify .now-playing {
   width: fit-content !important;
   max-width: min(100%, 470px) !important;
@@ -1234,6 +1275,7 @@
 }
 
 /* Spotify's transport cluster is tightly centered above the scrubber. */
+
 .playback-style-spotify .transport-stack {
   grid-column: 2 !important;
   grid-row: 1 !important;
@@ -1283,6 +1325,7 @@
 }
 
 /* Scrubber sits directly below the centered controls, like Spotify. */
+
 .playback-style-spotify .scrub-row {
   grid-column: 2 !important;
   grid-row: 2 !important;
@@ -1300,6 +1343,7 @@
 }
 
 /* Keep the right-side utility area compact and visually anchored to the edge. */
+
 .playback-style-spotify .volume-row {
   grid-column: 3 !important;
   grid-row: 1 / 3 !important;
@@ -1312,9 +1356,9 @@
   transform: none !important;
 }
 
-
 /* Spotify pass 2: add a little more vertical separation between the centered
    transport cluster and the scrubber. */
+
 .playback-bar.playback-style-spotify {
   grid-template-rows: 46px 32px !important;
 }
@@ -1327,11 +1371,11 @@
   margin-top: 4px !important;
 }
 
-
 /* Pandora restart: rebuild the desktop Pandora layout from scratch.
    Goal: thin full-width top progress rail, tight centered radio controls,
    thumbs close to the central cluster, small time readout near the volume,
    and no copied Pandora colors. */
+
 .playback-bar.playback-style-pandora {
   position: relative !important;
   min-height: 64px !important;
@@ -1348,6 +1392,7 @@
 }
 
 /* Full-width top edge progress rail. */
+
 .playback-style-pandora .scrub-row {
   position: absolute !important;
   left: 0 !important;
@@ -1419,6 +1464,7 @@
 }
 
 /* Small right-side time readout like Pandora. */
+
 .playback-style-pandora .scrub-row > span {
   position: absolute !important;
   top: 18px !important;
@@ -1446,6 +1492,7 @@
 }
 
 /* Hide metadata/artwork in desktop Pandora mode. */
+
 .playback-style-pandora .now-playing {
   display: contents !important;
 }
@@ -1457,6 +1504,7 @@
 }
 
 /* Tight centered radio-control cluster. */
+
 .playback-style-pandora .transport-stack {
   position: absolute !important;
   left: 50% !important;
@@ -1530,11 +1578,13 @@
 }
 
 /* Repeat active state should still be readable. */
+
 .playback-style-pandora .transport-repeat[data-active="true"] {
   color: var(--accent-bright) !important;
 }
 
 /* Position thumbs close to the transport cluster, not spread across the bar. */
+
 .playback-style-pandora .rating-controls {
   position: absolute !important;
   left: 50% !important;
@@ -1581,6 +1631,7 @@
 }
 
 /* Small right-side volume utility. */
+
 .playback-style-pandora .volume-row {
   position: absolute !important;
   right: 16px !important;
@@ -1608,6 +1659,7 @@
 }
 
 /* Mobile/tablet fallback remains the stacked player. */
+
 @media (max-width: 1100px) {
   .playback-style-pandora {
     grid-template-columns: 1fr !important;
@@ -1678,10 +1730,10 @@
   }
 }
 
-
 /* Pandora restart v3: restore the playback bar's fundamental full-width shell.
    The v2 restart accidentally changed the footer to position:relative, which
    collapsed the entire Pandora layout into its parent/content width. */
+
 .playback-bar.playback-style-pandora {
   position: fixed !important;
   left: 0 !important;
@@ -1692,8 +1744,8 @@
   box-sizing: border-box !important;
 }
 
-
 /* Pandora restart v4: taller bar and swap Repeat / Previous positions. */
+
 .playback-bar.playback-style-pandora {
   min-height: 78px !important;
 }
@@ -1703,6 +1755,7 @@
 }
 
 /* Visual order: Repeat, Previous, Play/Pause, Next. */
+
 .playback-style-pandora .transport-repeat {
   display: inline-grid !important;
   order: 0 !important;
@@ -1745,9 +1798,9 @@
   min-width: 38px !important;
 }
 
-
 /* Pandora restart v5: scale the controls with the taller bar and move the
    timestamp into the right-side utility row, immediately left of volume. */
+
 .playback-bar.playback-style-pandora {
   min-height: 84px !important;
 }
@@ -1797,6 +1850,7 @@
 }
 
 /* Shift volume a little left to make room for the timestamp. */
+
 .playback-style-pandora .volume-row {
   right: 18px !important;
   width: 132px !important;
@@ -1804,6 +1858,7 @@
 }
 
 /* Timestamp becomes one compact horizontal readout immediately left of volume. */
+
 .playback-style-pandora .scrub-row > span {
   top: auto !important;
   bottom: auto !important;
@@ -1830,8 +1885,8 @@
   margin-left: 4px;
 }
 
-
 /* Pandora restart v6: move the entire right-side time/volume utility group left. */
+
 .playback-style-pandora .volume-row {
   right: 74px !important;
 }
@@ -1844,9 +1899,9 @@
   right: 194px !important;
 }
 
-
 /* Pandora restart v8: hover-only visual rail growth.
    Keep the v6 geometry and timestamp/volume placement completely unchanged. */
+
 .playback-style-pandora .scrub-input::-moz-range-track,
 .playback-style-pandora .scrub-input::-moz-range-progress,
 .playback-style-pandora .scrub-input::-webkit-slider-runnable-track {
@@ -1861,8 +1916,8 @@
   }
 }
 
-
 /* Pandora restart v9: move only the time readout farther left from the speaker. */
+
 .playback-style-pandora .scrub-row > span:first-child {
   right: 238px !important;
 }
@@ -1871,8 +1926,8 @@
   right: 198px !important;
 }
 
-
 /* Pandora restart v10: move only the time readout farther left again. */
+
 .playback-style-pandora .scrub-row > span:first-child {
   right: 274px !important;
 }

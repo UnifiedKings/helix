@@ -1,4 +1,3 @@
-
 /* Search results clarity pass.
    Scoped entirely to the search page so queue, playbar, nav, album pages, etc.
    remain untouched. */
@@ -9,6 +8,7 @@
 
 /* Keep the top result visually prominent, but make it flatter and more
    structured like the approved concept. */
+
 .search-redesign .search-top-result {
   margin-top: 0;
 }
@@ -19,8 +19,7 @@
   padding: 1rem 1.1rem;
   gap: 1.25rem;
   border-radius: 20px;
-  background:
-    linear-gradient(90deg, color-mix(in srgb, var(--accent-soft) 48%, transparent), transparent 36%),
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-soft) 48%, transparent), transparent 36%),
     var(--surface);
   box-shadow: none;
 }
@@ -61,6 +60,7 @@
 }
 
 /* Tabs: flatter, clearer, closer to a results navigation bar. */
+
 .search-redesign .search-result-nav {
   display: flex;
   align-items: flex-end;
@@ -91,7 +91,7 @@
 }
 
 .search-redesign .search-result-nav button.active::after {
-  content: '';
+  content: "";
   position: absolute;
   left: 0.8rem;
   right: 0.8rem;
@@ -107,6 +107,7 @@
 }
 
 /* The key change: one song per row, not two cards. */
+
 .search-redesign .search-song-grid {
   display: flex;
   flex-direction: column;
@@ -116,6 +117,7 @@
 }
 
 /* Fake column labels using the section heading row without changing TSX. */
+
 .search-redesign .search-songs-section .search-section-heading {
   margin-bottom: 0;
   padding: 0 0.9rem 0.55rem;
@@ -130,8 +132,7 @@
 
 .search-redesign .search-song-row {
   display: grid;
-  grid-template-columns:
-    48px
+  grid-template-columns: 48px
     minmax(250px, 2.25fr)
     minmax(130px, 0.8fr)
     72px
@@ -239,6 +240,7 @@
 
 /* Album and artist tabs keep their current components; only remove some of the
    oversized-card feel so the whole search page shares the same visual density. */
+
 .search-redesign .search-album-strip {
   grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
   gap: 0.75rem;
@@ -259,13 +261,14 @@
 }
 
 /* Wide screens get the clean table feel. */
+
 /* Respond to the width actually available to the search results, not the
    browser viewport. This matters when Helix's queue panel is open. */
+
 @container (min-width: 900px) {
   .search-redesign .search-songs-section .search-section-heading {
     display: grid;
-    grid-template-columns:
-      calc(48px + 1rem)
+    grid-template-columns: calc(48px + 1rem)
       minmax(0, 1fr)
       minmax(90px, 0.42fr)
       64px
@@ -279,7 +282,7 @@
   }
 
   .search-redesign .search-songs-section .search-section-heading::after {
-    content: 'SOURCE    TIME    ACTIONS';
+    content: "SOURCE    TIME    ACTIONS";
     grid-column: 3 / 6;
     justify-self: stretch;
     color: var(--muted);
@@ -295,8 +298,7 @@
   }
 
   .search-redesign .search-song-row {
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(0, 1fr)
       minmax(90px, 0.42fr)
       64px
@@ -362,8 +364,8 @@
   box-sizing: border-box;
 }
 
-
 /* Albums: use the same one-result-per-row visual language as songs. */
+
 .search-redesign #search-albums .search-album-strip {
   display: flex;
   flex-direction: column;
@@ -445,6 +447,7 @@
 }
 
 /* Artists: same flat rows, with circular art and a clean metadata column. */
+
 .search-redesign #search-artists .artist-result-grid {
   display: flex;
   flex-direction: column;
@@ -476,7 +479,7 @@
 }
 
 .search-redesign #search-artists .artist-result-card::after {
-  content: '›';
+  content: "›";
   justify-self: end;
   color: var(--faint);
   font-size: 1.5rem;
@@ -513,6 +516,7 @@
 }
 
 /* Match the song section heading density for all result tabs. */
+
 .search-redesign #search-albums .search-section-heading,
 .search-redesign #search-artists .search-section-heading {
   margin-bottom: 0;
@@ -528,6 +532,7 @@
 }
 
 /* Keep everything shrinkable when the queue panel reduces content width. */
+
 .search-redesign #search-albums .search-album-strip,
 .search-redesign #search-albums .search-album-card,
 .search-redesign #search-artists .artist-result-grid,
@@ -566,8 +571,8 @@
   }
 }
 
-
 /* Search row actions — mirror History's lightweight action treatment. */
+
 .search-redesign .search-row-actions {
   display: grid;
   grid-template-columns: 54px 104px minmax(112px, 1fr);
@@ -617,20 +622,20 @@
 }
 
 .search-redesign .search-row-icon[data-tooltip="Play"]::before {
-  content: '▷';
+  content: "▷";
 }
 
 .search-redesign .search-row-icon[data-tooltip="Play"]::after {
-  content: 'Play';
+  content: "Play";
 }
 
 .search-redesign .search-row-icon[data-tooltip="Add to queue"]::before {
-  content: '+';
+  content: "+";
   font-weight: 700;
 }
 
 .search-redesign .search-row-icon[data-tooltip="Add to queue"]::after {
-  content: 'Add to queue';
+  content: "Add to queue";
 }
 
 .search-redesign .search-row-icon[data-tooltip="Add to Subsonic"] {
@@ -638,22 +643,22 @@
 }
 
 .search-redesign .search-row-icon[data-tooltip="Add to Subsonic"]::before {
-  content: '↧';
+  content: "↧";
   color: var(--accent);
 }
 
 .search-redesign .search-row-icon[data-tooltip="Add to Subsonic"]::after {
-  content: 'Add to Subsonic';
+  content: "Add to Subsonic";
   color: color-mix(in srgb, var(--accent) 28%, var(--text));
 }
 
 .search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::before {
-  content: '✓';
+  content: "✓";
   color: var(--accent);
 }
 
 .search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::after {
-  content: 'Queued';
+  content: "Queued";
 }
 
 .search-redesign .search-row-icon:not(:disabled):hover,
@@ -681,10 +686,10 @@
 }
 
 /* Give the History-style action group the space it actually needs. */
+
 @container (min-width: 980px) {
   .search-redesign .search-songs-section .search-section-heading {
-    grid-template-columns:
-      calc(48px + 1rem)
+    grid-template-columns: calc(48px + 1rem)
       minmax(0, 1fr)
       minmax(90px, 0.42fr)
       64px
@@ -692,8 +697,7 @@
   }
 
   .search-redesign .search-song-row {
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(0, 1fr)
       minmax(90px, 0.42fr)
       64px
@@ -702,6 +706,7 @@
 }
 
 /* Like History, collapse to icons before allowing labels to wrap. */
+
 @container (max-width: 979px) {
   .search-redesign .search-song-row {
     grid-template-columns: 48px minmax(0, 1fr) auto 142px;
@@ -745,10 +750,10 @@
   }
 }
 
-
 /* Search results page width fix: reserve breathing room on wide layouts so the
    result rows do not run underneath Helix's right-side queue panel. This only
    changes the results page itself, not the navbar, queue, or playbar. */
+
 @media (min-width: 1400px) {
   .search-redesign {
     max-width: calc(100% - 320px);
@@ -758,10 +763,10 @@
 
 /* Collapse the History-style action labels earlier so they fit before the queue
    starts overlapping the results area. */
+
 @container (min-width: 1160px) {
   .search-redesign .search-songs-section .search-section-heading {
-    grid-template-columns:
-      calc(48px + 1rem)
+    grid-template-columns: calc(48px + 1rem)
       minmax(0, 1fr)
       minmax(84px, 0.38fr)
       60px
@@ -769,8 +774,7 @@
   }
 
   .search-redesign .search-song-row {
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(0, 1fr)
       minmax(84px, 0.38fr)
       60px
@@ -802,9 +806,9 @@
   }
 }
 
-
 /* Corrective pass: keep the overall search page full-width. Only the result
    sections should reserve room so rows don't run under the queue panel. */
+
 @media (min-width: 1400px) {
   .search-redesign {
     max-width: none;
@@ -820,15 +824,16 @@
 
 /* Hide any built-in inner icon/text content so the History-style pseudo content
    is the only thing shown consistently. */
+
 .search-redesign .search-row-icon > * {
   display: none !important;
 }
 
 /* Slightly tighter action sizing so rows fit the reserved results box better. */
+
 @container (min-width: 1160px) {
   .search-redesign .search-songs-section .search-section-heading {
-    grid-template-columns:
-      calc(48px + 1rem)
+    grid-template-columns: calc(48px + 1rem)
       minmax(0, 1fr)
       minmax(82px, 0.36fr)
       56px
@@ -836,8 +841,7 @@
   }
 
   .search-redesign .search-song-row {
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(0, 1fr)
       minmax(82px, 0.36fr)
       56px
@@ -851,28 +855,29 @@
 }
 
 /* Use a cleaner, clearer library-add icon. */
+
 .search-redesign .search-row-icon[data-tooltip="Add to Subsonic"]::before {
-  content: '↓';
+  content: "↓";
   color: var(--accent);
   font-family: inherit;
 }
 
 .search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::before {
-  content: '↓';
+  content: "↓";
   color: var(--accent);
   font-family: inherit;
 }
 
 .search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::after {
-  content: 'Queued';
+  content: "Queued";
   color: color-mix(in srgb, var(--accent) 25%, var(--text));
 }
-
 
 /* FINAL WIDTH CORRECTION --------------------------------------------------
    Helix's main grid already reserves space for the queue. Search results must
    simply stay inside their own grid cell instead of subtracting a fake queue
    width from the page. */
+
 @media (min-width: 1400px) {
   .search-redesign,
   .search-redesign .search-songs-section,
@@ -899,10 +904,10 @@
 }
 
 /* Desktop: labels fit, but every non-action column is allowed to shrink. */
+
 @container (min-width: 1080px) {
   .search-redesign .search-songs-section .search-section-heading {
-    grid-template-columns:
-      60px
+    grid-template-columns: 60px
       minmax(180px, 1fr)
       minmax(78px, 110px)
       54px
@@ -911,8 +916,7 @@
   }
 
   .search-redesign .search-song-row {
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(180px, 1fr)
       minmax(78px, 110px)
       54px
@@ -930,6 +934,7 @@
 
 /* As soon as there isn't room for all three labels, use History's compact
    icon-only behavior rather than allowing the action cell to overflow. */
+
 @container (max-width: 1079px) {
   .search-redesign .search-songs-section .search-section-heading::after {
     display: none;
@@ -959,8 +964,9 @@
 }
 
 /* Use Helix's familiar S+ mark for Add to Subsonic instead of a download arrow. */
+
 .search-redesign .search-row-icon[data-tooltip="Add to Subsonic"]::before {
-  content: 'S+';
+  content: "S+";
   color: var(--accent);
   font-size: 0.78rem;
   font-weight: 800;
@@ -968,7 +974,7 @@
 }
 
 .search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::before {
-  content: '✓';
+  content: "✓";
   color: var(--accent);
   font-size: 0.95rem;
   font-weight: 800;
@@ -987,7 +993,6 @@
   }
 }
 
-
 /* -----------------------------------------------------------------------
    Results table final spacing pass
    Compare with History: the track column should give up spare horizontal
@@ -996,8 +1001,7 @@
 
 @container (min-width: 1080px) {
   .search-redesign .search-songs-section .search-section-heading {
-    grid-template-columns:
-      60px
+    grid-template-columns: 60px
       minmax(180px, 1fr)
       92px
       56px
@@ -1006,8 +1010,7 @@
   }
 
   .search-redesign .search-song-row {
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(180px, 1fr)
       92px
       56px
@@ -1026,10 +1029,10 @@
 
 /* Intermediate widths still have plenty of room for the History labels.
    Give actions priority and let the title/album text truncate first. */
+
 @container (min-width: 850px) and (max-width: 1079px) {
   .search-redesign .search-song-row {
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(150px, 1fr)
       86px
       54px
@@ -1051,8 +1054,9 @@
 }
 
 /* Exact same import symbol used by HistoryPage's ImportIcon. */
+
 .search-redesign .search-row-icon[data-tooltip="Add to Subsonic"]::before {
-  content: '⇩';
+  content: "⇩";
   color: var(--accent);
   font-family: inherit;
   font-size: 1rem;
@@ -1061,7 +1065,7 @@
 }
 
 .search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::before {
-  content: '⇩';
+  content: "⇩";
   color: var(--accent);
   font-family: inherit;
   font-size: 1rem;
@@ -1069,11 +1073,12 @@
 }
 
 .search-redesign .search-row-icon[data-tooltip="Queued for Subsonic"]::after {
-  content: 'Queued';
+  content: "Queued";
 }
 
 /* Track metadata is the flexible part of the table. Never let long album text
    steal width from source/time/actions. */
+
 .search-redesign .song-title-cell,
 .search-redesign .song-meta-line,
 .search-redesign .song-meta-album {
@@ -1086,7 +1091,6 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
 
 /* -----------------------------------------------------------------------
    Album results: match the song table's width priorities and action style.
@@ -1107,6 +1111,7 @@
 
 /* Let title/artist consume the spare middle space, but reserve a real source
    column so actions never get pushed to the far edge. */
+
 .search-redesign #search-albums .album-card-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 92px;
@@ -1143,6 +1148,7 @@
 }
 
 /* Pull the action group inward instead of leaving a huge dead zone. */
+
 .search-redesign #search-albums .album-card-actions {
   justify-self: stretch;
   display: grid;
@@ -1155,6 +1161,7 @@
 }
 
 /* History-style inline Play action. */
+
 .search-redesign #search-albums .album-card-actions--compact .primary {
   display: inline-flex;
   align-items: center;
@@ -1175,13 +1182,13 @@
 }
 
 .search-redesign #search-albums .album-card-actions--compact .primary::before {
-  content: '▷';
+  content: "▷";
   color: color-mix(in srgb, var(--text) 82%, var(--muted));
   font-size: 1rem;
 }
 
 .search-redesign #search-albums .album-card-actions--compact .primary::after {
-  content: 'Play';
+  content: "Play";
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 550;
@@ -1199,6 +1206,7 @@
 }
 
 /* Make the existing overflow menu visually lighter too. */
+
 .search-redesign #search-albums .album-card-menu {
   justify-self: end;
 }
@@ -1223,14 +1231,14 @@
 }
 
 .search-redesign #search-albums .album-more-button::before {
-  content: '⋯';
+  content: "⋯";
   color: color-mix(in srgb, var(--text) 82%, var(--muted));
   font-size: 1rem;
   letter-spacing: 0.08em;
 }
 
 .search-redesign #search-albums .album-more-button::after {
-  content: 'More';
+  content: "More";
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 550;
@@ -1242,6 +1250,7 @@
 }
 
 /* At reduced widths, sacrifice action labels before album text gets crushed. */
+
 @container (max-width: 900px) {
   .search-redesign #search-albums .search-album-card {
     grid-template-columns: 48px minmax(0, 1fr) 84px 92px;
@@ -1263,13 +1272,13 @@
   }
 }
 
-
 /* -----------------------------------------------------------------------
    Album row polish pass
    ----------------------------------------------------------------------- */
 
 /* Pull Source + Actions closer to the album info so the row feels intentional
    rather than stretched across the entire content area. */
+
 .search-redesign #search-albums .search-album-card {
   grid-template-columns: 48px minmax(0, 1fr) 90px 154px;
   column-gap: 0.65rem;
@@ -1287,6 +1296,7 @@
 }
 
 /* Beat the global .primary button styling explicitly. */
+
 .search-redesign #search-albums .album-card-actions--compact > button.primary,
 .search-redesign #search-albums .album-card-actions--compact > button.primary:hover:not(:disabled),
 .search-redesign #search-albums .album-card-actions--compact > button.primary:focus-visible {
@@ -1309,19 +1319,20 @@
 }
 
 /* Hide the actual ▶ character; use the same open triangle used by History. */
+
 .search-redesign #search-albums .album-card-actions--compact > button.primary {
   color: transparent !important;
 }
 
 .search-redesign #search-albums .album-card-actions--compact > button.primary::before {
-  content: '▷';
+  content: "▷";
   color: color-mix(in srgb, var(--text) 82%, var(--muted));
   font-size: 1rem;
   line-height: 1;
 }
 
 .search-redesign #search-albums .album-card-actions--compact > button.primary::after {
-  content: 'Play';
+  content: "Play";
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 550;
@@ -1334,6 +1345,7 @@
 }
 
 /* More should read like a subtle text action, not a separate UI widget. */
+
 .search-redesign #search-albums .album-more-button,
 .search-redesign #search-albums .album-more-button:hover,
 .search-redesign #search-albums .album-more-button:focus-visible {
@@ -1354,14 +1366,14 @@
 }
 
 .search-redesign #search-albums .album-more-button::before {
-  content: '•••';
+  content: "•••";
   letter-spacing: 0.08em;
   color: color-mix(in srgb, var(--text) 75%, var(--muted));
   font-size: 0.72rem;
 }
 
 .search-redesign #search-albums .album-more-button::after {
-  content: 'More';
+  content: "More";
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 550;
@@ -1373,12 +1385,14 @@
 }
 
 /* Slightly smaller source badge to match song rows better. */
+
 .search-redesign #search-albums .album-card-body > .badge {
   padding: 0.22rem 0.48rem;
   font-size: 0.68rem;
 }
 
 /* Compact intermediate layout before dropping labels. */
+
 @container (max-width: 900px) {
   .search-redesign #search-albums .search-album-card {
     grid-template-columns: 48px minmax(0, 1fr) 82px 78px;
@@ -1400,8 +1414,8 @@
   }
 }
 
-
 /* Real inline album action buttons rendered by SearchPage.tsx. */
+
 .search-redesign #search-albums .search-album-card {
   grid-template-columns: 48px minmax(0, 1fr) 90px 320px;
 }
@@ -1418,17 +1432,20 @@
 }
 
 /* Album actions use the exact same SearchPage classes as song actions now. */
+
 .search-redesign #search-albums .album-card-actions .search-row-icon {
   min-height: 30px;
 }
 
 /* Exact History import glyph. */
+
 .search-redesign #search-albums .album-card-actions .search-row-icon[data-tooltip="Add to Subsonic"]::before,
 .search-redesign #search-albums .album-card-actions .search-row-icon[data-tooltip="Queued for Subsonic"]::before {
-  content: '⇩';
+  content: "⇩";
 }
 
 /* Old More-menu rules are irrelevant after the TSX change. */
+
 .search-redesign #search-albums .album-card-menu,
 .search-redesign #search-albums .album-more-button,
 .search-redesign #search-albums .album-card-menu-popover {
@@ -1451,7 +1468,6 @@
   }
 }
 
-
 /* -----------------------------------------------------------------------
    Songs + Albums use the exact same column geometry.
    artwork | info | source | time | actions
@@ -1459,8 +1475,7 @@
    ----------------------------------------------------------------------- */
 
 .search-redesign #search-albums .search-album-card {
-  grid-template-columns:
-    48px
+  grid-template-columns: 48px
     minmax(180px, 1fr)
     92px
     56px
@@ -1469,6 +1484,7 @@
 }
 
 /* Source is now a real sibling column, just like Songs. */
+
 .search-redesign #search-albums .search-album-card > .badge {
   justify-self: start;
   align-self: center;
@@ -1480,6 +1496,7 @@
 }
 
 /* Album metadata only owns the flexible info column now. */
+
 .search-redesign #search-albums .album-card-body {
   display: block;
   min-width: 0;
@@ -1514,10 +1531,10 @@
 }
 
 /* Keep Songs and Albums aligned through the intermediate breakpoint too. */
+
 @container (min-width: 850px) and (max-width: 1079px) {
   .search-redesign #search-albums .search-album-card {
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(150px, 1fr)
       86px
       54px
@@ -1538,6 +1555,7 @@
 }
 
 /* At narrow widths, both result types collapse toward the same compact form. */
+
 @container (max-width: 849px) {
   .search-redesign #search-albums .search-album-card {
     grid-template-columns: 48px minmax(0, 1fr) auto 132px;
@@ -1557,7 +1575,6 @@
     display: none;
   }
 }
-
 
 /* -----------------------------------------------------------------------
    Shared Songs / Albums table geometry.
@@ -1585,6 +1602,7 @@
 }
 
 /* Both result lists occupy the exact same box. */
+
 .search-redesign .search-table-section .search-song-grid,
 .search-redesign .search-table-section .search-album-strip {
   width: 100%;
@@ -1596,11 +1614,11 @@
 }
 
 /* One canonical desktop row template for both result types. */
+
 @container (min-width: 1080px) {
   .search-redesign .search-table-section .search-song-row,
   .search-redesign .search-table-section .search-album-card {
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(180px, 1fr)
       92px
       56px
@@ -1614,10 +1632,10 @@
 
   /* Same heading geometry. Albums omit the Time label visually, but still
      reserve that column so Source/Actions remain stationary. */
+
   .search-redesign .search-table-section .search-section-heading {
     display: grid;
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(180px, 1fr)
       92px
       56px
@@ -1631,7 +1649,7 @@
   }
 
   .search-redesign .search-songs-section .search-section-heading::after {
-    content: 'SOURCE   TIME   ACTIONS';
+    content: "SOURCE   TIME   ACTIONS";
     grid-column: 3 / 6;
     justify-self: stretch;
     color: var(--muted);
@@ -1642,7 +1660,7 @@
   }
 
   .search-redesign .search-albums-section .search-section-heading::after {
-    content: 'SOURCE           ACTIONS';
+    content: "SOURCE           ACTIONS";
     grid-column: 3 / 6;
     justify-self: stretch;
     color: var(--muted);
@@ -1666,11 +1684,11 @@
 }
 
 /* Same intermediate template as well. */
+
 @container (min-width: 850px) and (max-width: 1079px) {
   .search-redesign .search-table-section .search-song-row,
   .search-redesign .search-table-section .search-album-card {
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(150px, 1fr)
       86px
       54px
@@ -1691,6 +1709,7 @@
 }
 
 /* Artwork and title start are explicitly identical. */
+
 .search-redesign .search-table-section .search-song-row .artwork-sm,
 .search-redesign .search-table-section .search-album-card .artwork-lg {
   width: 44px;
@@ -1706,6 +1725,7 @@
 }
 
 /* Source badges share exact dimensions/alignment. */
+
 .search-redesign .search-table-section .search-song-row > .badge,
 .search-redesign .search-table-section .search-album-card > .badge {
   justify-self: start;
@@ -1718,12 +1738,12 @@
 }
 
 /* Keep the album's empty Time slot exactly the same width as Song time. */
+
 .search-redesign .search-table-section .album-duration-spacer {
   display: block;
   width: 56px;
   min-width: 56px;
 }
-
 
 /* -----------------------------------------------------------------------
    Real column headers.
@@ -1739,8 +1759,7 @@
 @container (min-width: 1080px) {
   .search-redesign .search-table-section .search-column-heading {
     display: grid;
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(180px, 1fr)
       92px
       56px
@@ -1772,8 +1791,7 @@
 @container (min-width: 850px) and (max-width: 1079px) {
   .search-redesign .search-table-section .search-column-heading {
     display: grid;
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(150px, 1fr)
       86px
       54px
@@ -1821,6 +1839,7 @@
 
 /* At compact widths the table no longer has stable desktop columns, so keep
    only the section name rather than showing misleading column labels. */
+
 @container (max-width: 849px) {
   .search-redesign .search-table-section .search-column-heading {
     display: block;
@@ -1834,7 +1853,6 @@
   }
 }
 
-
 /* -----------------------------------------------------------------------
    Column header fix.
    Do not rely on container queries for the header itself. Give the header the
@@ -1843,8 +1861,7 @@
 
 .search-redesign .search-table-section .search-column-heading {
   display: grid !important;
-  grid-template-columns:
-    48px
+  grid-template-columns: 48px
     minmax(180px, 1fr)
     92px
     56px
@@ -1886,10 +1903,10 @@
 }
 
 /* Match the intermediate row geometry at narrower desktop widths. */
+
 @media (max-width: 1200px) and (min-width: 851px) {
   .search-redesign .search-table-section .search-column-heading {
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(150px, 1fr)
       86px
       54px
@@ -1899,6 +1916,7 @@
 }
 
 /* At genuinely compact widths, only show the section name. */
+
 @media (max-width: 850px) {
   .search-redesign .search-table-section .search-column-heading {
     display: block !important;
@@ -1912,13 +1930,13 @@
   }
 }
 
-
 /* -----------------------------------------------------------------------
    Final Songs / Albums size normalization.
    Both tabs should look like the same table with different content.
    ----------------------------------------------------------------------- */
 
 /* Identical row box sizing. */
+
 .search-redesign .search-table-section .search-song-row,
 .search-redesign .search-table-section .search-album-card {
   min-height: 66px !important;
@@ -1930,6 +1948,7 @@
 }
 
 /* Identical artwork dimensions. */
+
 .search-redesign .search-table-section .search-song-row .artwork-sm,
 .search-redesign .search-table-section .search-album-card .artwork-lg {
   width: 44px !important;
@@ -1942,6 +1961,7 @@
 }
 
 /* Identical title typography. */
+
 .search-redesign .search-table-section .song-title-cell > strong,
 .search-redesign .search-table-section .album-card-body > strong {
   display: block !important;
@@ -1954,6 +1974,7 @@
 }
 
 /* Identical secondary metadata typography and spacing. */
+
 .search-redesign .search-table-section .song-meta-line,
 .search-redesign .search-table-section .album-card-body > span {
   display: flex !important;
@@ -1969,6 +1990,7 @@
 }
 
 /* Album body should occupy exactly the same vertical footprint as song info. */
+
 .search-redesign .search-table-section .album-card-body,
 .search-redesign .search-table-section .song-title-cell {
   display: block !important;
@@ -1980,6 +2002,7 @@
 }
 
 /* Identical source badge dimensions. */
+
 .search-redesign .search-table-section .search-song-row > .badge,
 .search-redesign .search-table-section .search-album-card > .badge {
   min-height: 24px !important;
@@ -1995,6 +2018,7 @@
 }
 
 /* Same action control footprint in both tabs. */
+
 .search-redesign .search-table-section .search-row-actions,
 .search-redesign #search-albums .album-card-actions.search-row-actions {
   min-height: 30px !important;
@@ -2009,6 +2033,7 @@
 }
 
 /* Same header size/padding between Songs and Albums. */
+
 .search-redesign .search-table-section .search-column-heading {
   min-height: 42px !important;
   height: 42px !important;
@@ -2025,6 +2050,7 @@
 }
 
 /* The album's empty Time cell takes space only; it contributes no visual size. */
+
 .search-redesign .search-table-section .album-duration-spacer {
   height: 1px !important;
   min-height: 1px !important;
@@ -2032,7 +2058,6 @@
   margin: 0 !important;
   visibility: hidden !important;
 }
-
 
 /* -----------------------------------------------------------------------
    Search mode selector — Helix control styling.
@@ -2078,8 +2103,7 @@
   border-color: var(--accent-border) !important;
   background: var(--accent-soft) !important;
   color: var(--accent-bright) !important;
-  box-shadow:
-    inset 0 -2px 0 var(--accent),
+  box-shadow: inset 0 -2px 0 var(--accent),
     0 0 0 1px color-mix(in srgb, var(--accent) 8%, transparent) !important;
 }
 
@@ -2091,6 +2115,7 @@
 
 /* Keep the three controls compact rather than stretching like a mobile
    segmented pill. */
+
 @media (max-width: 720px) {
   .search-redesign .search-mode-row .search-tabs {
     width: fit-content !important;
@@ -2102,15 +2127,14 @@
   }
 }
 
-
 /* Keep Songs and Albums on identical column geometry so Actions never shifts
    when switching tabs. Albums intentionally reserve the Time column even
    though that cell is visually empty. */
+
 .search-results-table .search-results-header,
 .search-results-table .search-result-row,
 .search-results-table .search-album-row {
-  grid-template-columns:
-    minmax(0, 1fr)
+  grid-template-columns: minmax(0, 1fr)
     104px
     64px
     320px !important;
@@ -2147,31 +2171,31 @@
   visibility: hidden;
 }
 
-
 /* Prevent the entire Search content area from shifting horizontally when
    switching between result tabs with different document heights. One tab may
    need a vertical scrollbar while another may not; reserve that gutter for
    the lifetime of the Search route so Source / Time / Actions stay fixed. */
+
 /* Firefox can still change the viewport width between Search tabs when the
    document crosses the vertical-overflow threshold. Force the Search route to
    always own a vertical scrollbar so the table width is identical on Songs,
    Albums, and Artists. */
+
 html:has(.search-redesign) {
   overflow-y: scroll !important;
   scrollbar-gutter: stable !important;
 }
 
-
 /* Final explicit Songs / Albums column alignment.
    The Time slot is a fixed 72px on both result types. Albums already render
    an empty .album-duration-spacer, so it occupies exactly the same slot as a
    song duration without displaying anything. */
+
 @container (min-width: 850px) {
   .search-redesign .search-song-row,
   .search-redesign #search-albums .search-album-card,
   .search-redesign .search-table-section .search-column-heading {
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(180px, 1fr)
       92px
       72px
@@ -2226,10 +2250,10 @@ html:has(.search-redesign) {
   }
 }
 
-
 /* Final action alignment: the Actions columns were already aligned, but the
    album action group still inherited an older justify-content:end rule.
    Pin both button groups to the LEFT edge of the same fixed-width action cell. */
+
 @container (min-width: 850px) {
   .search-redesign #search-songs .search-row-actions,
   .search-redesign #search-albums .album-card-actions.search-row-actions {
@@ -2239,11 +2263,9 @@ html:has(.search-redesign) {
     min-width: 320px !important;
     max-width: 320px !important;
     column-gap: 0.55rem !important;
-
     justify-content: start !important;
     justify-items: start !important;
     justify-self: start !important;
-
     margin: 0 !important;
     padding: 0 !important;
     box-sizing: border-box !important;
@@ -2256,17 +2278,16 @@ html:has(.search-redesign) {
   }
 }
 
-
 /* -----------------------------------------------------------------------
    Shared Songs / Albums geometry.
    Both result types now use the same markup-level layout class and the exact
    same .search-row-actions class. No album-specific action layout remains.
    ----------------------------------------------------------------------- */
+
 @container (min-width: 850px) {
   .search-redesign .search-shared-result-row {
     display: grid !important;
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(180px, 1fr)
       92px
       72px
@@ -2332,8 +2353,7 @@ html:has(.search-redesign) {
 
   .search-redesign .search-table-section .search-column-heading {
     display: grid !important;
-    grid-template-columns:
-      48px
+    grid-template-columns: 48px
       minmax(180px, 1fr)
       92px
       72px

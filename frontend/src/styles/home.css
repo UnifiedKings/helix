@@ -16,8 +16,7 @@
   padding: clamp(1.45rem, 2.2vw, 2rem);
   border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
   border-radius: 22px;
-  background:
-    radial-gradient(circle at 78% 48%, var(--accent-soft), transparent 33%),
+  background: radial-gradient(circle at 78% 48%, var(--accent-soft), transparent 33%),
     var(--bg);
   box-shadow: 0 18px 45px rgba(0,0,0,0.18);
 }
@@ -28,8 +27,7 @@
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background:
-    linear-gradient(90deg,
+  background: linear-gradient(90deg,
       color-mix(in srgb, var(--bg) 98%, transparent) 0%,
       color-mix(in srgb, var(--bg) 94%, transparent) 20%,
       color-mix(in srgb, var(--bg) 74%, transparent) 48%,
@@ -74,8 +72,7 @@
   border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
   border-radius: 17px;
   background: color-mix(in srgb, var(--bg) 55%, transparent);
-  box-shadow:
-    0 18px 44px rgba(0,0,0,0.46),
+  box-shadow: 0 18px 44px rgba(0,0,0,0.46),
     0 0 0 1px rgba(0,0,0,0.28);
 }
 
@@ -132,6 +129,7 @@
 
 /* Only genuinely long titles are clamped. Normal titles are never put inside
    an overflow-hidden line clamp, which was clipping descenders such as g/y/p. */
+
 .home-session-title-row h1.is-long,
 .home-session-title-row h1.is-very-long {
   display: -webkit-box;
@@ -426,6 +424,7 @@
 }
 
 /* Hero-only refinement: song-first presentation and tighter visual language. */
+
 .home-session-card {
   border-radius: 12px;
 }
@@ -491,8 +490,8 @@
   border-radius: 6px;
 }
 
-
 /* User-palette compatibility for the Home hero. */
+
 .home-session-actions .button-link.primary {
   border-color: var(--accent-border) !important;
   background: var(--accent) !important;
@@ -504,8 +503,8 @@
   background: var(--accent-strong) !important;
 }
 
-
 /* Now Playing artist navigation uses the shared .artist-inline-link hover treatment. */
+
 .home-session-artist-row {
   display: flex;
   align-items: center;

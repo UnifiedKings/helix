@@ -26,6 +26,7 @@ textarea {
 
 /* Do not ask the browser to synthesize 800/850/900/950 weights.  The UI gets
    clearer hierarchy from 600/700 than from making every important label black. */
+
 button,
 nav a {
   font-weight: var(--weight-semibold);
@@ -68,6 +69,7 @@ p,
 
 /* Large display titles had accumulated unusually aggressive negative tracking.
    Normalize the main page/title surfaces to one display rhythm. */
+
 .home-session-title-row h1,
 .stations-hero h1,
 .playlist-editor-heading h1,
@@ -84,6 +86,7 @@ p,
 }
 
 /* Secondary headings should feel distinct without becoming display text. */
+
 .home-section-heading h2,
 .section-heading h2,
 .history-list-heading h2,
@@ -101,6 +104,7 @@ p,
 }
 
 /* Small uppercase labels benefit from positive tracking; normal labels do not. */
+
 .eyebrow {
   font-weight: var(--weight-bold);
   letter-spacing: var(--tracking-eyebrow);
@@ -108,6 +112,7 @@ p,
 }
 
 /* Repeated UI labels previously used 800-950 weights throughout the app. */
+
 .station-stat-card strong,
 .home-session-meta span,
 .station-card-body h3,
@@ -126,6 +131,7 @@ p,
 }
 
 /* Preserve stronger emphasis for the most important current-track labels. */
+
 .home-session-title-row h1,
 .playback-title,
 .queue-panel-redesign .queue-item.is-current .queue-track-title {
@@ -135,6 +141,7 @@ p,
 /* Home hero titles are intentionally a touch calmer than generic display text.
    Long track names wrap often, so give them slightly more breathing room and
    less aggressive negative tracking without changing the rest of Helix. */
+
 .home-session-title-row h1 {
   font-size: clamp(2.7rem, 4.5vw, 5rem);
   line-height: 1.045;
@@ -142,6 +149,7 @@ p,
 }
 
 /* Dense metadata reads better with normal spacing instead of display tracking. */
+
 .home-session-copy > .muted,
 .home-session-meta,
 .station-card-body,
