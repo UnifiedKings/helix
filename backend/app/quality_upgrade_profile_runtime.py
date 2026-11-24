@@ -175,10 +175,22 @@ def _commit_with_profile(db: Any) -> None:
         if job and job.status == 'upgraded':
             # Immutable snapshot is recorded at the moment of completion; old
             # upgrades with no such event remain explicitly labeled Legacy.
-            existing = db.execute(select(QualityUpgradeEvent.id).where(
+            # Multiple successful upgrades must produce independent immutable
+            # policy snapshots. A single "snapshot exists" guard would silently
+            # attribute all subsequent upgrades to the first policy used.
+            upgrade_at = job.upgraded_at.isoformat() if job.upgraded_at else ''
+            snapshots = db.execute(select(QualityUpgradeEvent).where(
                 QualityUpgradeEvent.job_id == job.id,
-                QualityUpgradeEvent.event == 'quality_policy_snapshot').limit(1)).first()
-            if not existing:
+                QualityUpgradeEvent.event == 'quality_policy_snapshot')).scalars().all()
+            already_recorded = False
+            for snapshot in snapshots:
+                try:
+                    if json.loads(snapshot.data_json or '{}').get('upgrade_at') == upgrade_at:
+                        already_recorded = True
+                        break
+                except (ValueError, TypeError):
+                    continue
+            if not already_recorded:
                 profile_name = ''
                 try:
                     profile = assigned_profile(db, job.id)
@@ -191,6 +203,7 @@ def _commit_with_profile(db: Any) -> None:
                                       'Quality profile at completion', {
                     'policy_name':profile_name or 'Unnamed profile',
                     'policy': context[1], 'before':before, 'after':after,
+                    'upgrade_at':upgrade_at,
                     'completion_source':job.completion_source,
                 })
             report = db.get(QualityBadFile, job.id)

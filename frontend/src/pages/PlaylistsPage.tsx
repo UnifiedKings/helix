@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react'
+import { ChangeEvent, FormEvent, useEffect, useRef, useState } from 'react'
 import { Link, useOutletContext } from 'react-router-dom'
 import { api } from '../api/client'
 import type { Capabilities, Playlist } from '../api/types'
@@ -20,7 +20,6 @@ type PlaylistSubsonicResult = {
   lookup_failed: number
   lookup_failed_tracks: string[]
 }
-
 
 function downloadJson(filename: string, payload: unknown) {
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
@@ -45,19 +44,27 @@ async function addPlaylistToSubsonicRequest(playlistId: string): Promise<Playlis
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
   })
-
   const text = await response.text()
   if (!response.ok) {
     let message = text || `${response.status} ${response.statusText}`
-    try {
-      message = JSON.parse(text).detail ?? message
-    } catch {
-      // Keep the raw response text.
-    }
+    try { message = JSON.parse(text).detail ?? message } catch { /* keep raw response */ }
     throw new Error(message)
   }
-
   return JSON.parse(text) as PlaylistSubsonicResult
+}
+
+async function coverRequest(playlistId: string, method: 'POST' | 'DELETE', image?: File) {
+  const response = await fetch(`/api/playlists/${encodeURIComponent(playlistId)}/cover`, {
+    method,
+    credentials: 'include',
+    headers: image ? { 'Content-Type': image.type } : undefined,
+    body: image,
+  })
+  if (!response.ok) {
+    let message = await response.text()
+    try { message = JSON.parse(message).detail ?? message } catch { /* keep response */ }
+    throw new Error(message || `Cover update failed (${response.status})`)
+  }
 }
 
 export function PlaylistsPage() {
@@ -73,6 +80,10 @@ export function PlaylistsPage() {
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null)
   const [subsonicBusyPlaylistId, setSubsonicBusyPlaylistId] = useState('')
   const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null)
+  const [coverBusyId, setCoverBusyId] = useState('')
+  const [coverTarget, setCoverTarget] = useState<Playlist | null>(null)
+  const coverPicker = useRef<HTMLInputElement>(null)
+  const [coverVersion, setCoverVersion] = useState<Record<string, number>>({})
 
   async function load() {
     try {
@@ -83,30 +94,20 @@ export function PlaylistsPage() {
   }
 
   useEffect(() => { void load() }, [])
-
   useEffect(() => {
-    api.capabilities()
-      .then(setCapabilities)
-      .catch(() => setCapabilities(null))
+    api.capabilities().then(setCapabilities).catch(() => setCapabilities(null))
   }, [])
 
   useEffect(() => {
     function closeOpenPlaylistMenus(event: PointerEvent) {
       const target = event.target as Element | null
       if (target?.closest('.playlist-library-menu')) return
-
-      document.querySelectorAll<HTMLDetailsElement>('details.playlist-library-menu[open]').forEach((menu) => {
-        menu.open = false
-      })
+      document.querySelectorAll<HTMLDetailsElement>('details.playlist-library-menu[open]').forEach(menu => { menu.open = false })
     }
-
     function closePlaylistMenusOnEscape(event: KeyboardEvent) {
       if (event.key !== 'Escape') return
-      document.querySelectorAll<HTMLDetailsElement>('details.playlist-library-menu[open]').forEach((menu) => {
-        menu.open = false
-      })
+      document.querySelectorAll<HTMLDetailsElement>('details.playlist-library-menu[open]').forEach(menu => { menu.open = false })
     }
-
     document.addEventListener('pointerdown', closeOpenPlaylistMenus)
     document.addEventListener('keydown', closePlaylistMenusOnEscape)
     return () => {
@@ -125,17 +126,11 @@ export function PlaylistsPage() {
   }, [createOpen, creating])
 
   function closeOtherPlaylistMenus(current: HTMLDetailsElement) {
-    document.querySelectorAll<HTMLDetailsElement>('details.playlist-library-menu[open]').forEach((menu) => {
-      if (menu !== current) menu.open = false
-    })
+    document.querySelectorAll<HTMLDetailsElement>('details.playlist-library-menu[open]').forEach(menu => { if (menu !== current) menu.open = false })
   }
-
   function closePlaylistMenus() {
-    document.querySelectorAll<HTMLDetailsElement>('details.playlist-library-menu[open]').forEach((menu) => {
-      menu.open = false
-    })
+    document.querySelectorAll<HTMLDetailsElement>('details.playlist-library-menu[open]').forEach(menu => { menu.open = false })
   }
-
   function closeCreateModal() {
     if (creating) return
     setCreateOpen(false)
@@ -143,11 +138,56 @@ export function PlaylistsPage() {
     setCreateWithImport(false)
   }
 
+  function changeCover(playlist: Playlist) {
+    if (coverBusyId) return
+    closePlaylistMenus()
+    setCoverTarget(playlist)
+    if (coverPicker.current) {
+      coverPicker.current.value = ''
+      coverPicker.current.click()
+    }
+  }
+
+  async function uploadCover(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    const playlist = coverTarget
+    if (!file || !playlist) return
+    setCoverTarget(null)
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 10 * 1024 * 1024) {
+      setError('Use a PNG, JPG, or WebP image under 10 MB')
+      return
+    }
+    setCoverBusyId(playlist.id)
+    setError('')
+    try {
+      await coverRequest(playlist.id, 'POST', file)
+      await load()
+      setCoverVersion(current => ({ ...current, [playlist.id]: Date.now() }))
+      setStatus(`${playlist.name}: custom cover saved`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not update playlist cover')
+    } finally { setCoverBusyId('') }
+  }
+
+  async function resetCover(playlist: Playlist) {
+    if (coverBusyId) return
+    closePlaylistMenus()
+    setCoverBusyId(playlist.id)
+    setError('')
+    try {
+      await coverRequest(playlist.id, 'DELETE')
+      await load()
+      setCoverVersion(current => ({ ...current, [playlist.id]: Date.now() }))
+      setStatus(`${playlist.name}: automatic collage restored`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not reset playlist cover')
+    } finally { setCoverBusyId('') }
+  }
+
   async function create(event: FormEvent) {
     event.preventDefault()
     const trimmedName = name.trim()
     if (!trimmedName || creating) return
-
     setCreating(true)
     setError('')
     try {
@@ -160,43 +200,30 @@ export function PlaylistsPage() {
       if (shouldImport) setImportTarget(created)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not create playlist')
-    } finally {
-      setCreating(false)
-    }
+    } finally { setCreating(false) }
   }
 
   async function exportPlaylist(playlist: Playlist) {
     closePlaylistMenus()
     setError('')
     try {
-      const payload = await api.exportPlaylist(playlist.id)
-      downloadJson(safeFilename(playlist.name), payload)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not export playlist')
-    }
+      downloadJson(safeFilename(playlist.name), await api.exportPlaylist(playlist.id))
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not export playlist') }
   }
 
   async function deletePlaylist(playlist: Playlist) {
-    const confirmed = window.confirm(`Delete playlist "${playlist.name}"? This cannot be undone.`)
-    if (!confirmed) return
-
+    if (!window.confirm(`Delete playlist "${playlist.name}"? This cannot be undone.`)) return
     setError('')
-    try {
-      await api.deletePlaylist(playlist.id)
-      await load()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not delete playlist')
-    }
+    try { await api.deletePlaylist(playlist.id); await load() }
+    catch (err) { setError(err instanceof Error ? err.message : 'Could not delete playlist') }
   }
 
   async function addPlaylistToSubsonic(playlist: Playlist) {
     if (subsonicBusyPlaylistId) return
-
     closePlaylistMenus()
     setSubsonicBusyPlaylistId(playlist.id)
     setError('')
     setStatus('')
-
     try {
       const result = await addPlaylistToSubsonicRequest(playlist.id)
       const parts: string[] = []
@@ -204,126 +231,56 @@ export function PlaylistsPage() {
       if (result.skipped_existing > 0) parts.push(`${result.skipped_existing} already in Subsonic`)
       if (result.unresolved > 0) parts.push(`${result.unresolved} unresolved`)
       if (result.lookup_failed > 0) parts.push(`${result.lookup_failed} could not be checked`)
-
-      setStatus(
-        parts.length
-          ? `${playlist.name}: ${parts.join(' • ')}`
-          : `${playlist.name}: no tracks needed to be added`,
-      )
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not add playlist to Subsonic')
-    } finally {
-      setSubsonicBusyPlaylistId('')
-    }
+      setStatus(parts.length ? `${playlist.name}: ${parts.join(' • ')}` : `${playlist.name}: no tracks needed to be added`)
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not add playlist to Subsonic') }
+    finally { setSubsonicBusyPlaylistId('') }
   }
 
-  const orderedPlaylists = [...playlists].sort(
-    (left, right) => Number(Boolean(right.system_key)) - Number(Boolean(left.system_key)),
-  )
-
+  const orderedPlaylists = [...playlists].sort((left, right) => Number(Boolean(right.system_key)) - Number(Boolean(left.system_key)))
   return (
     <div className="playlists-library-page">
       <header className="playlists-library-header">
-        <div>
-          <h1>Playlists</h1>
-          <p className="muted">Your playlists</p>
-        </div>
+        <div><h1>Playlists</h1><p className="muted">Your playlists</p></div>
         <div className="playlists-library-header-actions">
           <span className="playlists-library-count">{playlists.length} {playlists.length === 1 ? 'playlist' : 'playlists'}</span>
-          <button
-            type="button"
-            className="playlists-new-button"
-            onClick={() => setCreateOpen(true)}
-            aria-expanded={createOpen}
-          >
-            <span aria-hidden="true">＋</span>
-            New playlist
+          <button type="button" className="playlists-new-button" onClick={() => setCreateOpen(true)} aria-expanded={createOpen}>
+            <span aria-hidden="true">＋</span> New playlist
           </button>
         </div>
       </header>
-
+      <input ref={coverPicker} type="file" accept="image/png,image/jpeg,image/webp" style={{display:'none'}} aria-label="Choose playlist cover image" onChange={event => void uploadCover(event)} />
       {error ? <div className="error-banner">{error}</div> : null}
       {status ? <div className="status-banner">{status}</div> : null}
-
       <section className="playlists-library-section" aria-label="Your playlists">
         <div className="playlists-library-grid">
           {orderedPlaylists.map((playlist) => (
             <article className="playlist-library-card" key={playlist.id}>
               <div className="playlist-library-art-wrap">
-                <Link
-                  className="playlist-library-art-link"
-                  to={`/playlists/${encodeURIComponent(playlist.id)}`}
-                  aria-label={`Open ${playlist.name}`}
-                >
-                  <Artwork src={playlist.cover_url} alt={`${playlist.name} cover`} size="lg" />
+                <Link className="playlist-library-art-link" to={`/playlists/${encodeURIComponent(playlist.id)}`} aria-label={`Open ${playlist.name}`}>
+                  <Artwork src={playlist.cover_url ? `${playlist.cover_url}${playlist.cover_url.includes('?') ? '&' : '?'}coverVersion=${coverVersion[playlist.id] || 0}` : undefined} alt={`${playlist.name} cover`} size="lg" />
                 </Link>
-                <button
-                  type="button"
-                  className="playlist-library-play"
-                  aria-label={`Play ${playlist.name}`}
-                  title={`Play ${playlist.name}`}
-                  onClick={() => player.run(() => api.playPlaylist(playlist.id), 'play')}
-                >
-                  ▶
-                </button>
+                <button type="button" className="playlist-library-play" aria-label={`Play ${playlist.name}`} title={`Play ${playlist.name}`} onClick={() => player.run(() => api.playPlaylist(playlist.id), 'play')}>▶</button>
               </div>
-
               <div className="playlist-library-meta-row">
-                <Link className="playlist-library-title" to={`/playlists/${encodeURIComponent(playlist.id)}`}>
-                  {playlist.name}
-                </Link>
-                <details
-                  className="album-card-menu playlist-library-menu"
-                  onToggle={(event) => {
-                    if (event.currentTarget.open) closeOtherPlaylistMenus(event.currentTarget)
-                  }}
-                >
+                <Link className="playlist-library-title" to={`/playlists/${encodeURIComponent(playlist.id)}`}>{playlist.name}</Link>
+                <details className="album-card-menu playlist-library-menu" onToggle={event => {if (event.currentTarget.open) closeOtherPlaylistMenus(event.currentTarget)}}>
                   <summary aria-label={`More options for ${playlist.name}`} title="More options">⋯</summary>
                   <div className="album-card-menu-popover playlist-card-menu-popover">
-                    <button
-                      type="button"
-                      className="menu-link"
-                      onClick={() => player.run(() => api.playPlaylist(playlist.id, true), 'play')}
-                    >
-                      Shuffle
-                    </button>
+                    <button type="button" className="menu-link" onClick={() => player.run(() => api.playPlaylist(playlist.id, true), 'play')}>Shuffle</button>
                     <Link className="menu-link" to={`/playlists/${encodeURIComponent(playlist.id)}`}>Edit playlist</Link>
-                    <button
-                      type="button"
-                      className="menu-link"
-                      onClick={() => void exportPlaylist(playlist)}
-                    >
-                      Export playlist
-                    </button>
-                    <button
-                      type="button"
-                      className="menu-link"
-                      onClick={() => {
-                        closePlaylistMenus()
-                        setShareTarget({
-                          resourceType: 'playlist',
-                          resourceId: playlist.id,
-                          resourceSource: 'helix',
-                          title: playlist.name,
-                          artUrl: playlist.cover_url || '',
-                        })
-                      }}
-                    >
-                      Share playlist
-                    </button>
+                    <button type="button" className="menu-link" disabled={Boolean(coverBusyId)} onClick={() => changeCover(playlist)}>{coverBusyId === playlist.id ? 'Saving cover…' : 'Change cover'}</button>
+                    <button type="button" className="menu-link" disabled={Boolean(coverBusyId)} onClick={() => void resetCover(playlist)}>Reset cover to collage</button>
+                    <button type="button" className="menu-link" onClick={() => void exportPlaylist(playlist)}>Export playlist</button>
+                    <button type="button" className="menu-link" onClick={() => {
+                      closePlaylistMenus()
+                      setShareTarget({ resourceType:'playlist', resourceId:playlist.id, resourceSource:'helix', title:playlist.name, artUrl:playlist.cover_url || '' })
+                    }}>Share playlist</button>
                     {capabilities?.features.subsonic_import ? (
-                      <button
-                        type="button"
-                        className="menu-link"
-                        disabled={subsonicBusyPlaylistId === playlist.id}
-                        onClick={() => void addPlaylistToSubsonic(playlist)}
-                      >
+                      <button type="button" className="menu-link" disabled={subsonicBusyPlaylistId === playlist.id} onClick={() => void addPlaylistToSubsonic(playlist)}>
                         {subsonicBusyPlaylistId === playlist.id ? 'Checking Subsonic…' : 'Add to Subsonic'}
                       </button>
                     ) : null}
-                    {!playlist.system_key ? (
-                      <button type="button" className="menu-danger" onClick={() => void deletePlaylist(playlist)}>Delete playlist</button>
-                    ) : null}
+                    {!playlist.system_key ? <button type="button" className="menu-danger" onClick={() => void deletePlaylist(playlist)}>Delete playlist</button> : null}
                   </div>
                 </details>
               </div>
@@ -332,112 +289,46 @@ export function PlaylistsPage() {
           ))}
         </div>
       </section>
-
       {createOpen ? (
-        <div
-          className="playlist-create-backdrop"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) closeCreateModal()
-          }}
-        >
+        <div className="playlist-create-backdrop" role="presentation" onMouseDown={event => {if (event.target === event.currentTarget) closeCreateModal()}}>
           <form className="playlist-create-modal" onSubmit={create} role="dialog" aria-modal="true" aria-labelledby="playlist-create-title">
             <header className="playlist-create-header">
-              <div>
-                <p className="playlist-create-eyebrow">Playlist</p>
-                <h2 id="playlist-create-title">Create playlist</h2>
-              </div>
+              <div><p className="playlist-create-eyebrow">Playlist</p><h2 id="playlist-create-title">Create playlist</h2></div>
               <button type="button" className="playlist-create-close" onClick={closeCreateModal} disabled={creating} aria-label="Close create playlist">×</button>
             </header>
-
             <div className="playlist-create-body">
               <label className="playlist-create-field">
-                <span>Name</span>
-                <input
-                  autoFocus
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  placeholder="Playlist name"
-                  aria-label="Playlist name"
-                />
+                <span>Name</span><input autoFocus value={name} onChange={event => setName(event.target.value)} placeholder="Playlist name" aria-label="Playlist name" />
               </label>
-
               <div className="playlist-create-section">
-                <div className="playlist-create-section-copy">
-                  <strong>How do you want to start?</strong>
-                  <span>You can always import more music later.</span>
-                </div>
-
+                <div className="playlist-create-section-copy"><strong>How do you want to start?</strong><span>You can always import more music later.</span></div>
                 <div className="playlist-create-choice-grid">
-                  <button
-                    type="button"
-                    className={`playlist-create-choice ${!createWithImport ? 'active' : ''}`}
-                    onClick={() => setCreateWithImport(false)}
-                    aria-pressed={!createWithImport}
-                  >
+                  <button type="button" className={`playlist-create-choice ${!createWithImport ? 'active' : ''}`} onClick={() => setCreateWithImport(false)} aria-pressed={!createWithImport}>
                     <span className="playlist-create-choice-icon" aria-hidden="true">♫</span>
-                    <span>
-                      <strong>Start empty</strong>
-                      <small>Create the playlist and add tracks yourself.</small>
-                    </span>
+                    <span><strong>Start empty</strong><small>Create the playlist and add tracks yourself.</small></span>
                   </button>
-
-                  <button
-                    type="button"
-                    className={`playlist-create-choice ${createWithImport ? 'active' : ''}`}
-                    onClick={() => setCreateWithImport(true)}
-                    aria-pressed={createWithImport}
-                  >
+                  <button type="button" className={`playlist-create-choice ${createWithImport ? 'active' : ''}`} onClick={() => setCreateWithImport(true)} aria-pressed={createWithImport}>
                     <span className="playlist-create-choice-icon" aria-hidden="true">⇩</span>
-                    <span>
-                      <strong>Import tracks</strong>
-                      <small>Create it, then open Helix's full import workflow.</small>
-                    </span>
+                    <span><strong>Import tracks</strong><small>Create it, then open Helix's full import workflow.</small></span>
                   </button>
                 </div>
               </div>
-
               {createWithImport ? (
                 <div className="playlist-create-import-panel">
-                  <div>
-                    <strong>Import after creation</strong>
-                    <p>
-                      Helix will immediately open the existing importer, including match review,
-                      duplicate skipping, alternate matches, and source-specific upload/URL handling.
-                    </p>
-                  </div>
-                  <div className="playlist-create-source-chips" aria-label="Supported playlist import sources">
-                    <span>Helix</span>
-                    <span>YTMusic</span>
-                    <span>Spotify</span>
-                    <span>Pandora</span>
-                  </div>
+                  <div><strong>Import after creation</strong><p>Helix will immediately open the existing importer, including match review, duplicate skipping, alternate matches, and source-specific upload/URL handling.</p></div>
+                  <div className="playlist-create-source-chips" aria-label="Supported playlist import sources"><span>Helix</span><span>YTMusic</span><span>Spotify</span><span>Pandora</span></div>
                 </div>
               ) : null}
             </div>
-
             <footer className="playlist-create-footer">
               <button type="button" onClick={closeCreateModal} disabled={creating}>Cancel</button>
-              <button type="submit" className="primary" disabled={creating || !name.trim()}>
-                {creating ? 'Creating…' : createWithImport ? 'Create & import' : 'Create playlist'}
-              </button>
+              <button type="submit" className="primary" disabled={creating || !name.trim()}>{creating ? 'Creating…' : createWithImport ? 'Create & import' : 'Create playlist'}</button>
             </footer>
           </form>
         </div>
       ) : null}
-
       <ShareLinkModal target={shareTarget} onClose={() => setShareTarget(null)} />
-
-      <PlaylistImportModal
-        open={Boolean(importTarget)}
-        playlistId={importTarget?.id ?? ''}
-        playlistName={importTarget?.name ?? ''}
-        onClose={() => setImportTarget(null)}
-        onImported={async () => {
-          await load()
-          setImportTarget(null)
-        }}
-      />
+      <PlaylistImportModal open={Boolean(importTarget)} playlistId={importTarget?.id ?? ''} playlistName={importTarget?.name ?? ''} onClose={() => setImportTarget(null)} onImported={async () => {await load();setImportTarget(null)}} />
     </div>
   )
 }

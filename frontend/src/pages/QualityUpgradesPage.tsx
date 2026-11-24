@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { QualityProfilesEditor } from '../components/QualityProfilesEditor'
 import { QualitySearchLimits } from '../components/QualitySearchLimits'
 import '../styles/quality-upgrades.css'
+import '../styles/quality-library-reconciliation.css'
 import '../styles/quality-profiles.css'
 import '../styles/quality-upgrades-phase2.css'
 import '../styles/quality-upgrades-queue-fix.css'
@@ -12,6 +13,7 @@ type Job = { id: string; title: string; artist: string; album: string; art_url?:
 type Event = { id: string; event: string; message: string; data_json: string; created_at: string }
 type Audit = { job: Job; provenance: string; fingerprinted: boolean; active_search_id: string; events: Event[] }
 type Tab = 'overview' | 'profiles' | 'search' | 'history'
+type ScanReport = { status: string; scanned_at?: string; files_examined?: number; existing_upgrade_jobs?: number; newly_enrolled?: number; below_target?: number; target_satisfied?: number; reactivated?: number; upgrade_deferred?: number; ownership_unverified?: number; untracked_library_files?: number; unmatched_import_intents?: number; ambiguous_imports?: number; scan_truncated?: boolean; message?: string }
 type Target = { label: string; profile_name: string }
 type BadReport = { job_id: string; reason: string; reported_at: string }
 type HistoricalRecord = { kind: 'legacy' | 'profile' | 'not_recorded'; profile: string | null; original: Quality | null; result: Quality | null; completed_at?: string | null }
@@ -39,6 +41,8 @@ export function QualityUpgradesPage() {
   const [badFiles, setBadFiles] = useState<Record<string,BadReport>>({})
   const [historyRecords, setHistoryRecords] = useState<Record<string,HistoricalRecord>>({})
   const [historyFilter, setHistoryFilter] = useState<'all' | 'legacy' | 'profile'>('all')
+  const [scanningLibrary, setScanningLibrary] = useState(false)
+  const [scanReport, setScanReport] = useState<ScanReport | null>(null)
   const refresh = useCallback(async () => { try {
     const [data, targetData, badData, historyData] = await Promise.all([
       request<{ items: Job[] }>('/api/quality-upgrades?status=all'),
@@ -53,6 +57,18 @@ export function QualityUpgradesPage() {
     setError('')
   } catch(e) { setError(e instanceof Error ? e.message : String(e)) } }, [])
   useEffect(() => { void refresh() }, [refresh])
+  useEffect(() => { request<ScanReport>('/api/quality-upgrades/library/reconcile').then(setScanReport).catch(() => {}) }, [])
+  async function scanHelixLibrary() {
+    if (scanningLibrary) return
+    setScanningLibrary(true)
+    setError('')
+    try {
+      const result = await request<ScanReport>('/api/quality-upgrades/library/reconcile', { method: 'POST', body: '{}' })
+      setScanReport(result)
+      await refresh()
+    } catch (err) { setError(err instanceof Error ? err.message : String(err)) }
+    finally { setScanningLibrary(false) }
+  }
   useEffect(() => { let ws: WebSocket | undefined; let timeout: number | undefined; let closed = false; const connect = () => { if (closed) return; ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/ws/quality-upgrades`); ws.onmessage = event => { try { if (JSON.parse(event.data).type === 'quality-upgrades.changed') void refresh() } catch { /* ignore */ } }; ws.onclose = () => { if (!closed) timeout = window.setTimeout(connect, 2000) } }; connect(); return () => { closed = true; if (timeout !== undefined) clearTimeout(timeout); ws?.close() } }, [refresh])
   const filtered = useMemo(() => jobs.filter(j => (filter === 'all' || filter === j.status) && (tab !== 'history' || historyFilter === 'all' || historyRecords[j.id]?.kind === historyFilter) && `${j.title} ${j.artist} ${j.album}`.toLowerCase().includes(query.toLowerCase())), [jobs, filter, query, tab, historyFilter, historyRecords])
   const counts = useMemo(() => { const n: Record<string, number> = { all: jobs.length }; jobs.forEach(j => { n[j.status] = (n[j.status] || 0) + 1 }); return n }, [jobs])
@@ -93,7 +109,12 @@ export function QualityUpgradesPage() {
     <nav className="qp-tabs" aria-label="Quality upgrades sections">{([['overview','Overview'],['profiles','Quality Profiles'],['search','Search & Limits'],['history','History']] as [Tab,string][]).map(([id,name]) => <button type="button" key={id} className={tab === id ? 'active' : ''} aria-current={tab === id ? 'page' : undefined} onClick={() => setTab(id)}>{name}</button>)}</nav>
     {error && <div className="error-banner" role="alert">{error}</div>}
     {tab === 'profiles' && <QualityProfilesEditor />}
-    {tab === 'overview' && <section className="qp-overview" aria-label="Upgrade overview"><div className="qp-summary"><div><small>Upgrade jobs</small><strong>{jobs.length}</strong></div><div><small>Active operations</small><strong>{jobs.filter(j => busyStatuses.has(j.status)).length}</strong></div><div><small>Upgraded</small><strong>{counts.upgraded || 0}</strong></div><div><small>Needs attention</small><strong>{(counts.failed || 0) + (counts.no_match || 0)}</strong></div></div></section>}
+    {tab === 'overview' && <section className="qp-overview" aria-label="Upgrade overview"><div className="qp-summary"><div><small>Upgrade jobs</small><strong>{jobs.length}</strong></div><div><small>Active operations</small><strong>{jobs.filter(j => busyStatuses.has(j.status)).length}</strong></div><div><small>Upgraded</small><strong>{counts.upgraded || 0}</strong></div><div><small>Needs attention</small><strong>{(counts.failed || 0) + (counts.no_match || 0)}</strong></div></div><div className="qp-library-reconciliation">
+      <div><strong>Helix library reconciliation</strong><p>Discover missing Helix imports and reevaluate existing verified files against their quality targets. Searches obey your global limits.</p></div>
+      <button type="button" onClick={() => void scanHelixLibrary()} disabled={scanningLibrary || busy}>{scanningLibrary ? 'Scanning library…' : 'Scan Helix Library'}</button>
+      {scanReport?.status === 'complete' && <p className="qp-reconcile-result" role="status">{scanReport.files_examined ?? 0} files examined · {scanReport.newly_enrolled ?? 0} newly enrolled · {scanReport.below_target ?? 0} below target · {scanReport.target_satisfied ?? 0} target satisfied · {scanReport.reactivated ?? 0} reactivated · {scanReport.upgrade_deferred ?? 0} waiting for cooldown · {scanReport.untracked_library_files ?? 0} untracked · {scanReport.ownership_unverified ?? 0} ownership unverified{scanReport.scan_truncated ? ' · Scan limit reached' : ''}. Unverified files were not automatically adopted.</p>}
+      {scanReport?.status === 'failed' && <p className="qp-reconcile-result" role="alert">Last reconciliation failed. Check backend logs.</p>}
+    </div></section>}
     {(tab === 'overview' || tab === 'history') && <section className="quality-panel quality-table-panel qp-job-panel"><div className="qp-queue-toolbar"><div className="qp-queue-title"><h2>{tab === 'history' ? 'Upgrade history & records' : 'Upgrade queue'}</h2>{tab === 'overview' ? <p>Tracks follow their quality profiles. Bad-file replacements take priority.</p> : <p>Completed upgrades show the policy recorded at the time, not today's target.</p>}</div>{tab === 'history' && <select className="qp-history-filter" aria-label="Historical policy filter" value={historyFilter} onChange={e => setHistoryFilter(e.target.value as typeof historyFilter)}><option value="all">All policies</option><option value="legacy">Legacy upgrades</option><option value="profile">Profile-managed</option></select>}<input value={query} onChange={e => setQuery(e.target.value)} aria-label="Search artist, album, or track" placeholder="Search tracks…" /></div><div className="quality-filter-pill-row">{filters.filter(f => f === 'all' || f === filter || (counts[f] || 0) > 0 || ['pending','searching','upgraded','failed'].includes(f)).map(f => <button key={f} type="button" className={`quality-filter-pill ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>{label(f)} <strong>{counts[f] || 0}</strong></button>)}</div><div className="quality-table-head qp-table-head" role="presentation"><div>Track</div><div>Status</div><div>{tab === 'history' ? 'Original → Result' : 'Current → Target'}</div><div>{tab === 'history' ? 'Completed' : 'Next search'}</div><div>Actions</div></div><div className="quality-list quality-list-v2">{filtered.length === 0 && <p className="quality-empty">No tracks match this filter.</p>}{filtered.map(job => <article className="quality-table-row" key={job.id}><div className="quality-cell quality-track-cell" data-label="Track"><div className="quality-main"><div className="quality-art-wrap">{job.art_url ? <img className="quality-art" src={job.art_url} alt="" loading="lazy" /> : <div className="quality-art quality-art-placeholder">♪</div>}</div><div className="quality-track"><strong>{job.title}</strong><span>{job.artist}{job.album ? ` · ${job.album}` : ''}</span>{tab === 'history' && historyRecords[job.id]?.kind === 'legacy' && <span className="qp-legacy-label">Legacy · Previous upgrade rules</span>}{tab === 'history' && historyRecords[job.id]?.kind === 'profile' && <span className="qp-managed-label">Profile · {historyRecords[job.id].profile}</span>}</div></div></div><div className="quality-cell quality-status-cell" data-label="Status"><span className={`quality-status status-${job.status}`}>{badFiles[job.id] ? "Bad file · " : ""}{label(job.status)}</span>{job.last_error && <small className="qp-job-error" title={job.last_error}>{job.last_error}</small>}</div><div className="quality-cell quality-change-cell" data-label="Current → Target"><div className="quality-change-pair qp-quality-values"><span className="qp-current-quality" title={quality(tab === 'history' ? (historyRecords[job.id]?.original || job.original) : job.current)}>{quality(tab === 'history' ? (historyRecords[job.id]?.original || job.original) : job.current)}</span><span className="quality-arrow" aria-hidden="true">→</span><span className="qp-target-quality" title={tab === 'history' ? 'Quality recorded at completion (or latest known for legacy records)' : (targets[job.id]?.profile_name ? `${targets[job.id].profile_name}: ${targets[job.id].label}` : 'Assigned profile')}>{tab === 'history' ? quality(historyRecords[job.id]?.result || job.current) : (targets[job.id]?.label || 'No target configured')}</span></div></div><div className="quality-cell qp-next-search" data-label="Next search">{dateTime(tab === 'history' ? (historyRecords[job.id]?.completed_at || job.upgraded_at) : job.next_search_at)}</div><div className="quality-cell quality-actions-cell" data-label="Actions">
               <div className="qp-row-actions">
                 <button type="button" className="qp-details-button" disabled={busy} onClick={() => void openAudit(job)}>Details</button>

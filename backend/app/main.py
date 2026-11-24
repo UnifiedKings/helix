@@ -31,6 +31,7 @@ from .routers.playback_history import router as playback_history_router
 from .routers.streaming import router as streaming_router
 from .routers.fulfillment import router as fulfillment_router
 from .routers.home import router as home_router
+from .routers.playlist_custom_covers import router as playlist_custom_covers_router
 from .routers.playlists import router as playlists_router
 from .routers.search import router as search_router
 from .routers.settings import router as settings_router
@@ -47,6 +48,7 @@ from .routers.quality_search_limits import router as quality_search_limits_route
 from .routers.quality_bad_files import router as quality_bad_files_router
 from .routers.quality_history import router as quality_history_router
 from .routers.quality_rejected_sources import router as quality_rejected_sources_router
+from .routers.quality_library_reconciliation import router as quality_library_reconciliation_router
 from .routers.shares import router as shares_router
 from .routers.shares_liked_support import router as liked_shares_router, install as install_liked_shares
 
@@ -132,6 +134,11 @@ app.add_middleware(
 @app.on_event("startup")
 def _startup():
     init_db()
+    from .quality_continuous_upgrades import install_safe_revert
+    install_safe_revert()
+    from .quality_library_reconciliation import initialize_import_intents, install_import_tracking
+    initialize_import_intents()
+    install_import_tracking()
     from .quality_bad_files import QualityBadFile
     from .quality_source_registry import initialize_rejections
     initialize_rejections()
@@ -152,6 +159,8 @@ def _startup():
         initialize_profiles(db)
     finally:
         db.close()
+    from .quality_library_reconciliation import periodic_reconciliation
+    asyncio.get_event_loop().create_task(periodic_reconciliation())
     from .realtime import HUB
     try:
         HUB.bind_loop()
@@ -215,6 +224,7 @@ app.include_router(art_router)
 app.include_router(likes_router)
 app.include_router(lobbies_router)
 app.include_router(dislikes_router)
+app.include_router(playlist_custom_covers_router)
 app.include_router(playlists_router)
 app.include_router(subsonic_router)
 app.include_router(subsonic_add_router)
@@ -224,6 +234,7 @@ app.include_router(quality_search_limits_router)
 app.include_router(quality_bad_files_router)
 app.include_router(quality_history_router)
 app.include_router(quality_rejected_sources_router)
+app.include_router(quality_library_reconciliation_router)
 app.include_router(realtime_router)
 app.include_router(user_settings_router)
 app.include_router(lyrics_router)

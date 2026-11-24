@@ -18,7 +18,8 @@ from .quality_bad_files import QualityBadFile
 from .quality_search_budget import wait_for_search_budget
 from .settings_store import get_settings
 from . import quality_upgrade_service as service
-from .quality_upgrade_profile_runtime import process_profile_job, install_profile_hooks, uninstall_profile_hooks, reactivate_newly_eligible_jobs
+from .quality_upgrade_profile_runtime import process_profile_job, install_profile_hooks, uninstall_profile_hooks
+from .quality_continuous_upgrades import reevaluate_quality_jobs
 
 LOG = logging.getLogger(__name__)
 
@@ -72,7 +73,7 @@ async def quality_upgrade_worker_loop() -> None:
         while True:
             try:
                 if datetime.utcnow() >= next_reconcile:
-                    await asyncio.to_thread(reactivate_newly_eligible_jobs)
+                    await asyncio.to_thread(reevaluate_quality_jobs)
                     next_reconcile = datetime.utcnow() + timedelta(minutes=2)
                 db = SessionLocal()
                 try:

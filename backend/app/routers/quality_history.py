@@ -15,32 +15,45 @@ router = APIRouter(prefix='/api/quality-upgrades', tags=['quality-upgrades'])
 
 
 def history_payload(jobs, events):
-    records = {}
+    """Return historical first-original and most-recent-result, never today's target.
+
+    A track may now have multiple profile-managed replacements. Earlier legacy
+    versions survive in 'upgrade_version_rebased' events even when the mutable
+    job.original_* fields are advanced to permit another verified replacement.
+    """
+    grouped = {}
     for event in sorted(events, key=lambda e: (e.created_at, e.id)):
-        if event.event != 'quality_policy_snapshot' or event.job_id in records:
+        if event.event not in {'quality_policy_snapshot', 'upgrade_version_rebased'}:
             continue
         try:
-            data = json.loads(event.data_json)
-            if not isinstance(data, dict) or not data.get('policy_name'):
-                continue
-            records[event.job_id] = dict(kind='profile', profile=data['policy_name'],
-                                         original=data.get('before'), result=data.get('after'),
-                                         completed_at=event.created_at)
-        except (TypeError, ValueError):
+            data = json.loads(event.data_json or '{}')
+        except (ValueError, TypeError):
             continue
+        if isinstance(data, dict):
+            grouped.setdefault(event.job_id, []).append((event, data))
+    records = {}
     for job in jobs:
-        if job.id in records:
-            continue
-        # Status alone cannot prove when or under which rules upgrade occurred.
-        # Never present today's assigned/default profile as the historical one.
+        snapshots = [(event, data) for event, data in grouped.get(job.id, [])
+                     if event.event == 'quality_policy_snapshot' and data.get('policy_name')]
+        rebases = [(event, data) for event, data in grouped.get(job.id, [])
+                   if event.event == 'upgrade_version_rebased']
+        first_before = (rebases[0][1].get('original') if rebases else None)
+        if not first_before and snapshots:
+            first_before = snapshots[0][1].get('before')
+        if not first_before:
+            first_before = {key: getattr(job, 'original_' + key) for key in
+                            ('codec', 'bitrate', 'sample_rate', 'bit_depth')}
+        last = snapshots[-1] if snapshots else None
         records[job.id] = {
-            'kind': 'legacy' if job.upgraded_at or job.completion_source == 'slskd' else 'not_recorded',
-            'profile': None,
-            'original': {'codec': job.original_codec, 'bitrate':job.original_bitrate,
-                         'sample_rate':job.original_sample_rate,'bit_depth':job.original_bit_depth},
-            'result': {'codec': job.current_codec,'bitrate':job.current_bitrate,
-                       'sample_rate':job.current_sample_rate,'bit_depth':job.current_bit_depth},
-            'completed_at':job.upgraded_at,
+            'kind': ('profile' if snapshots else
+                     'legacy' if job.upgraded_at or job.completion_source == 'slskd' else 'not_recorded'),
+            'profile': last[1]['policy_name'] if last else None,
+            'original': first_before,
+            'result': (last[1].get('after') if last else None) or
+                      {key: getattr(job, 'current_' + key) for key in
+                       ('codec', 'bitrate', 'sample_rate', 'bit_depth')},
+            'completed_at': last[0].created_at if last else job.upgraded_at,
+            'version_count': len(snapshots) + (1 if rebases and not snapshots else 0),
         }
     return records
 
@@ -51,5 +64,5 @@ def upgrade_history(user: User = Depends(get_current_user), db: Session = Depend
         raise HTTPException(403, 'Subsonic add permission is required')
     jobs = db.execute(select(QualityUpgradeJob)).scalars().all()
     events = db.execute(select(QualityUpgradeEvent).where(
-        QualityUpgradeEvent.event == 'quality_policy_snapshot')).scalars().all()
+        QualityUpgradeEvent.event.in_(['quality_policy_snapshot', 'upgrade_version_rebased']))).scalars().all()
     return {'records': history_payload(jobs, events)}
