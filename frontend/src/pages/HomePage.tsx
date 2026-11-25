@@ -211,7 +211,7 @@ export function HomePage() {
         </Link>
         <Link className="home-quick-action" to="/stations">
           <span className="home-quick-icon"><NavIcon name="stations" /></span>
-          <span><strong>Start Station</strong><small>Create a station and let Helix build the vibe</small></span>
+          <span><strong>Start Station</strong><small>Create a station</small></span>
         </Link>
         <Link className="home-quick-action" to="/playlists">
           <span className="home-quick-icon"><NavIcon name="playlists" /></span>
