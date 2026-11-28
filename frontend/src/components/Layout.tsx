@@ -6,6 +6,7 @@ import { Sidebar } from './navigation/Sidebar'
 import { usePlayer } from '../hooks/usePlayer'
 import { useAuth } from '../auth'
 import { ImportQueuedToast } from './ImportQueuedToast'
+import { MediaDiagnosticsSettings } from '../hooks/mediaDiagnostics'
 
 const COMPACT_SHELL_QUERY = '(max-width: 1180px)'
 
@@ -130,6 +131,7 @@ export function Layout() {
           </main>
         )}
       </div>
+      {location.pathname.replace(/\/$/, '') === '/settings' ? <MediaDiagnosticsSettings /> : null}
       <ImportQueuedToast />
       <PlaybackBar player={player.player} audioIntent={player.audioIntent} run={player.run} setPlayer={player.setPlayer} setError={player.setError} />
     </div>

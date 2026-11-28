@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { AudioIntent, PlayerState } from '../api/types'
+import { traceMedia } from './mediaDiagnostics'
 
 export type AudioRunMode = 'play' | 'pause' | 'none'
 
@@ -34,36 +35,36 @@ export function usePlayer() {
 
   const run = useCallback((action: () => Promise<PlayerState>, audioMode: AudioRunMode = 'none') => {
     const isDirectTransport = action === api.pause || action === api.resume
+    const actionName = action === api.pause ? 'pause' : action === api.resume ? 'resume' : action === api.next ? 'next' : action === api.previous ? 'previous' : action === api.ended ? 'ended' : 'other'
+    traceMedia('transport-request', null, { action: actionName, mode: audioMode })
 
-    // A direct play/pause command owns the transport until its backend request
-    // settles. Ignore additional direct transport clicks completely, including
-    // their local audio intent, so button-spam cannot make browser audio and the
-    // authoritative backend state diverge.
+    // Restore main's direct play/pause lock, rather than serializing every mutation.
     if (isDirectTransport && transportInFlightRef.current) {
+      traceMedia('transport-ignored', null, { action: actionName, reason: 'direct-transport-in-flight' })
       return transportInFlightRef.current
     }
 
     const execute = async () => {
       const requestId = ++latestRequestRef.current
       actionInFlightRef.current = true
+      const startedAt = performance.now()
+      traceMedia('transport-start', null, { action: actionName, queuedMs: 0 })
 
       try {
         setError('')
-
-        // Pause should be audible immediately. Do this only after the transport
-        // lock has accepted the command so ignored spam cannot toggle local audio.
+        // Main: immediate local pause only for an accepted direct pause.
         if (audioMode === 'pause' && action === api.pause) {
           setAudioIntent((current) => ({ id: current.id + 1, action: 'pause' }))
         }
 
         const next = await action()
+        traceMedia('transport-response', null, { action: actionName, backendMs: Math.round(performance.now() - startedAt), accepted: requestId === latestRequestRef.current })
 
         if (requestId === latestRequestRef.current) {
           setPlayer(next)
         }
 
-        // Starting playback remains backend-first. Non-direct actions such as
-        // next/previous retain their existing post-action audio behavior.
+        // Original backend-first transport semantics. No extra global queue.
         if (audioMode === 'play') {
           setAudioIntent((current) => ({ id: current.id + 1, action: 'play' }))
         } else if (audioMode === 'pause' && action !== api.pause) {
@@ -72,6 +73,7 @@ export function usePlayer() {
 
         return next
       } catch (err) {
+        traceMedia('transport-error', null, { action: actionName, elapsedMs: Math.round(performance.now() - startedAt) })
         if (requestId === latestRequestRef.current) {
           setError(err instanceof Error ? err.message : 'Playback action failed')
         }

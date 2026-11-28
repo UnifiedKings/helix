@@ -143,7 +143,7 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
         skipFeedbackTimerRef.current = null
       }, 230)
     })
-    void run(action, shouldKeepPlaying ? 'play' : 'pause')
+    void run(action, shouldKeepPlaying ? 'play' : 'pause').catch(() => undefined)
   }
 
   async function toggleLike() {
@@ -216,13 +216,13 @@ export function PlaybackBar({ player, audioIntent, run, setPlayer, setError }: P
       repeatTrack={repeatTrack}
       onPrevious={() => runDirectionalSkip('previous', api.previous)}
       onNext={() => runDirectionalSkip('next', api.next)}
-      onTogglePlayback={() => void run(localPlaying ? api.pause : api.resume, localPlaying ? 'pause' : 'play')}
+      onTogglePlayback={() => void run(localPlaying ? api.pause : api.resume, localPlaying ? 'pause' : 'play').catch(() => undefined)}
       onToggleRepeat={() => setRepeatTrack(value => !value)}
       ratingControls={ratingControls}
       playbarStyle={playbarStyle}
       skipDirection={skipDirection}
       seekHitbox={seekHitbox}
-      audioControls={<AudioPlayer player={player} audioIntent={audioIntent} onStateChange={setPlayer} repeatTrack={repeatTrack} onLocalPlayingChange={setLocalPlaying} onError={setError} />}
+      audioControls={<AudioPlayer player={player} audioIntent={audioIntent} onStateChange={setPlayer} repeatTrack={repeatTrack} onLocalPlayingChange={setLocalPlaying} onError={setError} run={run} />}
     />
   )
 }
